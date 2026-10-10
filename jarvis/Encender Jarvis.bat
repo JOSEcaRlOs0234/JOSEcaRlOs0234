@@ -37,6 +37,8 @@ if errorlevel 1 (
   )
 )
 
+if not exist "datos\acceso-directo.txt" call "Crear acceso directo.bat"
+
 set ABRIR_NAVEGADOR=1
 call node_modules\.bin\tsx.cmd server.ts
 

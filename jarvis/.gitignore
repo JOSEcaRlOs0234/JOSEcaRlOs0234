@@ -6,3 +6,4 @@ registro/
 .env.*
 !.env.example
 package-lock.json
+datos/

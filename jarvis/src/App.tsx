@@ -19,6 +19,9 @@ import {
   Volume2,
   VolumeX,
   RefreshCw,
+  ShieldCheck,
+  Power,
+  X,
 } from "lucide-react";
 import {
   CONFIG,
@@ -36,6 +39,7 @@ import {
 } from "./services/weatherService";
 import { ReactorCore } from "./components/ReactorCore";
 import { NotificationStack } from "./components/NotificationStack";
+import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 
 const horaActual = () =>
   new Date().toLocaleTimeString("es-MX", {
@@ -118,6 +122,10 @@ export default function App() {
   );
   const [registro, setRegistro] = useState<string[]>([]);
 
+  // Permisos: pregunta pendiente y permisos recordados
+  const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
+  const [permisos, setPermisos] = useState<{ tipo: string; nombre: string }[]>([]);
+
   // Notificaciones
   const [notifications, setNotifications] = useState<HudNotification[]>([]);
 
@@ -188,6 +196,37 @@ export default function App() {
     }
   }, []);
 
+  const cargarPermisos = useCallback(async () => {
+    try {
+      const r = await fetch("/api/permisos");
+      if (r.ok) setPermisos((await r.json()).permisos ?? []);
+    } catch {
+      // Se reintenta en la próxima acción
+    }
+  }, []);
+
+  const quitarPermiso = async (tipo: string) => {
+    try {
+      const r = await fetch(`/api/permisos/${encodeURIComponent(tipo)}`, { method: "DELETE" });
+      if (r.ok) setPermisos((await r.json()).permisos ?? []);
+      showNotification("Listo: volveré a pedir permiso para eso.", "info");
+    } catch {
+      showNotification("No pude quitar el permiso.", "error");
+    }
+    cargarRegistro();
+  };
+
+  const apagarJarvis = async () => {
+    if (!window.confirm("¿Apagar a Jarvis? Para volver a usarlo, abre el icono de Jarvis.")) return;
+    try {
+      await fetch("/api/apagar", { method: "POST" });
+    } catch {
+      // El servidor se apaga y corta la conexión
+    }
+    setServidor("sin_conexion");
+    window.close();
+  };
+
   const comprobarServidor = useCallback(async () => {
     try {
       const r = await fetch("/api/estado");
@@ -234,47 +273,72 @@ export default function App() {
 
   // ---------------------------------------------------------------- conversación
 
-  const enviarMensaje = useCallback(
-    async (texto: string) => {
-      const limpio = texto.trim();
-      if (!limpio || enviandoRef.current) return;
-
+  /**
+   * Manda algo al servidor (un mensaje nuevo o una respuesta de permiso) y procesa lo que conteste:
+   * una respuesta de Jarvis, o una nueva pregunta de permiso.
+   */
+  const hablarConServidor = useCallback(
+    async (url: string, cuerpo: unknown) => {
       enviandoRef.current = true;
       setEnviando(true);
-      addMensaje("usuario", limpio);
       setEstado("pensando");
-
-      // Solo se manda a Gemini la conversación real (sin avisos locales)
-      const historial = messagesRef.current
-        .filter((m) => !m.local)
-        .map((m) => ({ rol: m.rol, texto: m.texto }));
-
+      let esperaPermiso = false;
       try {
-        const r = await fetch("/api/chat", {
+        const r = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ mensajes: historial }),
+          body: JSON.stringify(cuerpo),
         });
         const datos = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(datos.error || `Error ${r.status}`);
-        addMensaje("jarvis", datos.texto);
-        hablar(datos.texto);
+        if (datos.confirmacion) {
+          esperaPermiso = true;
+          setConfirmacion(datos.confirmacion);
+          hablar("Necesito su permiso, señor.");
+        } else {
+          addMensaje("jarvis", datos.texto);
+          hablar(datos.texto);
+        }
       } catch (err: any) {
         const aviso =
           err instanceof TypeError
-            ? "No puedo comunicarme con mi servidor. ¿Sigue abierta la ventana negra de Jarvis?"
+            ? "No puedo comunicarme con mi servidor. Vuelve a abrir Jarvis desde su icono."
             : err?.message || "Ocurrió un error inesperado.";
         addMensaje("jarvis", aviso, true);
         showNotification(aviso, "error");
         setEstado("reposo");
       } finally {
-        enviandoRef.current = false;
-        setEnviando(false);
+        // Mientras se espera el permiso, no se pueden mandar mensajes nuevos
+        if (!esperaPermiso) {
+          enviandoRef.current = false;
+          setEnviando(false);
+        }
         cargarRegistro();
+        cargarPermisos();
       }
     },
-    [addMensaje, hablar, showNotification, cargarRegistro]
+    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos]
   );
+
+  const enviarMensaje = useCallback(
+    async (texto: string) => {
+      const limpio = texto.trim();
+      if (!limpio || enviandoRef.current) return;
+      addMensaje("usuario", limpio);
+      // Solo se manda a Gemini la conversación real (sin avisos locales)
+      const historial = messagesRef.current.filter((m) => !m.local).map((m) => ({ rol: m.rol, texto: m.texto }));
+      await hablarConServidor("/api/chat", { mensajes: historial });
+    },
+    [addMensaje, hablarConServidor]
+  );
+
+  const responderPermiso = (aprobado: boolean, recordar: boolean) => {
+    if (!confirmacion) return;
+    const { id, descripcion } = confirmacion;
+    setConfirmacion(null);
+    addMensaje("usuario", `${aprobado ? "✔ Permitido" : "✖ No permitido"}: ${descripcion}`, true);
+    hablarConServidor("/api/permiso", { id, aprobado, recordar });
+  };
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
@@ -500,9 +564,10 @@ export default function App() {
   useEffect(() => {
     comprobarServidor();
     cargarRegistro();
+    cargarPermisos();
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -551,6 +616,7 @@ export default function App() {
   return (
     <div className="hud-viewport-bg relative w-screen h-screen overflow-hidden flex flex-col justify-between p-2.5 sm:p-4 text-[#e2f8ff]">
       <NotificationStack notifications={notifications} onDismiss={dismissNotification} />
+      {confirmacion && <PermisoDialog confirmacion={confirmacion} onResponder={responderPermiso} />}
 
       {/* BARRA SUPERIOR */}
       <header className="flex items-center justify-between gap-4 px-3 py-1.5 border-b border-[#00e5ff]/25 bg-[#041022]/80 backdrop-blur-md z-20 shrink-0">
@@ -572,6 +638,15 @@ export default function App() {
             title="Volver a comprobar"
           >
             <RefreshCw className="w-3.5 h-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={apagarJarvis}
+            className="ml-2 px-2 py-0.5 border border-[#ff3355]/50 text-[#ff3355] hover:bg-[#ff3355]/15 cursor-pointer flex items-center gap-1"
+            title="Apagar a Jarvis por completo"
+          >
+            <Power className="w-3.5 h-3.5" />
+            Apagar
           </button>
         </div>
       </header>
@@ -730,6 +805,41 @@ export default function App() {
               Versión de prueba: solo funciona con esta página abierta. En la Fase 3 funcionará en segundo plano.
             </p>
           </div>
+
+          {/* PERMISOS RECORDADOS */}
+          <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center gap-2 border-b border-[#00e5ff]/20 pb-1.5">
+              <ShieldCheck className="w-4 h-4 text-[#00e5ff]" />
+              <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                Permisos sin preguntar
+              </h2>
+            </div>
+            {permisos.length === 0 ? (
+              <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
+                Jarvis te pide permiso antes de cada acción en tu laptop.
+              </p>
+            ) : (
+              permisos.map((p) => (
+                <div
+                  key={p.tipo}
+                  className="flex items-center justify-between gap-2 text-[11px] font-hud-mono text-[#b8f4ff] bg-[#041226]/80 border border-[#00e5ff]/20 px-2 py-1"
+                >
+                  <span>{p.nombre}</span>
+                  <button
+                    type="button"
+                    onClick={() => quitarPermiso(p.tipo)}
+                    className="text-[#ff9933] hover:text-[#ff3355] cursor-pointer"
+                    title="Volver a pedir permiso para esto"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ))
+            )}
+            <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+              Borrar archivos, reemplazarlos o apagar la laptop siempre piden permiso.
+            </p>
+          </div>
         </section>
 
         {/* ================= CENTRO: REACTOR ================= */}
@@ -867,8 +977,8 @@ export default function App() {
       </main>
 
       <footer className="flex flex-wrap items-center justify-between gap-2 px-3 py-1 border-t border-[#00e5ff]/20 bg-[#030b18]/85 text-[11px] font-hud-mono text-[#68a8d8] z-20 shrink-0">
-        <span>FASE 1 · CONVERSACIÓN</span>
-        <span>Para apagar a Jarvis, cierra la ventana negra.</span>
+        <span>CONVERSACIÓN · CONTROL DE LA LAPTOP CON PERMISO</span>
+        <span>Cerrar esta ventana no apaga a Jarvis: usa el botón "Apagar".</span>
       </footer>
     </div>
   );

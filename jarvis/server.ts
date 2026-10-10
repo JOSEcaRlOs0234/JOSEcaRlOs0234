@@ -14,6 +14,8 @@ import path from "path";
 import { exec } from "child_process";
 import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
+import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
+import { DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
@@ -34,7 +36,12 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Llamas al usuario "señor" de vez en cuando, sin exagerar.
 - Tus respuestas se leen en voz alta: sé breve (normalmente 1 a 3 frases), sin listas, sin asteriscos, sin emojis ni formato.
 - Si no sabes algo o no estás seguro, dilo con honestidad. No inventes datos.
-- Por ahora solo puedes conversar. Si te piden controlar Spotify, la computadora o WhatsApp, explica con amabilidad que esa función llegará pronto.`;
+- Puedes controlar la laptop (Windows) SOLO con las herramientas que tienes. Úsalas cuando el usuario te pida algo así.
+- El sistema le pide permiso al usuario antes de cada acción; tú no necesitas preguntar "¿está seguro?", solo usa la herramienta.
+- Nunca digas que hiciste algo si la herramienta no respondió con éxito. Si respondió con "error", explícalo con palabras sencillas.
+- Si el usuario no dio permiso, acéptalo con naturalidad y no lo intentes otra vez.
+- Para archivos usa rutas que empiecen con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis. Solo puedes escribir y borrar en la carpeta Jarvis.
+- Todavía no puedes controlar Spotify ni WhatsApp directamente; esas funciones llegarán pronto (sí puedes abrir esos programas).`;
 
 const ai = new GoogleGenAI({ apiKey: CLAVE || "sin-clave" });
 
@@ -86,23 +93,51 @@ function esModeloInexistente(err: any): boolean {
   return Number(err?.status) === 404 || /not found|is not supported|NOT_FOUND/i.test(texto);
 }
 
-async function preguntarAGemini(contents: any[]): Promise<string> {
+/** Le pregunta a Gemini (con la lista de herramientas). Si el modelo principal no existe, usa el de respaldo. */
+async function preguntarAGemini(contents: any[]) {
   const pedir = (model: string) =>
     ai.models.generateContent({
       model,
       contents,
-      config: { systemInstruction: PERSONALIDAD },
+      config: { systemInstruction: PERSONALIDAD, tools: [{ functionDeclarations: DECLARACIONES as any }] },
     });
 
+  let respuesta;
   try {
-    const respuesta = await pedir(MODELO);
-    return respuesta.text?.trim() || "";
+    respuesta = await pedir(MODELO);
   } catch (err) {
     if (!esModeloInexistente(err) || MODELO === MODELO_RESPALDO) throw err;
     registrar("AVISO", `El modelo ${MODELO} no está disponible; usando ${MODELO_RESPALDO}.`);
-    const respuesta = await pedir(MODELO_RESPALDO);
-    return respuesta.text?.trim() || "";
+    respuesta = await pedir(MODELO_RESPALDO);
   }
+  const llamadas: Llamada[] = (respuesta.functionCalls ?? []).map((c: any) => ({
+    id: c.id,
+    name: String(c.name ?? ""),
+    args: (c.args ?? {}) as Record<string, unknown>,
+  }));
+  return {
+    // Se devuelve tal cual (incluye las "firmas de pensamiento" que Gemini necesita para continuar)
+    content: respuesta.candidates?.[0]?.content ?? { role: "model", parts: [] },
+    texto: respuesta.text?.trim() || "",
+    llamadas,
+  };
+}
+
+const agente = new Agente(preguntarAGemini);
+
+/** Envía al navegador el resultado del agente y lo anota en el registro. */
+function responderResultado(res: express.Response, resultado: Awaited<ReturnType<Agente["conversar"]>>) {
+  if ("confirmacion" in resultado) return res.json(resultado);
+  const texto = resultado.texto || "Hecho, señor.";
+  registrar("CHAT", `Jarvis: ${texto}`);
+  res.json({ texto });
+}
+
+function responderError(res: express.Response, err: any) {
+  if (err instanceof ErrorHerramienta) return res.status(400).json({ error: err.message });
+  const explicacion = explicarError(err);
+  registrar("ERROR", `${explicacion} (detalle técnico: ${String(err?.message || err).slice(0, 160)})`);
+  res.status(502).json({ error: explicacion });
 }
 
 // Estado del sistema (para que la interfaz sepa si falta la clave)
@@ -144,14 +179,40 @@ app.post("/api/chat", async (req, res) => {
 
   registrar("CHAT", `Usuario: ${ultimo.texto}`);
   try {
-    const texto = (await preguntarAGemini(contents)) || "Disculpe, señor, no tengo una respuesta para eso.";
-    registrar("CHAT", `Jarvis: ${texto}`);
-    res.json({ texto });
-  } catch (err: any) {
-    const explicacion = explicarError(err);
-    registrar("ERROR", `${explicacion} (detalle técnico: ${String(err?.message || err).slice(0, 160)})`);
-    res.status(502).json({ error: explicacion });
+    responderResultado(res, await agente.conversar(contents));
+  } catch (err) {
+    responderError(res, err);
   }
+});
+
+// El usuario contestó "Sí" o "No" a una pregunta de permiso
+app.post("/api/permiso", async (req, res) => {
+  const { id, aprobado, recordar } = req.body ?? {};
+  if (typeof id !== "string" || typeof aprobado !== "boolean") {
+    return res.status(400).json({ error: "Respuesta de permiso no válida." });
+  }
+  try {
+    responderResultado(res, await agente.responderPermiso(id, aprobado, recordar === true));
+  } catch (err) {
+    responderError(res, err);
+  }
+});
+
+// Permisos que el usuario marcó como "no volver a preguntar"
+app.get("/api/permisos", (_req, res) => {
+  res.json({ permisos: permisosRecordados() });
+});
+
+app.delete("/api/permisos/:tipo", (req, res) => {
+  olvidarPermiso(req.params.tipo);
+  res.json({ permisos: permisosRecordados() });
+});
+
+// Botón "Apagar Jarvis"
+app.post("/api/apagar", (_req, res) => {
+  registrar("SISTEMA", "Jarvis apagado desde la interfaz.");
+  res.json({ ok: true });
+  setTimeout(() => process.exit(0), 300);
 });
 
 // Últimas líneas del registro, para verlas en la interfaz
@@ -169,6 +230,13 @@ const vite = await createViteServer({
 });
 app.use(vite.middlewares);
 
+/** Abre Jarvis en su propia ventana (modo aplicación de Microsoft Edge); si falla, en el navegador normal. */
+function abrirVentana(url: string) {
+  exec(`start "" msedge --app=${url} --window-size=1400,900`, (err) => {
+    if (err) exec(`start "" "${url}"`);
+  });
+}
+
 const servidor = app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
   registrar("SISTEMA", `Jarvis encendido en ${url} (modelo: ${MODELO})`);
@@ -176,7 +244,7 @@ const servidor = app.listen(PORT, HOST, () => {
   console.log("  ===============================================");
   console.log("   J.A.R.V.I.S. está encendido");
   console.log(`   Abre en tu navegador: ${url}`);
-  console.log("   Para apagarlo, cierra esta ventana negra.");
+  console.log("   Para apagarlo: botón \"Apagar\" en Jarvis, o cierra esta ventana.");
   console.log("  ===============================================");
   if (!claveConfigurada) {
     console.log("");
@@ -185,14 +253,14 @@ const servidor = app.listen(PORT, HOST, () => {
   console.log("");
 
   if (process.env.ABRIR_NAVEGADOR === "1" && process.platform === "win32") {
-    exec(`start "" "${url}"`);
+    abrirVentana(url);
   }
 });
 
 servidor.on("error", (err: any) => {
   if (err?.code === "EADDRINUSE") {
-    console.error(`\n  Jarvis ya está encendido en otra ventana (el puerto ${PORT} está ocupado).`);
-    console.error(`  Abre http://localhost:${PORT} en tu navegador o cierra la otra ventana.\n`);
+    console.error(`\n  Jarvis ya está encendido (el puerto ${PORT} está ocupado).`);
+    console.error("  Ábrelo con el icono de Jarvis, o apágalo con su botón \"Apagar\" antes de usar esta ventana.\n");
   } else {
     console.error("\n  No pude encender Jarvis:", err?.message || err, "\n");
   }

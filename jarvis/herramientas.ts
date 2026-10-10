@@ -1,0 +1,525 @@
+/**
+ * La LISTA PERMITIDA de cosas que Jarvis puede hacer en la laptop.
+ * Gemini solo puede pedir estas acciones; cada una revisa sus datos antes de ejecutarse
+ * y tiene su propio nivel de permiso. Nada fuera de esta lista se puede hacer.
+ */
+
+import { existsSync } from "fs";
+import { mkdir, readdir, readFile, realpath, stat, writeFile } from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+import * as win from "./windows.ts";
+
+const CARPETA_JARVIS_APP = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Nivel de permiso de cada acción:
+ *  - "normal": pide permiso, pero el usuario puede marcar "no volver a preguntar".
+ *  - "delicada": SIEMPRE pide permiso (borrar, sobrescribir, apagar...).
+ *  - "libre": no necesita permiso (no cambia nada en la laptop).
+ */
+export type Nivel = "libre" | "normal" | "delicada";
+
+export interface Revisada {
+  nivel: Nivel;
+  // Tipo de permiso que se puede recordar (por ejemplo "abrir_programa")
+  tipo: string;
+  // Lo que se le muestra al usuario al pedir permiso
+  descripcion: string;
+  ejecutar: () => Promise<Record<string, unknown>>;
+}
+
+export class ErrorHerramienta extends Error {}
+
+// ------------------------------------------------------------------ declaraciones para Gemini
+
+export const DECLARACIONES = [
+  {
+    name: "abrir_programa",
+    description:
+      "Abre un programa instalado en la laptop (por ejemplo: Spotify, Chrome, Word, Bloc de notas, Calculadora, WhatsApp).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { nombre: { type: "string", description: "Nombre del programa" } },
+      required: ["nombre"],
+    },
+  },
+  {
+    name: "abrir_pagina_web",
+    description: "Abre una página web en el navegador. Solo direcciones http o https.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { url: { type: "string", description: "Dirección completa, por ejemplo https://www.youtube.com" } },
+      required: ["url"],
+    },
+  },
+  {
+    name: "buscar_en_internet",
+    description: "Abre una búsqueda de Google en el navegador.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { consulta: { type: "string" } },
+      required: ["consulta"],
+    },
+  },
+  {
+    name: "controlar_volumen",
+    description: "Sube, baja, silencia o fija el volumen de la laptop.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        accion: { type: "string", enum: ["subir", "bajar", "silenciar", "establecer"] },
+        cantidad: {
+          type: "integer",
+          description: "Porcentaje: cuánto subir o bajar (por defecto 10), o el nivel exacto si accion=establecer.",
+        },
+      },
+      required: ["accion"],
+    },
+  },
+  {
+    name: "listar_archivos",
+    description:
+      "Muestra los archivos de una carpeta del usuario. La ruta empieza con una de estas carpetas: Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis. Ejemplo: 'Documentos/Tareas'.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { carpeta: { type: "string" } },
+      required: ["carpeta"],
+    },
+  },
+  {
+    name: "leer_archivo",
+    description: "Lee un archivo de texto (txt, md, csv, json...). Ruta como 'Escritorio/notas.txt'.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { ruta: { type: "string" } },
+      required: ["ruta"],
+    },
+  },
+  {
+    name: "crear_archivo",
+    description:
+      "Crea un archivo de texto dentro de la carpeta Documentos/Jarvis (la única carpeta donde Jarvis puede escribir).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        nombre: { type: "string", description: "Nombre del archivo, por ejemplo 'lista-compras.txt'" },
+        contenido: { type: "string" },
+        sobrescribir: { type: "boolean", description: "true si se quiere reemplazar un archivo que ya existe" },
+      },
+      required: ["nombre", "contenido"],
+    },
+  },
+  {
+    name: "abrir_archivo",
+    description: "Abre un archivo o carpeta del usuario con su programa normal (por ejemplo un PDF o una foto).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { ruta: { type: "string" } },
+      required: ["ruta"],
+    },
+  },
+  {
+    name: "borrar_archivo",
+    description: "Manda a la Papelera de reciclaje un archivo de la carpeta Documentos/Jarvis.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { nombre: { type: "string" } },
+      required: ["nombre"],
+    },
+  },
+  {
+    name: "sistema",
+    description: "Bloquear, suspender, reiniciar o apagar la laptop, o cancelar un apagado pendiente.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        accion: { type: "string", enum: ["bloquear", "suspender", "reiniciar", "apagar", "cancelar_apagado"] },
+      },
+      required: ["accion"],
+    },
+  },
+];
+
+// ------------------------------------------------------------------ utilidades
+
+/** Minúsculas y sin acentos, para comparar nombres. */
+export function normalizar(texto: string): string {
+  return texto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function texto(valor: unknown, campo: string, max = 300): string {
+  if (typeof valor !== "string" || !valor.trim()) throw new ErrorHerramienta(`Falta el dato "${campo}".`);
+  if (valor.length > max) throw new ErrorHerramienta(`El dato "${campo}" es demasiado largo.`);
+  return valor.trim();
+}
+
+function necesitaWindows(): void {
+  if (!win.esWindows) throw new ErrorHerramienta("Esta acción solo funciona en Windows.");
+}
+
+const EXTENSIONES_TEXTO = new Set([
+  ".txt", ".md", ".csv", ".json", ".log", ".html", ".htm", ".css", ".xml", ".yaml", ".yml", ".ini", ".srt",
+]);
+
+// Archivos que podrían ejecutar código: Jarvis nunca los abre ni los crea
+const EXTENSIONES_PELIGROSAS = new Set([
+  ".exe", ".bat", ".cmd", ".com", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".msi", ".msp",
+  ".scr", ".lnk", ".hta", ".cpl", ".reg", ".jar", ".pif", ".url", ".appref-ms", ".inf", ".dll", ".sys",
+]);
+
+const NOMBRES_CARPETAS: Record<string, string> = {
+  escritorio: "escritorio",
+  desktop: "escritorio",
+  documentos: "documentos",
+  "mis documentos": "documentos",
+  documents: "documentos",
+  descargas: "descargas",
+  downloads: "descargas",
+  imagenes: "imagenes",
+  fotos: "imagenes",
+  pictures: "imagenes",
+  musica: "musica",
+  music: "musica",
+  videos: "videos",
+  jarvis: "jarvis",
+};
+
+/**
+ * Convierte "Documentos/Tareas/x.txt" en una ruta real y comprueba que quede DENTRO
+ * de las carpetas permitidas (nada de AppData, Windows, Archivos de programa, etc.).
+ */
+export async function resolverRuta(
+  entrada: string,
+  carpetas: Record<string, string>
+): Promise<{ ruta: string; raiz: string; bonita: string }> {
+  const limpia = entrada.trim().replace(/^["']|["']$/g, "");
+  let raiz: string | undefined;
+  let resto: string;
+
+  if (path.isAbsolute(limpia) || /^[a-zA-Z]:[\\/]/.test(limpia)) {
+    const absoluta = path.resolve(limpia);
+    raiz = Object.values(carpetas).find((c) => estaDentro(absoluta, c));
+    if (!raiz) throw new ErrorHerramienta("Solo puedo usar tus carpetas personales (Escritorio, Documentos, Descargas...).");
+    resto = path.relative(raiz, absoluta);
+  } else {
+    const partes = limpia.split(/[\\/]+/).filter(Boolean);
+    // Probar los nombres de una y dos palabras ("mis documentos")
+    for (const n of [2, 1]) {
+      const alias = NOMBRES_CARPETAS[normalizar(partes.slice(0, n).join(" "))];
+      if (alias && partes.length >= n) {
+        raiz = carpetas[alias];
+        partes.splice(0, n);
+        break;
+      }
+    }
+    if (!raiz) {
+      throw new ErrorHerramienta(
+        "La ruta debe empezar con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis."
+      );
+    }
+    resto = partes.join(path.sep);
+  }
+
+  const ruta = path.resolve(raiz, resto);
+  if (!estaDentro(ruta, raiz)) throw new ErrorHerramienta("Esa ruta sale de las carpetas permitidas.");
+
+  // Revisar también la ruta "real" por si hay accesos directos de carpeta que apunten a otro lado
+  if (existsSync(ruta)) {
+    const real = await realpath(ruta);
+    const raizReal = existsSync(raiz) ? await realpath(raiz) : raiz;
+    if (!estaDentro(real, raizReal)) throw new ErrorHerramienta("Esa ruta apunta fuera de las carpetas permitidas.");
+  }
+  if (estaDentro(ruta, CARPETA_JARVIS_APP)) {
+    throw new ErrorHerramienta("No puedo tocar los archivos del propio Jarvis.");
+  }
+
+  const nombreRaiz = Object.entries(carpetas).find(([, v]) => v === raiz)?.[0] ?? "";
+  const nombreVisible =
+    nombreRaiz === "jarvis" ? "Documentos\\Jarvis" : nombreRaiz.charAt(0).toUpperCase() + nombreRaiz.slice(1);
+  const bonita = [nombreVisible, resto].filter(Boolean).join("\\");
+  return { ruta, raiz, bonita };
+}
+
+function estaDentro(ruta: string, carpeta: string): boolean {
+  const rel = path.relative(carpeta, ruta);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+/** Ruta dentro de Documentos\\Jarvis (la única carpeta donde Jarvis puede escribir o borrar). */
+async function rutaEnJarvis(nombre: string, carpetas: Record<string, string>) {
+  if (/[<>:"|?*\x00-\x1f]/.test(nombre) || /(^|[\\/])\.\.([\\/]|$)/.test(nombre)) {
+    throw new ErrorHerramienta("Ese nombre de archivo tiene caracteres no permitidos.");
+  }
+  const r = await resolverRuta(path.join("Jarvis", nombre), carpetas);
+  if (!estaDentro(r.ruta, carpetas.jarvis) || r.ruta === carpetas.jarvis) {
+    throw new ErrorHerramienta("Solo puedo escribir o borrar dentro de Documentos\\Jarvis.");
+  }
+  return r;
+}
+
+function validarUrl(entrada: string): string {
+  let url: URL;
+  try {
+    url = new URL(/^[a-z]+:/i.test(entrada) ? entrada : `https://${entrada}`);
+  } catch {
+    throw new ErrorHerramienta("Esa dirección web no es válida.");
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new ErrorHerramienta("Solo puedo abrir páginas web (http o https).");
+  }
+  return url.toString();
+}
+
+/** Busca el programa que mejor coincide con el nombre pedido. */
+export function buscarPrograma(nombre: string, lista: win.Programa[]): win.Programa | undefined {
+  const buscado = normalizar(nombre);
+  const conNombre = lista.map((p) => ({ p, n: normalizar(p.nombre) }));
+  return (
+    conNombre.find((x) => x.n === buscado)?.p ??
+    conNombre.find((x) => x.n.startsWith(buscado))?.p ??
+    conNombre.find((x) => x.n.split(/[^a-z0-9]+/).includes(buscado))?.p ??
+    conNombre.find((x) => buscado.length >= 4 && x.n.includes(buscado))?.p
+  );
+}
+
+// ------------------------------------------------------------------ revisar cada acción
+
+/**
+ * Revisa una petición de Gemini. Si los datos no son válidos lanza ErrorHerramienta.
+ * Devuelve qué tan delicada es, cómo describirla al usuario y la función que la ejecuta.
+ */
+export async function revisar(nombre: string, args: Record<string, unknown>): Promise<Revisada> {
+  switch (nombre) {
+    case "abrir_programa": {
+      const pedido = texto(args.nombre, "nombre", 100);
+      const basico = win.PROGRAMAS_BASICOS[normalizar(pedido)];
+      let programa: win.Programa | undefined;
+      if (win.esWindows) {
+        try {
+          programa = buscarPrograma(pedido, await win.listarProgramas());
+          if (!programa && !basico) programa = buscarPrograma(pedido, await win.listarProgramas(true));
+        } catch {
+          // Si Windows no da la lista, quedan los programas básicos
+        }
+      }
+      if (!programa && !basico) {
+        necesitaWindows();
+        throw new ErrorHerramienta(`No encontré un programa llamado "${pedido}" en el menú Inicio.`);
+      }
+      const visible = programa?.nombre ?? pedido;
+      return {
+        nivel: "normal",
+        tipo: "abrir_programa",
+        descripcion: `Abrir el programa "${visible}"`,
+        ejecutar: async () => {
+          necesitaWindows();
+          if (programa) win.lanzarPrograma(programa);
+          else win.lanzarBasico(basico!);
+          return { resultado: `Abrí ${visible}.` };
+        },
+      };
+    }
+
+    case "abrir_pagina_web": {
+      const url = validarUrl(texto(args.url, "url", 2000));
+      return {
+        nivel: "normal",
+        tipo: "abrir_web",
+        descripcion: `Abrir la página ${url}`,
+        ejecutar: async () => {
+          necesitaWindows();
+          win.abrirUrl(url);
+          return { resultado: `Abrí ${url}.` };
+        },
+      };
+    }
+
+    case "buscar_en_internet": {
+      const consulta = texto(args.consulta, "consulta", 300);
+      const url = `https://www.google.com/search?q=${encodeURIComponent(consulta)}`;
+      return {
+        nivel: "normal",
+        tipo: "abrir_web",
+        descripcion: `Buscar en Google: "${consulta}"`,
+        ejecutar: async () => {
+          necesitaWindows();
+          win.abrirUrl(url);
+          return { resultado: "Abrí la búsqueda en el navegador." };
+        },
+      };
+    }
+
+    case "controlar_volumen": {
+      const accion = args.accion;
+      if (accion !== "subir" && accion !== "bajar" && accion !== "silenciar" && accion !== "establecer") {
+        throw new ErrorHerramienta("Acción de volumen no válida.");
+      }
+      const numero = Number(args.cantidad ?? (accion === "establecer" ? 50 : 10));
+      const cantidad = Math.max(0, Math.min(100, Math.round(Number.isFinite(numero) ? numero : 10)));
+      const descripciones = {
+        subir: `Subir el volumen ${cantidad}%`,
+        bajar: `Bajar el volumen ${cantidad}%`,
+        silenciar: "Silenciar / quitar silencio",
+        establecer: `Poner el volumen en ${cantidad}%`,
+      };
+      return {
+        nivel: "normal",
+        tipo: "volumen",
+        descripcion: descripciones[accion],
+        ejecutar: async () => {
+          necesitaWindows();
+          await win.volumen(accion, cantidad);
+          return { resultado: "Listo." };
+        },
+      };
+    }
+
+    case "listar_archivos": {
+      const { ruta, bonita } = await resolverRuta(texto(args.carpeta, "carpeta", 500), await win.carpetasUsuario());
+      return {
+        nivel: "normal",
+        tipo: "ver_archivos",
+        descripcion: `Ver qué archivos hay en ${bonita}`,
+        ejecutar: async () => {
+          const entradas = await readdir(ruta, { withFileTypes: true }).catch(() => {
+            throw new ErrorHerramienta("Esa carpeta no existe.");
+          });
+          const lista = entradas
+            .filter((e) => !e.name.startsWith(".") && e.name.toLowerCase() !== "desktop.ini")
+            .slice(0, 100)
+            .map((e) => (e.isDirectory() ? `[carpeta] ${e.name}` : e.name));
+          return { carpeta: bonita, total: entradas.length, archivos: lista };
+        },
+      };
+    }
+
+    case "leer_archivo": {
+      const { ruta, bonita } = await resolverRuta(texto(args.ruta, "ruta", 500), await win.carpetasUsuario());
+      const ext = path.extname(ruta).toLowerCase();
+      if (!EXTENSIONES_TEXTO.has(ext)) {
+        throw new ErrorHerramienta("Solo puedo leer archivos de texto (txt, md, csv, json...).");
+      }
+      if (/^\.env/i.test(path.basename(ruta))) throw new ErrorHerramienta("Ese archivo puede tener claves secretas.");
+      return {
+        nivel: "normal",
+        tipo: "leer_archivos",
+        descripcion: `Leer el archivo ${bonita}`,
+        ejecutar: async () => {
+          const info = await stat(ruta).catch(() => {
+            throw new ErrorHerramienta("Ese archivo no existe.");
+          });
+          if (!info.isFile()) throw new ErrorHerramienta("Eso no es un archivo.");
+          if (info.size > 200 * 1024) throw new ErrorHerramienta("El archivo es demasiado grande para leerlo.");
+          const contenido = await readFile(ruta, "utf8");
+          return { archivo: bonita, contenido: contenido.slice(0, 20000) };
+        },
+      };
+    }
+
+    case "crear_archivo": {
+      const carpetas = await win.carpetasUsuario();
+      const nombreArchivo = texto(args.nombre, "nombre", 150).replace(/^jarvis[\\/]+/i, "");
+      const conExtension = path.extname(nombreArchivo) ? nombreArchivo : `${nombreArchivo}.txt`;
+      const ext = path.extname(conExtension).toLowerCase();
+      if (EXTENSIONES_PELIGROSAS.has(ext) || !EXTENSIONES_TEXTO.has(ext)) {
+        throw new ErrorHerramienta("Solo puedo crear archivos de texto (txt, md, csv, json, html...).");
+      }
+      const contenido = typeof args.contenido === "string" ? args.contenido : "";
+      if (contenido.length > 100000) throw new ErrorHerramienta("El contenido es demasiado largo.");
+      const { ruta, bonita } = await rutaEnJarvis(conExtension, carpetas);
+      const existe = existsSync(ruta);
+      if (existe && args.sobrescribir !== true) {
+        throw new ErrorHerramienta(`Ya existe ${bonita}. Pregunta al usuario si quiere reemplazarlo.`);
+      }
+      return {
+        nivel: existe ? "delicada" : "normal",
+        tipo: "crear_archivos",
+        descripcion: existe ? `REEMPLAZAR el archivo ${bonita} (se pierde lo que tenía)` : `Crear el archivo ${bonita}`,
+        ejecutar: async () => {
+          await mkdir(path.dirname(ruta), { recursive: true });
+          await writeFile(ruta, contenido, "utf8");
+          return { resultado: `Guardé ${bonita}.` };
+        },
+      };
+    }
+
+    case "abrir_archivo": {
+      const { ruta, bonita } = await resolverRuta(texto(args.ruta, "ruta", 500), await win.carpetasUsuario());
+      if (EXTENSIONES_PELIGROSAS.has(path.extname(ruta).toLowerCase())) {
+        throw new ErrorHerramienta("Por seguridad no abro programas ni scripts, solo documentos, fotos, música, etc.");
+      }
+      return {
+        nivel: "normal",
+        tipo: "abrir_archivos",
+        descripcion: `Abrir ${bonita}`,
+        ejecutar: async () => {
+          necesitaWindows();
+          if (!existsSync(ruta)) throw new ErrorHerramienta("Ese archivo no existe.");
+          win.abrirRuta(ruta);
+          return { resultado: `Abrí ${bonita}.` };
+        },
+      };
+    }
+
+    case "borrar_archivo": {
+      const nombreArchivo = texto(args.nombre, "nombre", 150).replace(/^jarvis[\\/]+/i, "");
+      const { ruta, bonita } = await rutaEnJarvis(nombreArchivo, await win.carpetasUsuario());
+      return {
+        nivel: "delicada",
+        tipo: "borrar_archivos",
+        descripcion: `BORRAR ${bonita} (se va a la Papelera de reciclaje)`,
+        ejecutar: async () => {
+          necesitaWindows();
+          const info = await stat(ruta).catch(() => {
+            throw new ErrorHerramienta("Ese archivo no existe.");
+          });
+          if (!info.isFile()) throw new ErrorHerramienta("Solo puedo borrar archivos, no carpetas.");
+          await win.mandarAPapelera(ruta);
+          return { resultado: `Mandé ${bonita} a la Papelera.` };
+        },
+      };
+    }
+
+    case "sistema": {
+      const accion = args.accion;
+      const descripciones: Record<string, string> = {
+        bloquear: "Bloquear la laptop",
+        suspender: "Suspender la laptop",
+        reiniciar: "REINICIAR la laptop en 60 segundos",
+        apagar: "APAGAR la laptop en 60 segundos",
+        cancelar_apagado: "Cancelar el apagado o reinicio pendiente",
+      };
+      if (typeof accion !== "string" || !(accion in descripciones)) {
+        throw new ErrorHerramienta("Acción de sistema no válida.");
+      }
+      const a = accion as keyof typeof descripciones & Parameters<typeof win.accionSistema>[0];
+      return {
+        nivel: a === "cancelar_apagado" ? "libre" : "delicada",
+        tipo: "sistema",
+        descripcion: descripciones[a],
+        ejecutar: async () => {
+          necesitaWindows();
+          win.accionSistema(a);
+          const extra =
+            a === "apagar" || a === "reiniciar" ? " Dile al usuario que puede pedir cancelarlo en el próximo minuto." : "";
+          return { resultado: `Hecho: ${descripciones[a]}.${extra}` };
+        },
+      };
+    }
+
+    default:
+      throw new ErrorHerramienta(`No tengo permitido hacer "${nombre}".`);
+  }
+}
+
+// Nombres legibles de los permisos que se pueden recordar
+export const NOMBRES_PERMISOS: Record<string, string> = {
+  abrir_programa: "Abrir programas",
+  abrir_web: "Abrir páginas web y búsquedas",
+  volumen: "Cambiar el volumen",
+  ver_archivos: "Ver qué archivos hay en tus carpetas",
+  leer_archivos: "Leer archivos de texto",
+  crear_archivos: "Crear archivos en Documentos\\Jarvis",
+  abrir_archivos: "Abrir documentos, fotos y carpetas",
+};
