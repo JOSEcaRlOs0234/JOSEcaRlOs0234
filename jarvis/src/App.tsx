@@ -22,6 +22,9 @@ import {
   ShieldCheck,
   Power,
   X,
+  Brain,
+  Plus,
+  RotateCcw,
 } from "lucide-react";
 import {
   CONFIG,
@@ -88,6 +91,19 @@ const MENSAJE_INICIAL: HudMessage = {
   local: true,
 };
 
+const CLAVE_CONVERSACION = "jarvis_conversacion";
+
+/** La conversación se guarda en esta ventana para que no se pierda al cerrarla. */
+function conversacionGuardada(): HudMessage[] {
+  try {
+    const lista = JSON.parse(localStorage.getItem(CLAVE_CONVERSACION) || "[]");
+    if (Array.isArray(lista) && lista.length) return lista;
+  } catch {
+    // Si no se puede leer, se empieza de nuevo
+  }
+  return [MENSAJE_INICIAL];
+}
+
 export default function App() {
   const [estado, setEstado] = useState<ReactorState>("reposo");
   const [now, setNow] = useState<Date>(() => new Date());
@@ -103,8 +119,8 @@ export default function App() {
   const [showCitySearch, setShowCitySearch] = useState(false);
 
   // Conversación
-  const [messages, setMessages] = useState<HudMessage[]>([MENSAJE_INICIAL]);
-  const messagesRef = useRef<HudMessage[]>([MENSAJE_INICIAL]);
+  const [messages, setMessages] = useState<HudMessage[]>(conversacionGuardada);
+  const messagesRef = useRef<HudMessage[]>(messages);
   const [inputMessage, setInputMessage] = useState("");
   const [enviando, setEnviando] = useState(false);
   const enviandoRef = useRef(false);
@@ -126,6 +142,10 @@ export default function App() {
   // Permisos: pregunta pendiente y permisos recordados
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [permisos, setPermisos] = useState<{ tipo: string; nombre: string }[]>([]);
+
+  // Memoria permanente de Jarvis
+  const [recuerdos, setRecuerdos] = useState<{ id: string; texto: string; fecha: string }[]>([]);
+  const [nuevoRecuerdo, setNuevoRecuerdo] = useState("");
 
   // Modelos de Gemini disponibles
   const [modelos, setModelos] = useState<{ id: string; nombre: string }[]>([]);
@@ -229,6 +249,50 @@ export default function App() {
     }
     setServidor("sin_conexion");
     window.close();
+  };
+
+  const cargarRecuerdos = useCallback(async () => {
+    try {
+      const r = await fetch("/api/recuerdos");
+      if (r.ok) setRecuerdos((await r.json()).recuerdos ?? []);
+    } catch {
+      // Se reintenta en la próxima conversación
+    }
+  }, []);
+
+  const agregarRecuerdoManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const texto = nuevoRecuerdo.trim();
+    if (!texto) return;
+    setNuevoRecuerdo("");
+    try {
+      const r = await fetch("/api/recuerdos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto }),
+      });
+      if (r.ok) setRecuerdos((await r.json()).recuerdos ?? []);
+    } catch {
+      showNotification("No pude guardar el recuerdo.", "error");
+    }
+    cargarRegistro();
+  };
+
+  const borrarRecuerdo = async (id: string) => {
+    try {
+      const r = await fetch(`/api/recuerdos/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (r.ok) setRecuerdos((await r.json()).recuerdos ?? []);
+    } catch {
+      showNotification("No pude borrar el recuerdo.", "error");
+    }
+    cargarRegistro();
+  };
+
+  const nuevaConversacion = () => {
+    if (enviandoRef.current) return;
+    if (!window.confirm("¿Empezar una conversación nueva? Jarvis conserva su memoria, solo se borra este chat.")) return;
+    messagesRef.current = [{ ...MENSAJE_INICIAL, timestamp: horaActual() }];
+    setMessages(messagesRef.current);
   };
 
   const cargarModelos = useCallback(async () => {
@@ -353,9 +417,10 @@ export default function App() {
         }
         cargarRegistro();
         cargarPermisos();
+        cargarRecuerdos();
       }
     },
-    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos]
+    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos]
   );
 
   const enviarMensaje = useCallback(
@@ -604,9 +669,19 @@ export default function App() {
     cargarRegistro();
     cargarPermisos();
     cargarModelos();
+    cargarRecuerdos();
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos]);
+
+  // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
+  useEffect(() => {
+    try {
+      localStorage.setItem(CLAVE_CONVERSACION, JSON.stringify(messages.slice(-60)));
+    } catch {
+      // Si el navegador no deja guardar, no pasa nada
+    }
+  }, [messages]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -897,6 +972,61 @@ export default function App() {
               Borrar archivos, reemplazarlos o apagar la laptop siempre piden permiso.
             </p>
           </div>
+
+          {/* MEMORIA DE JARVIS */}
+          <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+              <div className="flex items-center gap-2">
+                <Brain className="w-4 h-4 text-[#00e5ff]" />
+                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                  Memoria de Jarvis
+                </h2>
+              </div>
+              <span className="font-hud-mono text-[10px] text-[#00e5ff]">{recuerdos.length}</span>
+            </div>
+            {recuerdos.length === 0 ? (
+              <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
+                Dile por ejemplo: &ldquo;Recuerda que me llamo...&rdquo; y lo guardará aquí.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-1">
+                {[...recuerdos].reverse().map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-start justify-between gap-2 text-[11px] text-[#e2f8ff] bg-[#041226]/80 border border-[#00e5ff]/20 px-2 py-1"
+                  >
+                    <span className="leading-snug break-words">{r.texto}</span>
+                    <button
+                      type="button"
+                      onClick={() => borrarRecuerdo(r.id)}
+                      className="text-[#ff9933] hover:text-[#ff3355] cursor-pointer shrink-0 mt-0.5"
+                      title="Olvidar esto"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <form onSubmit={agregarRecuerdoManual} className="flex gap-1.5">
+              <input
+                type="text"
+                value={nuevoRecuerdo}
+                onChange={(e) => setNuevoRecuerdo(e.target.value)}
+                maxLength={300}
+                placeholder="Agregar un recuerdo..."
+                className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+              />
+              <button
+                type="submit"
+                disabled={!nuevoRecuerdo.trim()}
+                className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                title="Guardar recuerdo"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </form>
+          </div>
         </section>
 
         {/* ================= CENTRO: REACTOR ================= */}
@@ -927,6 +1057,15 @@ export default function App() {
                   Conversación
                 </h2>
               </div>
+              <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={nuevaConversacion}
+                className="p-1 text-[#68a8d8] hover:text-[#00e5ff] cursor-pointer"
+                title="Nueva conversación (la memoria se conserva)"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={cambiarVoz}
@@ -938,6 +1077,7 @@ export default function App() {
                 {vozActiva ? <Volume2 className="w-3 h-3" /> : <VolumeX className="w-3 h-3" />}
                 {vozActiva ? "Voz encendida" : "Voz apagada"}
               </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">

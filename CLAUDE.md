@@ -32,7 +32,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.3.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.4.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -64,6 +64,11 @@
   (solo texto, ≤200 KB, nunca .env), crear_archivo (solo texto, solo Documentos\Jarvis), abrir_archivo (nunca ejecutables),
   borrar_archivo (solo Documentos\Jarvis, a la Papelera), sistema.
   Rutas: alias Escritorio/Documentos/Descargas/Imagenes/Musica/Videos/Jarvis; `resolverRuta` impide salir (.., absolutas, enlaces).
+- `memoria.ts` (pedido del usuario: "para la memoria"): recuerdos permanentes en `datos/memoria.json` (máx. 200, 300 car.).
+  Herramientas `guardar_recuerdo`/`olvidar_recuerdo` (nivel libre: no tocan la laptop). Se inyectan en las instrucciones
+  de Gemini en cada turno (`instrucciones()` en server.ts, junto con fecha/hora). `GET/POST/DELETE /api/recuerdos`.
+  Panel "Memoria de Jarvis" para ver/agregar/borrar. La conversación del chat se guarda en localStorage (últimos 60 mensajes);
+  botón "Nueva conversación" la borra (la memoria se conserva).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

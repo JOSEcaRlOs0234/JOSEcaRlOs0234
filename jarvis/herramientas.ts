@@ -9,6 +9,7 @@ import { mkdir, readdir, readFile, realpath, stat, writeFile } from "fs/promises
 import path from "path";
 import { fileURLToPath } from "url";
 import * as win from "./windows.ts";
+import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
 
 const CARPETA_JARVIS_APP = path.dirname(fileURLToPath(import.meta.url));
 
@@ -126,6 +127,25 @@ export const DECLARACIONES = [
       type: "object",
       properties: { nombre: { type: "string" } },
       required: ["nombre"],
+    },
+  },
+  {
+    name: "guardar_recuerdo",
+    description:
+      "Guarda en la memoria permanente algo sobre el usuario (su nombre, gustos, fechas importantes, pendientes). Úsalo cuando el usuario pida que recuerdes algo o comparta un dato personal útil. Una idea por recuerdo, escrita en tercera persona.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { texto: { type: "string", description: "Por ejemplo: 'Se llama Elliott y vive en Monterrey'" } },
+      required: ["texto"],
+    },
+  },
+  {
+    name: "olvidar_recuerdo",
+    description: "Borra un recuerdo de la memoria cuando el usuario lo pida o cuando ya no sea cierto. Usa el [id] del recuerdo.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
     },
   },
   {
@@ -504,6 +524,34 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           const extra =
             a === "apagar" || a === "reiniciar" ? " Dile al usuario que puede pedir cancelarlo en el próximo minuto." : "";
           return { resultado: `Hecho: ${descripciones[a]}.${extra}` };
+        },
+      };
+    }
+
+    case "guardar_recuerdo": {
+      const recuerdo = texto(args.texto, "texto", MAX_LARGO_RECUERDO);
+      return {
+        // Solo cambia la memoria de Jarvis (no la laptop) y se puede borrar en el panel "Memoria"
+        nivel: "libre",
+        tipo: "memoria",
+        descripcion: `Recordar: "${recuerdo}"`,
+        ejecutar: async () => {
+          const r = agregarRecuerdo(recuerdo);
+          return { resultado: `Guardado en la memoria con id ${r.id}.` };
+        },
+      };
+    }
+
+    case "olvidar_recuerdo": {
+      const id = texto(args.id, "id", 40).replace(/[\[\]]/g, "");
+      return {
+        nivel: "libre",
+        tipo: "memoria",
+        descripcion: `Olvidar el recuerdo ${id}`,
+        ejecutar: async () => {
+          const borrado = borrarRecuerdo(id);
+          if (!borrado) throw new ErrorHerramienta("No encontré ese recuerdo.");
+          return { resultado: `Olvidé: "${borrado.texto}".` };
         },
       };
     }

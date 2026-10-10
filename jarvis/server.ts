@@ -17,6 +17,7 @@ import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
 import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
 import { DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
+import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -45,7 +46,16 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Nunca digas que hiciste algo si la herramienta no respondió con éxito. Si respondió con "error", explícalo con palabras sencillas.
 - Si el usuario no dio permiso, acéptalo con naturalidad y no lo intentes otra vez.
 - Para archivos usa rutas que empiecen con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis. Solo puedes escribir y borrar en la carpeta Jarvis.
-- Todavía no puedes controlar Spotify ni WhatsApp directamente; esas funciones llegarán pronto (sí puedes abrir esos programas).`;
+- Todavía no puedes controlar Spotify ni WhatsApp directamente; esas funciones llegarán pronto (sí puedes abrir esos programas).
+- Tienes memoria permanente: usa guardar_recuerdo cuando el usuario te pida recordar algo o te cuente un dato personal útil
+  (nombre, gustos, cumpleaños, pendientes), y avísale brevemente que lo recordarás. Usa olvidar_recuerdo si te lo pide.
+  Nunca guardes contraseñas, claves ni datos bancarios.`;
+
+/** Instrucciones para Gemini: personalidad + fecha de hoy + todo lo que Jarvis recuerda. */
+function instrucciones(): string {
+  const hoy = new Date().toLocaleString("es-MX", { dateStyle: "full", timeStyle: "short" });
+  return `${PERSONALIDAD}\n\nFecha y hora actual: ${hoy}.\n\n${recuerdosParaGemini()}`;
+}
 
 const ai = new GoogleGenAI({ apiKey: CLAVE || "sin-clave" });
 
@@ -110,7 +120,7 @@ async function preguntarAGemini(contents: any[]) {
     ai.models.generateContent({
       model,
       contents,
-      config: { systemInstruction: PERSONALIDAD, tools: [{ functionDeclarations: DECLARACIONES as any }] },
+      config: { systemInstruction: instrucciones(), tools: [{ functionDeclarations: DECLARACIONES as any }] },
     });
 
   let respuesta;
@@ -253,6 +263,25 @@ app.get("/api/permisos", (_req, res) => {
 app.delete("/api/permisos/:tipo", (req, res) => {
   olvidarPermiso(req.params.tipo);
   res.json({ permisos: permisosRecordados() });
+});
+
+// Memoria de Jarvis (panel "Memoria")
+app.get("/api/recuerdos", (_req, res) => {
+  res.json({ recuerdos: leerRecuerdos() });
+});
+
+app.post("/api/recuerdos", (req, res) => {
+  const texto = req.body?.texto;
+  if (typeof texto !== "string" || !texto.trim()) return res.status(400).json({ error: "Escribe algo para recordar." });
+  const r = agregarRecuerdo(texto);
+  registrar("MEMORIA", `Agregado a mano: ${r.texto}`);
+  res.json({ recuerdos: leerRecuerdos() });
+});
+
+app.delete("/api/recuerdos/:id", (req, res) => {
+  const borrado = borrarRecuerdo(req.params.id);
+  if (borrado) registrar("MEMORIA", `Borrado: ${borrado.texto}`);
+  res.json({ recuerdos: leerRecuerdos() });
 });
 
 // Botón "Apagar Jarvis"

@@ -33,3 +33,9 @@ Borra el archivo `.env` y vuelve a abrir **Encender Jarvis.bat**.
 Arriba a la derecha hay un menú con **todos los modelos de Gemini** que tu clave puede usar (la misma clave sirve para todos).
 Los "Flash" son rápidos; los "Pro" piensan más pero tardan más y tienen menos uso gratis.
 Si el elegido falla o llega a su límite, Jarvis usa otro automáticamente (queda anotado en el registro).
+
+## Memoria
+Dile a Jarvis "Recuerda que..." y lo guarda para siempre (en `datos/memoria.json`, solo en tu laptop).
+Lo ves y lo borras en el panel **Memoria de Jarvis**. También puedes decirle "olvida que...".
+La conversación también se conserva al cerrar la ventana; el botón ↺ empieza una conversación nueva (la memoria no se borra).
+No le pidas que recuerde contraseñas ni datos del banco.
