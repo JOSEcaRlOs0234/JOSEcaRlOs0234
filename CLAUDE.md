@@ -26,7 +26,8 @@
 ## Estado actual
 - Laptop del usuario: **Windows**, Jarvis instalado en `C:\Jarvis\jarvis`. El usuario delegó todas las decisiones técnicas.
 - El código vive en la carpeta `jarvis/` de este repo (repo de perfil de GitHub, público → nunca subir secretos).
-- Push a GitHub falla por permisos (403); se le entrega al usuario un zip (`git archive HEAD jarvis`) con SendUserFile.
+- GitHub: el usuario dio acceso; el trabajo se sube a la rama `claude/zealous-bardeen-xz2fta` (no a main).
+  Al usuario se le entrega además un zip (`git archive HEAD jarvis`) con SendUserFile para instalarlo en su laptop.
   Para actualizar: extraer el zip en `C:\Jarvis` reemplazando archivos (`.env`, `node_modules`, `datos`, `registro` se conservan).
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
