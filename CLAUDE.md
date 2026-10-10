@@ -32,6 +32,10 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.3.0). Los lanzadores apagan un
+  Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
+  (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
+
 ## Cómo está hecho Jarvis (carpeta jarvis/)
 - Lanzadores (Windows):
   - `Encender Jarvis.bat`: visible. Revisa Node.js → `npm install` la primera vez → si no hay clave corre `configurar.mjs`

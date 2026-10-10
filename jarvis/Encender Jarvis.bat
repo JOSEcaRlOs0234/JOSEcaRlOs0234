@@ -39,6 +39,9 @@ if errorlevel 1 (
 
 if not exist "datos\acceso-directo.txt" call "Crear acceso directo.bat"
 
+rem Si quedó encendido otro Jarvis (por ejemplo una versión vieja), se apaga para usar este
+powershell -NoProfile -Command "try { Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/apagar -TimeoutSec 2 | Out-Null; Start-Sleep -Seconds 2 } catch {}" >nul 2>nul
+
 set ABRIR_NAVEGADOR=1
 call node_modules\.bin\tsx.cmd server.ts
 

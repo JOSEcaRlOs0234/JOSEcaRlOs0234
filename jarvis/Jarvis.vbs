@@ -1,8 +1,8 @@
 ' Abre J.A.R.V.I.S. como aplicacion, sin la ventana negra.
-' Si Jarvis ya esta encendido, solo abre su ventana.
+' Si Jarvis ya esta encendido (y es la version actual), solo abre su ventana.
 Option Explicit
 
-Dim sh, fso, carpeta
+Dim sh, fso, carpeta, estado
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 carpeta = fso.GetParentFolderName(WScript.ScriptFullName)
@@ -14,22 +14,43 @@ If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Or Not fso.FileExi
   WScript.Quit
 End If
 
-If ServidorActivo() Then
+estado = Pedir("GET", "http://127.0.0.1:3000/api/estado")
+
+If estado <> "" And InStr(estado, """version"":""" & VersionInstalada() & """") > 0 Then
+  ' Ya esta encendido y actualizado: solo abrir la ventana
   sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900", 0, False
 Else
+  If estado <> "" Then
+    ' Esta encendida una version vieja: apagarla primero
+    Pedir "POST", "http://127.0.0.1:3000/api/apagar"
+    WScript.Sleep 2000
+  End If
   If Not fso.FolderExists(carpeta & "\registro") Then fso.CreateFolder(carpeta & "\registro")
   sh.Environment("PROCESS")("ABRIR_NAVEGADOR") = "1"
   ' El servidor corre escondido; sus mensajes quedan en registro\servidor.log
   sh.Run "cmd /c node_modules\.bin\tsx.cmd server.ts > registro\servidor.log 2>&1", 0, False
 End If
 
-Function ServidorActivo()
+' Hace una peticion a Jarvis; devuelve el texto de la respuesta o "" si no responde
+Function Pedir(metodo, url)
   Dim http
+  Pedir = ""
   On Error Resume Next
   Set http = CreateObject("MSXML2.ServerXMLHTTP.6.0")
-  http.setTimeouts 1000, 1000, 1000, 1000
-  http.Open "GET", "http://127.0.0.1:3000/api/estado", False
+  http.setTimeouts 1000, 1000, 2000, 2000
+  http.Open metodo, url, False
   http.Send
-  ServidorActivo = (Err.Number = 0 And http.Status = 200)
+  If Err.Number = 0 And http.Status = 200 Then Pedir = http.responseText
   On Error GoTo 0
+End Function
+
+' Lee la version de package.json
+Function VersionInstalada()
+  Dim texto, re, m
+  VersionInstalada = "?"
+  texto = fso.OpenTextFile(carpeta & "\package.json", 1).ReadAll
+  Set re = New RegExp
+  re.Pattern = """version"":\s*""([^""]+)"""
+  Set m = re.Execute(texto)
+  If m.Count > 0 Then VersionInstalada = m(0).SubMatches(0)
 End Function

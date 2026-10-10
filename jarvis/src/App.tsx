@@ -40,6 +40,7 @@ import {
 import { ReactorCore } from "./components/ReactorCore";
 import { NotificationStack } from "./components/NotificationStack";
 import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
+import paquete from "../package.json";
 
 const horaActual = () =>
   new Date().toLocaleTimeString("es-MX", {
@@ -261,11 +262,18 @@ export default function App() {
     try {
       const r = await fetch("/api/estado");
       if (!r.ok) throw new Error();
-      setServidor(await r.json());
+      const datos = await r.json();
+      setServidor(datos);
+      if (datos.version !== paquete.version) {
+        showNotification(
+          "Sigue encendida una versión vieja de Jarvis. Usa \"Apagar\" y vuelve a abrirlo con su icono.",
+          "warning"
+        );
+      }
     } catch {
       setServidor("sin_conexion");
     }
-  }, []);
+  }, [showNotification]);
 
   // ---------------------------------------------------------------- voz de Jarvis
 

@@ -12,6 +12,7 @@ import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
 import { exec } from "child_process";
+import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
 import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
@@ -20,6 +21,9 @@ import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
+
+// Versión de Jarvis (sube con cada actualización; sirve para detectar si quedó encendida una versión vieja)
+const VERSION: string = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
@@ -156,7 +160,7 @@ function responderError(res: express.Response, err: any) {
 
 // Estado del sistema (para que la interfaz sepa si falta la clave)
 app.get("/api/estado", (_req, res) => {
-  res.json({ claveConfigurada, modelo: modeloActual });
+  res.json({ claveConfigurada, modelo: modeloActual, version: VERSION });
 });
 
 // Todos los modelos de Gemini que sirven para platicar (se los pregunta a Google)
@@ -282,7 +286,7 @@ function abrirVentana(url: string) {
 
 const servidor = app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
-  registrar("SISTEMA", `Jarvis encendido en ${url} (modelo: ${modeloActual})`);
+  registrar("SISTEMA", `Jarvis ${VERSION} encendido en ${url} (modelo: ${modeloActual})`);
   console.log("");
   console.log("  ===============================================");
   console.log("   J.A.R.V.I.S. está encendido");
