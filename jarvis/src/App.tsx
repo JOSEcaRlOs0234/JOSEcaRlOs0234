@@ -25,6 +25,7 @@ import {
   Brain,
   Plus,
   RotateCcw,
+  PenLine,
 } from "lucide-react";
 import {
   CONFIG,
@@ -44,6 +45,7 @@ import { ReactorCore } from "./components/ReactorCore";
 import { NotificationStack } from "./components/NotificationStack";
 import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 import paquete from "../package.json";
+import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 
 const horaActual = () =>
   new Date().toLocaleTimeString("es-MX", {
@@ -146,6 +148,11 @@ export default function App() {
   // Memoria permanente de Jarvis
   const [recuerdos, setRecuerdos] = useState<{ id: string; texto: string; fecha: string }[]>([]);
   const [nuevoRecuerdo, setNuevoRecuerdo] = useState("");
+
+  // Pizarra
+  const [pizarra, setPizarra] = useState<PizarraDatos>({ titulo: "", contenido: "", actualizada: 0 });
+  const [pizarraAbierta, setPizarraAbierta] = useState(false);
+  const pizarraVistaRef = useRef(0);
 
   // Modelos de Gemini disponibles
   const [modelos, setModelos] = useState<{ id: string; nombre: string }[]>([]);
@@ -288,6 +295,43 @@ export default function App() {
     cargarRegistro();
   };
 
+  /** Lee la pizarra; si Jarvis escribió algo nuevo, la abre. */
+  const cargarPizarra = useCallback(async (abrirSiCambio: boolean) => {
+    try {
+      const r = await fetch("/api/pizarra");
+      if (!r.ok) return;
+      const datos: PizarraDatos = await r.json();
+      setPizarra(datos);
+      if (abrirSiCambio && datos.actualizada > pizarraVistaRef.current && datos.contenido) setPizarraAbierta(true);
+      pizarraVistaRef.current = datos.actualizada;
+    } catch {
+      // Se reintenta en la próxima conversación
+    }
+  }, []);
+
+  const borrarPizarraManual = async () => {
+    if (!window.confirm("¿Borrar todo lo que hay en la pizarra?")) return;
+    try {
+      const r = await fetch("/api/pizarra", { method: "DELETE" });
+      if (r.ok) {
+        const datos = await r.json();
+        setPizarra(datos);
+        pizarraVistaRef.current = datos.actualizada;
+      }
+    } catch {
+      showNotification("No pude borrar la pizarra.", "error");
+    }
+  };
+
+  const copiarPizarra = async () => {
+    try {
+      await navigator.clipboard.writeText([pizarra.titulo, pizarra.contenido].filter(Boolean).join("\n\n"));
+      showNotification("Texto de la pizarra copiado.", "info");
+    } catch {
+      showNotification("No pude copiar el texto.", "error");
+    }
+  };
+
   const nuevaConversacion = () => {
     if (enviandoRef.current) return;
     if (!window.confirm("¿Empezar una conversación nueva? Jarvis conserva su memoria, solo se borra este chat.")) return;
@@ -418,9 +462,10 @@ export default function App() {
         cargarRegistro();
         cargarPermisos();
         cargarRecuerdos();
+        cargarPizarra(true);
       }
     },
-    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos]
+    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos, cargarPizarra]
   );
 
   const enviarMensaje = useCallback(
@@ -670,9 +715,10 @@ export default function App() {
     cargarPermisos();
     cargarModelos();
     cargarRecuerdos();
+    cargarPizarra(false);
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra]);
 
   // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
   useEffect(() => {
@@ -1031,6 +1077,24 @@ export default function App() {
 
         {/* ================= CENTRO: REACTOR ================= */}
         <section className="lg:col-span-6 flex items-center justify-center min-h-[380px] relative">
+          {pizarraAbierta && (
+            <PizarraPanel
+              pizarra={pizarra}
+              onCerrar={() => setPizarraAbierta(false)}
+              onBorrar={borrarPizarraManual}
+              onCopiar={copiarPizarra}
+            />
+          )}
+          {!pizarraAbierta && (
+            <button
+              type="button"
+              onClick={() => setPizarraAbierta(true)}
+              className="absolute top-2 right-2 z-20 px-2.5 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#00e5ff]/15 cursor-pointer flex items-center gap-1"
+              title="Ver la pizarra"
+            >
+              <PenLine className="w-3.5 h-3.5" /> Pizarra
+            </button>
+          )}
           <ReactorCore
             estado={estado}
             dictando={dictando}
@@ -1174,7 +1238,7 @@ export default function App() {
       </main>
 
       <footer className="flex flex-wrap items-center justify-between gap-2 px-3 py-1 border-t border-[#00e5ff]/20 bg-[#030b18]/85 text-[11px] font-hud-mono text-[#68a8d8] z-20 shrink-0">
-        <span>CONVERSACIÓN · CONTROL DE LA LAPTOP CON PERMISO</span>
+        <span>CONVERSACIÓN · MEMORIA · PIZARRA · CONTROL DE LA LAPTOP CON PERMISO</span>
         <span>Cerrar esta ventana no apaga a Jarvis: usa el botón "Apagar".</span>
       </footer>
     </div>

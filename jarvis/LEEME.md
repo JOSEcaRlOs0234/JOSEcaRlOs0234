@@ -39,3 +39,16 @@ Dile a Jarvis "Recuerda que..." y lo guarda para siempre (en `datos/memoria.json
 Lo ves y lo borras en el panel **Memoria de Jarvis**. También puedes decirle "olvida que...".
 La conversación también se conserva al cerrar la ventana; el botón ↺ empieza una conversación nueva (la memoria no se borra).
 No le pidas que recuerde contraseñas ni datos del banco.
+
+## Todo lo que platicas queda guardado
+Cada mensaje se guarda en `datos/historial/` (un archivo por mes). Pregúntale "¿qué te conté la semana pasada sobre...?"
+y Jarvis lo busca. No necesitas instalar ninguna base de datos.
+
+## Pizarra
+Pídele "escribe en la pizarra..." o "hazme una lista de...": aparece una pizarra sobre el reactor.
+Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba del reactor) la vuelve a abrir.
+
+## Cuando Jarvis no sabe algo
+- **Investigar** (gratis): busca en Google con Gemini; lo hace solo cuando necesita datos actuales.
+- **Consultar a Claude** (opcional, de pago, unos centavos por pregunta): doble clic en `Configurar Claude.bat`
+  y pega una clave de https://console.anthropic.com. Siempre te pide permiso antes de cada consulta.

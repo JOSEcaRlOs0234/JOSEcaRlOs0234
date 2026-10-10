@@ -9,7 +9,12 @@ carpeta = fso.GetParentFolderName(WScript.ScriptFullName)
 sh.CurrentDirectory = carpeta
 
 ' Primera vez (falta instalar o falta la clave): usar el encendido con ventana visible
+' (tambien si una actualizacion trae piezas nuevas que hay que instalar)
 If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Or Not fso.FileExists(carpeta & "\.env") Then
+  sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  WScript.Quit
+End If
+If sh.Run("node revisar-piezas.cjs", 0, True) <> 0 Then
   sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
   WScript.Quit
 End If

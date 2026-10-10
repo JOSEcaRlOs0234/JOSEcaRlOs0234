@@ -10,6 +10,15 @@ import path from "path";
 import { fileURLToPath } from "url";
 import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
+import { borrarPizarra, escribirPizarra, MAX_PIZARRA } from "./pizarra.ts";
+import { buscarEnHistorial } from "./historial.ts";
+import { claudeConfigurado, consultarAClaude, explicarErrorClaude } from "./consultas.ts";
+
+// El servidor conecta aquí la búsqueda con Gemini + Google (necesita la clave y el modelo actual)
+let investigador: ((pregunta: string) => Promise<string>) | null = null;
+export function conectarInvestigador(f: (pregunta: string) => Promise<string>): void {
+  investigador = f;
+}
 
 const CARPETA_JARVIS_APP = path.dirname(fileURLToPath(import.meta.url));
 
@@ -56,7 +65,7 @@ export const DECLARACIONES = [
   },
   {
     name: "buscar_en_internet",
-    description: "Abre una búsqueda de Google en el navegador.",
+    description: "Abre una búsqueda de Google en el NAVEGADOR para que el usuario vea los resultados.",
     parametersJsonSchema: {
       type: "object",
       properties: { consulta: { type: "string" } },
@@ -146,6 +155,58 @@ export const DECLARACIONES = [
       type: "object",
       properties: { id: { type: "string" } },
       required: ["id"],
+    },
+  },
+  {
+    name: "investigar",
+    description:
+      "Busca información ACTUAL o que no sabes con seguridad (noticias, precios, clima, resultados, horarios, datos recientes) usando la Búsqueda de Google, y te devuelve la respuesta para que se la digas al usuario. Gratis.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { pregunta: { type: "string" } },
+      required: ["pregunta"],
+    },
+  },
+  {
+    name: "consultar_a_claude",
+    description:
+      "Le pregunta a Claude (otra inteligencia artificial, experta en razonamiento, programación y temas difíciles). Úsalo cuando el usuario lo pida o cuando no sepas algo y 'investigar' no fue suficiente. Cuesta unos centavos por consulta.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        pregunta: { type: "string", description: "La pregunta completa, clara y con los detalles necesarios" },
+        contexto: { type: "string", description: "Información de la conversación que Claude necesita (opcional)" },
+      },
+      required: ["pregunta"],
+    },
+  },
+  {
+    name: "escribir_en_pizarra",
+    description:
+      "Escribe en la pizarra que el usuario ve en pantalla. Úsala cuando pida una pizarra, apuntar algo, una lista, pasos, una explicación con estructura, una tabla o algo que convenga ver escrito. Formato: '# ' para títulos, '- ' para viñetas, '1. ' para pasos, **negritas**.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        titulo: { type: "string" },
+        contenido: { type: "string" },
+        agregar: { type: "boolean", description: "true para añadir debajo de lo que ya hay; false (por defecto) para empezar limpia" },
+      },
+      required: ["contenido"],
+    },
+  },
+  {
+    name: "borrar_pizarra",
+    description: "Borra todo lo que hay en la pizarra.",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "buscar_en_historial",
+    description:
+      "Busca en TODAS las conversaciones pasadas con el usuario (desde el primer día). Úsalo cuando pregunte por algo que platicaron antes y no está en tus recuerdos.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { palabras: { type: "string", description: "Palabras clave a buscar" } },
+      required: ["palabras"],
     },
   },
   {
@@ -528,6 +589,85 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       };
     }
 
+    case "investigar": {
+      const pregunta = texto(args.pregunta, "pregunta", 1000);
+      return {
+        nivel: "libre",
+        tipo: "investigar",
+        descripcion: `Investigar en internet: "${pregunta}"`,
+        ejecutar: async () => {
+          if (!investigador) throw new ErrorHerramienta("La búsqueda no está disponible.");
+          try {
+            return { respuesta: await investigador(pregunta) };
+          } catch {
+            throw new ErrorHerramienta("No pude buscar en internet en este momento.");
+          }
+        },
+      };
+    }
+
+    case "consultar_a_claude": {
+      const pregunta = texto(args.pregunta, "pregunta", 4000);
+      const contexto = typeof args.contexto === "string" ? args.contexto.slice(0, 4000) : "";
+      if (!claudeConfigurado()) {
+        throw new ErrorHerramienta(
+          "La conexión con Claude no está activada (falta su clave). El usuario puede activarla abriendo 'Configurar Claude.bat'."
+        );
+      }
+      return {
+        nivel: "normal",
+        tipo: "consultar_claude",
+        descripcion: `Consultar a Claude (cuesta unos centavos): "${pregunta.slice(0, 200)}"`,
+        ejecutar: async () => {
+          try {
+            return { respuesta_de_claude: await consultarAClaude(pregunta, contexto) };
+          } catch (err) {
+            throw new ErrorHerramienta(explicarErrorClaude(err));
+          }
+        },
+      };
+    }
+
+    case "escribir_en_pizarra": {
+      const contenido = texto(args.contenido, "contenido", MAX_PIZARRA);
+      const titulo = typeof args.titulo === "string" ? args.titulo.trim() : undefined;
+      return {
+        nivel: "libre",
+        tipo: "pizarra",
+        descripcion: `Escribir en la pizarra${titulo ? `: ${titulo}` : ""}`,
+        ejecutar: async () => {
+          escribirPizarra(titulo, contenido, args.agregar === true);
+          return { resultado: "Escrito en la pizarra. El usuario ya lo está viendo; no lo leas completo, solo coméntalo brevemente." };
+        },
+      };
+    }
+
+    case "borrar_pizarra":
+      return {
+        nivel: "libre",
+        tipo: "pizarra",
+        descripcion: "Borrar la pizarra",
+        ejecutar: async () => {
+          borrarPizarra();
+          return { resultado: "Pizarra borrada." };
+        },
+      };
+
+    case "buscar_en_historial": {
+      const palabras = texto(args.palabras, "palabras", 300);
+      return {
+        nivel: "libre",
+        tipo: "historial",
+        descripcion: `Buscar en conversaciones pasadas: "${palabras}"`,
+        ejecutar: async () => {
+          const encontrados = buscarEnHistorial(palabras);
+          return encontrados.length
+            ? { mensajes_encontrados: encontrados }
+            : { resultado: "No encontré nada sobre eso en las conversaciones pasadas." };
+        },
+      };
+    }
+
     case "guardar_recuerdo": {
       const recuerdo = texto(args.texto, "texto", MAX_LARGO_RECUERDO);
       return {
@@ -570,4 +710,5 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   leer_archivos: "Leer archivos de texto",
   crear_archivos: "Crear archivos en Documentos\\Jarvis",
   abrir_archivos: "Abrir documentos, fotos y carpetas",
+  consultar_claude: "Consultar a Claude (cuesta unos centavos)",
 };

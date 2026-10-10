@@ -32,7 +32,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.4.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.5.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -69,6 +69,18 @@
   de Gemini en cada turno (`instrucciones()` en server.ts, junto con fecha/hora). `GET/POST/DELETE /api/recuerdos`.
   Panel "Memoria de Jarvis" para ver/agregar/borrar. La conversación del chat se guarda en localStorage (últimos 60 mensajes);
   botón "Nueva conversación" la borra (la memoria se conserva).
+- Pedido del usuario: "almacenar todo lo que se habla, pizarra, y conectarse contigo (Claude) si no sabe algo":
+  - `historial.ts`: TODO el chat (usuario y Jarvis) se guarda en `datos/historial/AAAA-MM.jsonl`; herramienta
+    `buscar_en_historial` (libre). No se instala ninguna base de datos: archivos JSON en la laptop.
+  - `pizarra.ts` + `components/PizarraPanel.tsx`: herramientas `escribir_en_pizarra` (titulo, contenido, agregar) y
+    `borrar_pizarra` (libres). `datos/pizarra.json`; `GET/DELETE /api/pizarra`. La interfaz la abre sola sobre el reactor
+    cuando cambia `actualizada`. Formato mini-markdown (#, -, 1., **negritas**) dibujado sin HTML.
+  - `consultas.ts`: `investigar` (libre) = Gemini + googleSearch (gratis, misma clave); `consultar_a_claude` (normal,
+    se puede recordar como "consultar_claude") = SDK `@anthropic-ai/sdk`, modelo `claude-opus-5-5`, effort medium,
+    `fallbacks: "default"` (beta server-side-fallback-2026-07-01), web_search_20260209 (max 3), maneja pause_turn y refusal.
+    Necesita `ANTHROPIC_API_KEY` en `.env` (opcional, de pago): `Configurar Claude.bat` → `configurar-claude.mjs`.
+    Probado: rechazo con clave falsa (401) se explica bien. No probado con clave real ni googleSearch real.
+  - `revisar-piezas.cjs`: los lanzadores corren `npm install` si falta alguna dependencia (las actualizaciones pueden traer nuevas).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

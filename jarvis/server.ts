@@ -16,7 +16,10 @@ import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
 import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
-import { DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
+import { conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
+import { buscarEnInternet, claudeConfigurado } from "./consultas.ts";
+import { guardarEnHistorial } from "./historial.ts";
+import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -49,7 +52,13 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Todavía no puedes controlar Spotify ni WhatsApp directamente; esas funciones llegarán pronto (sí puedes abrir esos programas).
 - Tienes memoria permanente: usa guardar_recuerdo cuando el usuario te pida recordar algo o te cuente un dato personal útil
   (nombre, gustos, cumpleaños, pendientes), y avísale brevemente que lo recordarás. Usa olvidar_recuerdo si te lo pide.
-  Nunca guardes contraseñas, claves ni datos bancarios.`;
+  Nunca guardes contraseñas, claves ni datos bancarios.
+- Todo lo que se platica queda guardado. Si el usuario pregunta por algo de conversaciones anteriores que no está en tus
+  recuerdos, usa buscar_en_historial.
+- Si no sabes algo o necesitas datos actuales (noticias, precios, clima, resultados), usa investigar. Si aun así no basta,
+  o el usuario lo pide, usa consultar_a_claude. No inventes.
+- Cuando el usuario pida una pizarra, apuntar algo, una lista, pasos o una explicación larga, usa escribir_en_pizarra
+  y en tu respuesta hablada solo di brevemente qué escribiste (no lo leas completo).`;
 
 /** Instrucciones para Gemini: personalidad + fecha de hoy + todo lo que Jarvis recuerda. */
 function instrucciones(): string {
@@ -153,11 +162,22 @@ async function preguntarAGemini(contents: any[]) {
 
 const agente = new Agente(preguntarAGemini);
 
+// Búsqueda en internet (Gemini + Google) para la herramienta "investigar"
+conectarInvestigador(async (pregunta) => {
+  try {
+    return await buscarEnInternet(ai, modeloActual, pregunta);
+  } catch (err) {
+    if (!convieneOtroModelo(err) || modeloActual === "gemini-3.8-flash") throw err;
+    return await buscarEnInternet(ai, "gemini-3.8-flash", pregunta);
+  }
+});
+
 /** Envía al navegador el resultado del agente y lo anota en el registro. */
 function responderResultado(res: express.Response, resultado: Awaited<ReturnType<Agente["conversar"]>>) {
   if ("confirmacion" in resultado) return res.json(resultado);
   const texto = resultado.texto || "Hecho, señor.";
   registrar("CHAT", `Jarvis: ${texto}`);
+  guardarEnHistorial("jarvis", texto);
   res.json({ texto });
 }
 
@@ -170,7 +190,7 @@ function responderError(res: express.Response, err: any) {
 
 // Estado del sistema (para que la interfaz sepa si falta la clave)
 app.get("/api/estado", (_req, res) => {
-  res.json({ claveConfigurada, modelo: modeloActual, version: VERSION });
+  res.json({ claveConfigurada, modelo: modeloActual, version: VERSION, claude: claudeConfigurado() });
 });
 
 // Todos los modelos de Gemini que sirven para platicar (se los pregunta a Google)
@@ -235,6 +255,7 @@ app.post("/api/chat", async (req, res) => {
   }));
 
   registrar("CHAT", `Usuario: ${ultimo.texto}`);
+  guardarEnHistorial("usuario", ultimo.texto);
   try {
     responderResultado(res, await agente.conversar(contents));
   } catch (err) {
@@ -282,6 +303,16 @@ app.delete("/api/recuerdos/:id", (req, res) => {
   const borrado = borrarRecuerdo(req.params.id);
   if (borrado) registrar("MEMORIA", `Borrado: ${borrado.texto}`);
   res.json({ recuerdos: leerRecuerdos() });
+});
+
+// Pizarra
+app.get("/api/pizarra", (_req, res) => {
+  res.json(leerPizarra());
+});
+
+app.delete("/api/pizarra", (_req, res) => {
+  registrar("PIZARRA", "Pizarra borrada desde la interfaz.");
+  res.json(borrarPizarra());
 });
 
 // Botón "Apagar Jarvis"
