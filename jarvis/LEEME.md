@@ -28,3 +28,8 @@ Abre **Encender Jarvis.bat** (con ventana negra) para ver los mensajes, y mánda
 
 ## Cambiar la clave de Gemini
 Borra el archivo `.env` y vuelve a abrir **Encender Jarvis.bat**.
+
+## Elegir el modelo de Gemini
+Arriba a la derecha hay un menú con **todos los modelos de Gemini** que tu clave puede usar (la misma clave sirve para todos).
+Los "Flash" son rápidos; los "Pro" piensan más pero tardan más y tienen menos uso gratis.
+Si el elegido falla o llega a su límite, Jarvis usa otro automáticamente (queda anotado en el registro).

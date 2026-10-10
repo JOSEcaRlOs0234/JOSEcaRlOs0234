@@ -16,15 +16,15 @@ import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
 import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
 import { DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
+import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = "127.0.0.1";
-const MODELO = process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash";
-// Si el modelo principal deja de existir, Jarvis prueba con este
-const MODELO_RESPALDO = "gemini-3.5-flash";
+// Modelo elegido en la interfaz (se guarda en datos/modelo.json); si no hay, el del .env o gemini-3.8-flash
+let modeloActual = modeloElegido(process.env.GEMINI_MODEL?.trim() || "gemini-3.8-flash");
 const CLAVE = process.env.GEMINI_API_KEY?.trim() || "";
 const claveConfigurada = CLAVE.length > 20 && !CLAVE.includes("pega_aqui");
 
@@ -88,12 +88,19 @@ function explicarError(err: any): string {
   return "Ocurrió un error inesperado al hablar con Gemini.";
 }
 
-function esModeloInexistente(err: any): boolean {
+/** Errores en los que vale la pena probar con otro modelo (no existe, está saturado o llegó a su límite). */
+function convieneOtroModelo(err: any): boolean {
   const texto = String(err?.message || "");
-  return Number(err?.status) === 404 || /not found|is not supported|NOT_FOUND/i.test(texto);
+  const codigo = Number(err?.status || err?.code || 0);
+  return (
+    codigo === 404 ||
+    codigo === 429 ||
+    codigo === 503 ||
+    /not found|is not supported|NOT_FOUND|RESOURCE_EXHAUSTED|quota|overloaded|UNAVAILABLE/i.test(texto)
+  );
 }
 
-/** Le pregunta a Gemini (con la lista de herramientas). Si el modelo principal no existe, usa el de respaldo. */
+/** Le pregunta a Gemini (con la lista de herramientas). Si el modelo elegido falla, prueba con los de respaldo. */
 async function preguntarAGemini(contents: any[]) {
   const pedir = (model: string) =>
     ai.models.generateContent({
@@ -103,13 +110,20 @@ async function preguntarAGemini(contents: any[]) {
     });
 
   let respuesta;
-  try {
-    respuesta = await pedir(MODELO);
-  } catch (err) {
-    if (!esModeloInexistente(err) || MODELO === MODELO_RESPALDO) throw err;
-    registrar("AVISO", `El modelo ${MODELO} no está disponible; usando ${MODELO_RESPALDO}.`);
-    respuesta = await pedir(MODELO_RESPALDO);
+  let ultimoError: any;
+  for (const modelo of ordenDePrueba(modeloActual)) {
+    try {
+      respuesta = await pedir(modelo);
+      if (modelo !== modeloActual) registrar("AVISO", `Respondió el modelo de respaldo ${modelo}.`);
+      break;
+    } catch (err) {
+      ultimoError = err;
+      if (!convieneOtroModelo(err)) throw err;
+      registrar("AVISO", `El modelo ${modelo} falló (${String((err as any)?.status ?? "")}); probando otro.`);
+    }
   }
+  if (!respuesta) throw ultimoError;
+
   const llamadas: Llamada[] = (respuesta.functionCalls ?? []).map((c: any) => ({
     id: c.id,
     name: String(c.name ?? ""),
@@ -142,7 +156,36 @@ function responderError(res: express.Response, err: any) {
 
 // Estado del sistema (para que la interfaz sepa si falta la clave)
 app.get("/api/estado", (_req, res) => {
-  res.json({ claveConfigurada, modelo: MODELO });
+  res.json({ claveConfigurada, modelo: modeloActual });
+});
+
+// Todos los modelos de Gemini que sirven para platicar (se los pregunta a Google)
+app.get("/api/modelos", async (_req, res) => {
+  if (!claveConfigurada) return res.json({ modelos: [], actual: modeloActual });
+  try {
+    res.json({ modelos: await listarModelos(CLAVE), actual: modeloActual });
+  } catch (err: any) {
+    registrar("ERROR", `No pude obtener la lista de modelos: ${String(err?.message ?? err).slice(0, 160)}`);
+    res.status(502).json({ error: explicarError(err), modelos: [], actual: modeloActual });
+  }
+});
+
+// Cambiar el modelo que usa Jarvis
+app.post("/api/modelo", async (req, res) => {
+  const id = req.body?.id;
+  if (!idValido(id)) return res.status(400).json({ error: "Ese modelo no es válido." });
+  try {
+    const disponibles = await listarModelos(CLAVE);
+    if (disponibles.length && !disponibles.some((m) => m.id === id)) {
+      return res.status(400).json({ error: "Ese modelo no está disponible con tu clave." });
+    }
+  } catch {
+    // Si no se puede comprobar la lista, se acepta igual (si falla, entra el respaldo)
+  }
+  modeloActual = id;
+  guardarModelo(id);
+  registrar("SISTEMA", `Modelo cambiado a ${id}`);
+  res.json({ modelo: modeloActual });
 });
 
 // Platicar con Jarvis
@@ -239,7 +282,7 @@ function abrirVentana(url: string) {
 
 const servidor = app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
-  registrar("SISTEMA", `Jarvis encendido en ${url} (modelo: ${MODELO})`);
+  registrar("SISTEMA", `Jarvis encendido en ${url} (modelo: ${modeloActual})`);
   console.log("");
   console.log("  ===============================================");
   console.log("   J.A.R.V.I.S. está encendido");

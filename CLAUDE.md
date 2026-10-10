@@ -46,7 +46,11 @@
   - Escucha solo en 127.0.0.1:3000. Rechaza peticiones a /api con Origin/Host que no sean localhost (registra "SEGURIDAD").
   - `POST /api/chat {mensajes:[{rol,texto}]}` → `Agente` → `{texto}` o `{confirmacion:{id,descripcion,delicada,tipo,nombreTipo}}`.
   - `POST /api/permiso {id,aprobado,recordar}` → continúa el turno pausado. `GET/DELETE /api/permisos[/:tipo]`. `POST /api/apagar`.
-  - Modelo `GEMINI_MODEL` (por defecto `gemini-3.8-flash`, respaldo `gemini-3.5-flash`). Errores en español en `explicarError`.
+  - Modelos (`modelos.ts`, pedido del usuario: "todas las versiones de Gemini"): `GET /api/modelos` lista desde Google
+    (REST v1beta/models, filtra los que no sirven para chat: embedding, tts, live, imagen...), `POST /api/modelo {id}`
+    lo cambia y lo guarda en `datos/modelo.json`. Menú desplegable en la barra superior.
+    Si el modelo falla con 404/429/503 prueba en orden: elegido → gemini-3.8-flash → 3.5-flash → 3.5-flash-lite → 3.1-pro-preview.
+    La misma clave sirve para todos. Errores en español en `explicarError`.
 - `agente.ts`: bucle de function calling (máx. 6 vueltas). Devuelve el `content` del modelo tal cual (firmas de pensamiento).
   Pausa en cada acción que necesita permiso (pendientes en memoria, caducan en 5 min). Permisos recordados en `datos/permisos.json`.
 - `herramientas.ts`: LISTA PERMITIDA (`DECLARACIONES`) + `revisar()` que valida y clasifica cada acción:

@@ -126,6 +126,9 @@ export default function App() {
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [permisos, setPermisos] = useState<{ tipo: string; nombre: string }[]>([]);
 
+  // Modelos de Gemini disponibles
+  const [modelos, setModelos] = useState<{ id: string; nombre: string }[]>([]);
+
   // Notificaciones
   const [notifications, setNotifications] = useState<HudNotification[]>([]);
 
@@ -225,6 +228,33 @@ export default function App() {
     }
     setServidor("sin_conexion");
     window.close();
+  };
+
+  const cargarModelos = useCallback(async () => {
+    try {
+      const r = await fetch("/api/modelos");
+      const datos = await r.json();
+      setModelos(datos.modelos ?? []);
+    } catch {
+      setModelos([]);
+    }
+  }, []);
+
+  const cambiarModelo = async (id: string) => {
+    try {
+      const r = await fetch("/api/modelo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setServidor((prev) => (prev && prev !== "sin_conexion" ? { ...prev, modelo: datos.modelo } : prev));
+      showNotification(`Ahora uso el modelo ${datos.modelo}.`, "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude cambiar el modelo.", "error");
+    }
+    cargarRegistro();
   };
 
   const comprobarServidor = useCallback(async () => {
@@ -565,9 +595,10 @@ export default function App() {
     comprobarServidor();
     cargarRegistro();
     cargarPermisos();
+    cargarModelos();
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos]);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
@@ -610,7 +641,7 @@ export default function App() {
       : servidor === "sin_conexion"
       ? { texto: "Servidor apagado", color: "text-[#ff3355]" }
       : servidor.claveConfigurada
-      ? { texto: `Clave de Gemini lista · ${servidor.modelo}`, color: "text-[#00f5a0]" }
+      ? { texto: "Gemini listo", color: "text-[#00f5a0]" }
       : { texto: "Falta la clave de Gemini", color: "text-[#ff9933]" };
 
   return (
@@ -631,6 +662,24 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2 shrink-0 font-hud-mono text-xs">
           <span className={estadoServidor.color}>● {estadoServidor.texto}</span>
+          {servidor && servidor !== "sin_conexion" && servidor.claveConfigurada && (
+            <select
+              value={servidor.modelo}
+              onChange={(e) => cambiarModelo(e.target.value)}
+              onFocus={() => modelos.length === 0 && cargarModelos()}
+              className="max-w-[220px] bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-0.5 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
+              title="Elige qué modelo de Gemini usa Jarvis"
+            >
+              {!modelos.some((m) => m.id === servidor.modelo) && (
+                <option value={servidor.modelo}>{servidor.modelo}</option>
+              )}
+              {modelos.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.nombre} ({m.id})
+                </option>
+              ))}
+            </select>
+          )}
           <button
             type="button"
             onClick={comprobarServidor}
