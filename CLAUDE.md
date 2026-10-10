@@ -6,7 +6,7 @@
 - Cuando el usuario deba hacer algo: un paso a la vez y esperar a que diga "listo".
 
 ## Fases
-1. Platicar con Jarvis desde la interfaz (Gemini). ← ACTUAL: plan presentado, esperando respuestas
+1. Platicar con Jarvis desde la interfaz (Gemini). ← ACTUAL: código listo, esperando prueba del usuario
 2. Spotify (poner canción/playlist, pausar, siguiente, qué suena).
 3. Activación con doble aplauso (programa en segundo plano, ignora ruidos sueltos, arranca al prender, sensibilidad ajustable).
 4. Control de la laptop (abrir programas/webs, volumen, crear/leer archivos en UNA carpeta).
@@ -21,14 +21,30 @@
 - WhatsApp: solo obedecer al número del dueño.
 - Registro (log) de todo lo que hace Jarvis.
 
-## Estado de la interfaz original (zip de Google AI Studio)
-- React + Vite + Tailwind (frontend) y `server.ts` con Express (backend) que llama a Gemini con `@google/genai`.
-- Tiene: reactor animado de 4 estados, chat, voz del navegador (speechSynthesis), detector de aplausos en el navegador,
-  clima Open-Meteo, Gmail/Drive con login de Google vía Firebase, "lecciones" en IndexedDB, generación de video Veo,
-  voz en vivo por WebSocket.
-- Problemas detectados: el chat usa `/api/teacher` (sin memoria de la conversación, siempre dice "No lo sé todavía");
-  pide permisos enormes de Gmail/Drive (no necesarios); servidor escucha en 0.0.0.0.
+## Estado actual
+- Laptop del usuario: **Windows**. El usuario delegó todas las decisiones técnicas.
+- El código vive en la carpeta `jarvis/` de este repo (repo de perfil de GitHub, público → nunca subir secretos).
+- Push a GitHub falló por permisos (la app de Claude no tiene acceso al repo); el usuario debe conectar GitHub en claude.ai.
+- Fase 1: código terminado y probado en la nube (sin clave real). **Esperando que el usuario lo pruebe en su laptop.**
 
-## Pendiente de confirmar con el usuario
-- Sistema operativo de la laptop (Claude corre en la nube y no puede verlo).
-- Dónde guardar el código (este repo es el de perfil público de GitHub; se recomendó un repo privado `jarvis`).
+## Cómo está hecho Jarvis (carpeta jarvis/)
+- `Encender Jarvis.bat`: revisa Node.js → `npm install` la primera vez → si no hay clave corre `configurar.mjs` → arranca `server.ts` y abre el navegador.
+- `configurar.mjs`: pide la clave de Gemini, la prueba contra Google y la guarda en `.env`.
+- `server.ts` (Express + Vite en modo middleware, se corre con `tsx`, sin paso de compilación):
+  - Escucha solo en 127.0.0.1:3000. Rechaza peticiones a /api con Origin/Host que no sean localhost (registra "SEGURIDAD").
+  - `POST /api/chat {mensajes:[{rol:"usuario"|"jarvis",texto}]}` → Gemini con personalidad de Jarvis (respuestas cortas, para voz).
+    Modelo `GEMINI_MODEL` (por defecto `gemini-3.8-flash`, respaldo `gemini-3.5-flash` si el modelo no existe).
+    Errores traducidos a español sencillo en `explicarError`.
+  - `GET /api/estado`, `GET /api/registro`.
+- `registro.ts`: escribe `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO.
+- Interfaz `src/App.tsx` (React + Tailwind): reloj/clima (Open-Meteo), detector de aplausos de prueba en el navegador,
+  reactor (`components/ReactorCore.tsx`), chat con dictado por voz (Web Speech API, Chrome/Edge) y voz de Jarvis
+  (speechSynthesis, prefiere voces de Windows en español: Jorge/Raúl/Pablo), panel de registro.
+- Se quitó del diseño original de AI Studio: Gmail/Drive/Firebase (permisos excesivos), video Veo, voz Live, "lecciones".
+  El zip original no está en el repo.
+
+## Ideas para fases siguientes
+- Fase 2: Spotify Web API (OAuth PKCE, token guardado en .env/archivo local; requiere Spotify Premium para controlar reproducción).
+  Usar "function calling" de Gemini con una lista cerrada de herramientas.
+- Fase 3: programa aparte en segundo plano (p. ej. Python con sounddevice o Node) + tarea de inicio de Windows.
+- Fase 4: herramientas permitidas (lista blanca), confirmación para acciones delicadas, carpeta única para archivos.
