@@ -6,9 +6,9 @@
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
 import { ErrorHerramienta, NOMBRES_PERMISOS, Revisada, revisar } from "./herramientas.ts";
 import { registrar } from "./registro.ts";
+import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 /** Función que le pregunta a Gemini; recibe la conversación y devuelve su respuesta. */
 export type PreguntarModelo = (contents: any[]) => Promise<{ content: any; texto: string; llamadas: Llamada[] }>;
@@ -44,7 +44,6 @@ const CADUCA_MS = 5 * 60 * 1000;
 
 // ------------------------------------------------------------------ permisos recordados
 
-const CARPETA_DATOS = path.join(path.dirname(fileURLToPath(import.meta.url)), "datos");
 const ARCHIVO_PERMISOS = path.join(CARPETA_DATOS, "permisos.json");
 
 function leerPermisos(): Set<string> {

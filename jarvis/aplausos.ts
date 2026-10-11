@@ -8,10 +8,11 @@ import { execFile } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { DetectorAplausos, EventoAplauso } from "./detector-aplausos.ts";
+import { Calibracion, CALIBRACION_INICIAL, DetectorAplausos, EventoAplauso } from "./detector-aplausos.ts";
+import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 const CARPETA_APP = path.dirname(fileURLToPath(import.meta.url));
-const ARCHIVO_CONFIG = path.join(CARPETA_APP, "datos", "aplausos.json");
+const ARCHIVO_CONFIG = path.join(CARPETA_DATOS, "aplausos.json");
 const esWindows = process.platform === "win32";
 
 export interface ConfigAplausos {
@@ -23,6 +24,8 @@ export interface ConfigAplausos {
   nombreDispositivo: string;
   // true si el usuario lo eligió a mano (entonces Jarvis no lo cambia solo)
   microfonoManual: boolean;
+  // Cómo suenan los aplausos del usuario (botón "Enseñarle mis aplausos")
+  calibracion: Calibracion;
   // Ya se configuró el arranque con Windows la primera vez (para no volver a crearlo si el usuario lo quitó)
   arranqueConfigurado: boolean;
 }
@@ -34,6 +37,7 @@ export interface EstadoAplausos {
   nivel: number;
   eventos: { hora: string; texto: string }[];
   activaciones: number;
+  aprendiendo: boolean;
   sinSonido: boolean;
   arranqueConWindows: boolean;
 }
@@ -71,6 +75,7 @@ export class OidoDeJarvis {
     this.config = this.leerConfig();
     this.detector = new DetectorAplausos((e) => this.alEvento(e));
     this.detector.sensibilidad = this.config.sensibilidad;
+    this.detector.calibracion = { ...CALIBRACION_INICIAL, ...this.config.calibracion };
   }
 
   private leerConfig(): ConfigAplausos {
@@ -80,6 +85,7 @@ export class OidoDeJarvis {
       dispositivo: -1,
       nombreDispositivo: "",
       microfonoManual: false,
+      calibracion: { ...CALIBRACION_INICIAL },
       arranqueConfigurado: false,
     };
     try {
@@ -102,7 +108,13 @@ export class OidoDeJarvis {
   private alEvento(e: EventoAplauso): void {
     if (e.tipo === "aplauso") this.anotar(`Aplauso (fuerza ${e.fuerza})`);
     else if (e.tipo === "ignorado") this.anotar(`Ignorado: ${e.motivo}`);
-    else {
+    else if (e.tipo === "aprendido") this.anotar(`Aprendiendo: aplauso ${e.numero} de 3`);
+    else if (e.tipo === "calibrado") {
+      this.config.calibracion = { maxLargo: e.maxLargo, minAgudos: e.minAgudos };
+      this.guardarConfig();
+      this.anotar("¡Listo! Ya aprendí cómo suenan tus aplausos");
+      this.registrar("APLAUSOS", `Aprendí los aplausos del usuario (hasta ${e.maxLargo} ms, agudos ≥ ${e.minAgudos}).`);
+    } else {
       this.activaciones++;
       this.anotar("¡Doble aplauso! Jarvis activado");
       this.registrar("APLAUSOS", "Doble aplauso detectado: Jarvis activado.");
@@ -254,6 +266,20 @@ export class OidoDeJarvis {
     await this.iniciar();
   }
 
+  /** Botón "Enseñarle mis aplausos": las próximas 3 palmadas se usan para aprender. */
+  aprender(): void {
+    this.detector.aprender();
+    this.anotar("Aplaude 3 veces, despacio (uno cada segundo)...");
+  }
+
+  /** Volver a las reglas de fábrica. */
+  restablecerCalibracion(): void {
+    this.config.calibracion = { ...CALIBRACION_INICIAL };
+    this.detector.calibracion = { ...CALIBRACION_INICIAL };
+    this.guardarConfig();
+    this.anotar("Reglas de aplausos de fábrica restablecidas");
+  }
+
   /** Pausa la detección unos segundos (mientras Jarvis habla por las bocinas). */
   pausar(ms: number): void {
     this.detector.pausar(ms, performance.now());
@@ -307,6 +333,7 @@ export class OidoDeJarvis {
       nivel: Math.round(this.detector.nivel * 100) / 100,
       eventos: this.eventos,
       activaciones: this.activaciones,
+      aprendiendo: this.detector.aprendiendo,
       // Escuchando hace más de 4 segundos y solo llegan ceros: Windows no deja oír o es el micrófono equivocado
       sinSonido:
         this.estado === "escuchando" &&
@@ -327,7 +354,7 @@ export class OidoDeJarvis {
   }
 
   /** Crea o quita el acceso directo que enciende a Jarvis (en segundo plano) al prender la laptop. */
-  async cambiarArranque(activar: boolean): Promise<void> {
+  async cambiarArranque(activar: boolean, silencioso = false): Promise<void> {
     if (!esWindows) throw new Error("Solo funciona en Windows.");
     const datos = {
       JARVIS_ACCESO: this.rutaAccesoInicio(),
@@ -349,12 +376,19 @@ export class OidoDeJarvis {
     }
     this.config.arranqueConfigurado = true;
     this.guardarConfig();
-    this.registrar("APLAUSOS", activar ? "Jarvis arrancará solo al prender la laptop." : "Jarvis ya no arrancará solo.");
+    if (!silencioso) {
+      this.registrar("APLAUSOS", activar ? "Jarvis arrancará solo al prender la laptop." : "Jarvis ya no arrancará solo.");
+    }
   }
 
-  /** La primera vez, deja activado el arranque con Windows (lo pidió el usuario). */
+  /** La primera vez deja activado el arranque con Windows (lo pidió el usuario); después lo mantiene al día. */
   async configurarArranqueInicial(): Promise<void> {
-    if (!esWindows || this.config.arranqueConfigurado) return;
+    if (!esWindows) return;
+    // Si ya existe, rehacerlo para que apunte a ESTA carpeta (por si Jarvis se actualizó en otra carpeta)
+    if (this.config.arranqueConfigurado) {
+      if (this.arranqueConWindows()) await this.cambiarArranque(true, true).catch(() => undefined);
+      return;
+    }
     try {
       await this.cambiarArranque(true);
     } catch (err: any) {

@@ -5,7 +5,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 export interface Modelo {
   id: string;
@@ -13,7 +13,6 @@ export interface Modelo {
   descripcion: string;
 }
 
-const CARPETA_DATOS = path.join(path.dirname(fileURLToPath(import.meta.url)), "datos");
 const ARCHIVO_CONFIG = path.join(CARPETA_DATOS, "modelo.json");
 
 // Modelos que no sirven para platicar (voz en vivo, imágenes, video, embeddings...)

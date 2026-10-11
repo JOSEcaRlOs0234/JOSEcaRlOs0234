@@ -1,16 +1,21 @@
 /**
- * Asistente para guardar tu clave de Gemini en el archivo .env
- * Lo abre automáticamente "Encender Jarvis.bat" si todavía no hay clave.
- * También puedes usarlo para cambiar la clave: escribe  npm run configurar
+ * Asistente para guardar tu clave de Gemini en el archivo .env (en la carpeta fija de datos de Jarvis).
+ *   node configurar.mjs             → pide la clave solo si todavía no hay una
+ *   node configurar.mjs --cambiar   → pide una clave nueva aunque ya haya una
+ *   node configurar.mjs --comprobar → no pregunta nada; termina con error si falta la clave
  */
 
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
 import readline from "readline/promises";
-import { fileURLToPath } from "url";
+import { ARCHIVO_ENV, prepararDatos } from "./ubicacion.mjs";
 
-const carpeta = path.dirname(fileURLToPath(import.meta.url));
-const archivoEnv = path.join(carpeta, ".env");
+const archivoEnv = ARCHIVO_ENV;
+
+// Traer la clave de una copia vieja de Jarvis si la hay
+prepararDatos();
+const yaHayClave = existsSync(archivoEnv) && /^GEMINI_API_KEY=\S{20,}/m.test(readFileSync(archivoEnv, "utf8"));
+if (process.argv.includes("--comprobar")) process.exit(yaHayClave ? 0 : 1);
+if (yaHayClave && !process.argv.includes("--cambiar")) process.exit(0);
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 

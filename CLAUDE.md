@@ -30,11 +30,19 @@
 - El código vive en la carpeta `jarvis/` de este repo (repo de perfil de GitHub, público → nunca subir secretos).
 - GitHub: el usuario dio acceso; el trabajo se sube a la rama `claude/zealous-bardeen-xz2fta` (no a main).
   Al usuario se le entrega además un zip (`git archive HEAD jarvis`) con SendUserFile para instalarlo en su laptop.
-  Para actualizar: extraer el zip en `C:\Jarvis` reemplazando archivos (`.env`, `node_modules`, `datos`, `registro` se conservan).
+  **Desde v2.0 los datos NO viven en la carpeta del programa** (`ubicacion.mjs`): `.env`, memoria, historial, permisos,
+  pizarra, modelo, aplausos y registro van en `%LOCALAPPDATA%\Jarvis` (Linux: ~/.jarvis; `JARVIS_DATOS` lo cambia).
+  `prepararDatos()` (lo llaman server.ts, configurar.mjs y configurar-claude.mjs) copia la primera vez el `.env` + `datos/`
+  + `registro/` de la copia más reciente encontrada (carpeta del programa, C:\Jarvis\*, Descargas\*\jarvis, Escritorio).
+  Así el usuario puede extraer cada zip donde sea (lo hizo en Descargas varias veces) sin que pida la clave.
+  El icono del Escritorio se rehace por copia (marcador `datos\acceso-directo.txt` en la carpeta del programa) y el
+  acceso de arranque con Windows se rehace en cada inicio para apuntar a la copia actual.
+  `configurar.mjs`: sin argumentos pide clave solo si falta; `--cambiar`; `--comprobar` (exit 1 si falta; lo usa Jarvis.vbs).
+  `Cambiar clave de Gemini.bat` para cambiarla.
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.9.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.0.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -112,6 +120,12 @@
     silencio (y el micrófono no fue elegido a mano), `buscarMicrofono()` prueba cada dispositivo ~1.2 s y se queda con
     el primero que manda sonido; guarda `dispositivo` + `nombreDispositivo` (el número se re-busca por nombre al iniciar)
     y `microfonoManual`. Estado "buscando" en el panel. Probado con un PvRecorder falso (elige el 3.º de 3).
+  - PRUEBA REAL v1.9: el micrófono YA oye, pero sus aplausos salían "Ignorado: golpe grave" y "sonido largo".
+    v2.0: reglas más flexibles por defecto (`CALIBRACION_INICIAL`: dura ≤250 ms, agudos ≥0.30; fin de evento cuando
+    rms < 20% del pico) y botón "Enseñarle mis aplausos": las siguientes 3 palmadas se miden y `terminarAprendizaje()`
+    AFLOJA las reglas para aceptarlas (nunca las endurece; tope 450 ms, agudos mín 0.08). Guardado en
+    `config.calibracion`; "Reiniciar" vuelve a fábrica. Los "Ignorado" ahora muestran "· N ms, agudos X" para diagnosticar.
+    Siguen pasando los 13 casos sintéticos + aplausos "de laptop" (ruido filtrado a 2.5 kHz con eco 60–150 ms).
   - En su registro se vio 429 en gemini-3.8-flash y 3.5-flash (límite gratuito) y respondió el respaldo: funciona.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.

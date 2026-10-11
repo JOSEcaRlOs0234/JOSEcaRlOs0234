@@ -5,7 +5,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 export interface Pizarra {
   titulo: string;
@@ -13,7 +13,6 @@ export interface Pizarra {
   actualizada: number;
 }
 
-const CARPETA_DATOS = path.join(path.dirname(fileURLToPath(import.meta.url)), "datos");
 const ARCHIVO = path.join(CARPETA_DATOS, "pizarra.json");
 export const MAX_PIZARRA = 20000;
 

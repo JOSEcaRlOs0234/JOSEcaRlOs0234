@@ -15,6 +15,7 @@ import { exec } from "child_process";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
+import { ARCHIVO_ENV, CARPETA_DATOS, prepararDatos } from "./ubicacion.mjs";
 import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
 import { conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
 import { buscarEnInternet, claudeConfigurado } from "./consultas.ts";
@@ -25,7 +26,9 @@ import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } f
 import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, ".env"), quiet: true });
+// Tus datos viven en un lugar fijo (AppData\Local\Jarvis); la primera vez se traen de copias viejas
+prepararDatos();
+dotenv.config({ path: ARCHIVO_ENV, quiet: true });
 
 // Versión de Jarvis (sube con cada actualización; sirve para detectar si quedó encendida una versión vieja)
 const VERSION: string = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
@@ -98,7 +101,7 @@ function explicarError(err: any): string {
   const texto = String(err?.message || err || "");
   const codigo = Number(err?.status || err?.code || 0);
   if (/API key not valid|API_KEY_INVALID|invalid api key/i.test(texto) || codigo === 401) {
-    return "Mi clave de Gemini no es válida. Revisa que la copiaste completa en el archivo .env.";
+    return "Mi clave de Gemini no es válida. Cierra Jarvis y abre \"Encender Jarvis\" para volver a ponerla.";
   }
   if (codigo === 403 || /permission|PERMISSION_DENIED/i.test(texto)) {
     return "Google rechazó mi clave de Gemini (permiso denegado). Puede que la clave esté desactivada.";
@@ -348,6 +351,12 @@ app.post("/api/aplausos/config", async (req, res) => {
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
 });
 
+app.post("/api/aplausos/aprender", (req, res) => {
+  if (req.body?.accion === "restablecer") oido.restablecerCalibracion();
+  else oido.aprender();
+  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+});
+
 app.get("/api/aplausos/microfonos", async (_req, res) => {
   res.json({ microfonos: await oido.listarMicrofonos() });
 });
@@ -395,7 +404,7 @@ function abrirVentana(url: string) {
 
 const servidor = app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
-  registrar("SISTEMA", `Jarvis ${VERSION} encendido en ${url} (modelo: ${modeloActual})`);
+  registrar("SISTEMA", `Jarvis ${VERSION} encendido en ${url} (modelo: ${modeloActual}, datos en ${CARPETA_DATOS})`);
   console.log("");
   console.log("  ===============================================");
   console.log("   J.A.R.V.I.S. está encendido");

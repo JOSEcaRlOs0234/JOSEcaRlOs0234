@@ -55,6 +55,7 @@ interface EstadoAplausos {
   nivel: number;
   eventos: { hora: string; texto: string }[];
   activaciones: number;
+  aprendiendo: boolean;
   sinSonido: boolean;
   arranqueConWindows: boolean;
   activacion: number;
@@ -579,6 +580,19 @@ export default function App() {
     }
   };
 
+  const ensenarAplausos = async (accion: "aprender" | "restablecer") => {
+    try {
+      const r = await fetch("/api/aplausos/aprender", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion }),
+      });
+      if (r.ok) setAplausos(await r.json());
+    } catch {
+      showNotification("No pude hablar con el detector de aplausos.", "error");
+    }
+  };
+
   const cambiarArranque = async (activo: boolean) => {
     try {
       const r = await fetch("/api/aplausos/arranque", {
@@ -961,6 +975,30 @@ export default function App() {
                 onChange={(e) => cambiarAplausos({ sensibilidad: Number(e.target.value) })}
                 className="w-full mt-1.5 accent-[#00e5ff] cursor-pointer"
               />
+            </div>
+
+            <div className="grid grid-cols-[1fr_auto] gap-1.5">
+              <button
+                type="button"
+                onClick={() => ensenarAplausos("aprender")}
+                disabled={!aplausos || aplausos.estado !== "escuchando" || aplausos.aprendiendo}
+                className={`px-2 py-1.5 text-[11px] font-hud-mono font-bold border cursor-pointer disabled:cursor-not-allowed ${
+                  aplausos?.aprendiendo
+                    ? "border-[#ff9933] text-[#ff9933] bg-[#ff9933]/15 animate-pulse"
+                    : "border-[#00e5ff] text-[#e2f8ff] bg-[#00e5ff]/15 hover:bg-[#00e5ff]/30 disabled:opacity-40"
+                }`}
+              >
+                {aplausos?.aprendiendo ? "👏 Aplaude 3 veces, despacio..." : "👏 Enseñarle mis aplausos"}
+              </button>
+              <button
+                type="button"
+                onClick={() => ensenarAplausos("restablecer")}
+                disabled={!aplausos}
+                className="px-2 py-1.5 text-[10px] font-hud-mono border border-[#68a8d8]/40 text-[#68a8d8] hover:text-[#e2f8ff] cursor-pointer"
+                title="Volver a las reglas de fábrica"
+              >
+                Reiniciar
+              </button>
             </div>
 
             <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#b8f4ff] cursor-pointer select-none">

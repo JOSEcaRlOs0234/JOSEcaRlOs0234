@@ -5,11 +5,11 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { existsSync, readFileSync, writeFileSync } from "fs";
-import path from "path";
 import readline from "readline/promises";
-import { fileURLToPath } from "url";
+import { ARCHIVO_ENV, prepararDatos } from "./ubicacion.mjs";
 
-const archivoEnv = path.join(path.dirname(fileURLToPath(import.meta.url)), ".env");
+prepararDatos();
+const archivoEnv = ARCHIVO_ENV;
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
 console.log("");

@@ -13,7 +13,12 @@ fondo = False
 If WScript.Arguments.Count > 0 Then fondo = (LCase(WScript.Arguments(0)) = "fondo")
 
 ' Falta instalar, falta la clave o una actualizacion trae piezas nuevas: usar el encendido con ventana visible
-If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Or Not fso.FileExists(carpeta & "\.env") Then
+If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Then
+  If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  WScript.Quit
+End If
+' La clave vive en AppData\Local\Jarvis; configurar.mjs --comprobar dice si ya esta
+If sh.Run("node configurar.mjs --comprobar", 0, True) <> 0 Then
   If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
   WScript.Quit
 End If

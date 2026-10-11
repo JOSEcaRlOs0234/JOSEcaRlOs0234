@@ -15,7 +15,18 @@
 export type EventoAplauso =
   | { tipo: "aplauso"; fuerza: number }
   | { tipo: "ignorado"; motivo: string }
-  | { tipo: "activado" };
+  | { tipo: "activado" }
+  | { tipo: "aprendido"; numero: number }
+  | { tipo: "calibrado"; maxLargo: number; minAgudos: number };
+
+/** Lo que el detector aprendió de los aplausos del usuario. */
+export interface Calibracion {
+  maxLargo: number; // milisegundos que puede durar un aplauso
+  minAgudos: number; // qué tan "agudo" debe sonar como mínimo
+}
+
+export const CALIBRACION_INICIAL: Calibracion = { maxLargo: 250, minAgudos: 0.3 };
+const APLAUSOS_PARA_APRENDER = 3;
 
 const MS_POR_MUESTRA = 1000 / 16000;
 
@@ -27,6 +38,8 @@ export function umbralPorSensibilidad(sensibilidad: number): number {
 
 export class DetectorAplausos {
   sensibilidad = 5;
+  calibracion: Calibracion = { ...CALIBRACION_INICIAL };
+  private aprendidos: { largo: number; agudos: number }[] | null = null;
 
   private fondo = 0.003; // ruido de fondo del cuarto (se ajusta solo)
   private previos: number[] = []; // volumen de los últimos pedacitos (para ver si subió de golpe)
@@ -36,6 +49,30 @@ export class DetectorAplausos {
   nivel = 0; // volumen actual, para el medidor de la pantalla
 
   constructor(private avisar: (e: EventoAplauso) => void) {}
+
+  /** Empieza a aprender cómo suenan los aplausos del usuario (debe aplaudir 3 veces, despacio). */
+  aprender(): void {
+    this.aprendidos = [];
+    this.aplausos = [];
+  }
+
+  get aprendiendo(): boolean {
+    return this.aprendidos !== null;
+  }
+
+  private terminarAprendizaje(): void {
+    const lista = this.aprendidos ?? [];
+    this.aprendidos = null;
+    // Dejar margen (un poco más largo y menos agudo que lo escuchado). Aprender solo AFLOJA las reglas
+    // para aceptar los aplausos del usuario; nunca las hace más estrictas que las de fábrica.
+    const largoAprendido = Math.max(...lista.map((x) => x.largo)) * 1.4 + 40;
+    const agudosAprendidos = Math.min(...lista.map((x) => x.agudos)) * 0.7;
+    const maxLargo = Math.round(Math.min(450, Math.max(CALIBRACION_INICIAL.maxLargo, largoAprendido)));
+    const minAgudos =
+      Math.round(Math.max(0.08, Math.min(CALIBRACION_INICIAL.minAgudos, agudosAprendidos)) * 100) / 100;
+    this.calibracion = { maxLargo, minAgudos };
+    this.avisar({ tipo: "calibrado", maxLargo, minAgudos });
+  }
 
   /** Pausa la detección (por ejemplo mientras Jarvis habla). */
   pausar(ms: number, ahora: number): void {
@@ -74,7 +111,7 @@ export class DetectorAplausos {
       const e = this.evento;
       if (pico > e.pico) e.pico = pico;
       if (e.agudos.length < 3) e.agudos.push(agudos);
-      if (rms > Math.max(e.pico * 0.15, this.fondo * 4)) e.ultimoFuerte = ahora;
+      if (rms > Math.max(e.pico * 0.2, this.fondo * 4)) e.ultimoFuerte = ahora;
       const largo = ahora - e.inicio;
       if (ahora - e.ultimoFuerte > 40 || largo > 600) {
         this.evento = null;
@@ -102,13 +139,25 @@ export class DetectorAplausos {
 
   private terminarEvento(e: { inicio: number; pico: number; agudos: number[] }, largo: number, ahora: number): void {
     const agudosPromedio = e.agudos.reduce((a, b) => a + b, 0) / e.agudos.length;
-    if (largo > 160) {
-      this.avisar({ tipo: "ignorado", motivo: "sonido largo (voz, música o portazo)" });
+    const datos = `${Math.round(largo)} ms, agudos ${agudosPromedio.toFixed(2)}`;
+
+    // Modo "enseñarle mis aplausos": guardar cómo suena cada golpe, sin decidir nada
+    if (this.aprendidos) {
+      if (largo <= 600) {
+        this.aprendidos.push({ largo, agudos: agudosPromedio });
+        this.avisar({ tipo: "aprendido", numero: this.aprendidos.length });
+      }
+      if (this.aprendidos.length >= APLAUSOS_PARA_APRENDER) this.terminarAprendizaje();
+      return;
+    }
+
+    if (largo > this.calibracion.maxLargo) {
+      this.avisar({ tipo: "ignorado", motivo: `sonido largo (voz, música o portazo) · ${datos}` });
       this.aplausos = [];
       return;
     }
-    if (agudosPromedio < 0.55) {
-      this.avisar({ tipo: "ignorado", motivo: "golpe grave (puerta, mesa, pasos)" });
+    if (agudosPromedio < this.calibracion.minAgudos) {
+      this.avisar({ tipo: "ignorado", motivo: `golpe grave (puerta, mesa, pasos) · ${datos}` });
       this.aplausos = [];
       return;
     }

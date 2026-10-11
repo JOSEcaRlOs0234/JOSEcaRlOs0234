@@ -6,9 +6,9 @@
 
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { CARPETA_DATOS } from "./ubicacion.mjs";
 
-const CARPETA = path.join(path.dirname(fileURLToPath(import.meta.url)), "datos", "historial");
+const CARPETA = path.join(CARPETA_DATOS, "historial");
 
 function normalizar(texto: string): string {
   return texto.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");

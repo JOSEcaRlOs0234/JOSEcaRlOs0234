@@ -6,7 +6,7 @@
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 export interface Recuerdo {
   id: string;
@@ -14,7 +14,6 @@ export interface Recuerdo {
   fecha: string;
 }
 
-const CARPETA_DATOS = path.join(path.dirname(fileURLToPath(import.meta.url)), "datos");
 const ARCHIVO = path.join(CARPETA_DATOS, "memoria.json");
 const MAX_RECUERDOS = 200;
 export const MAX_LARGO_RECUERDO = 300;

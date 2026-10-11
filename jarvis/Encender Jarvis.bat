@@ -37,13 +37,11 @@ if "%INSTALAR%"=="1" (
   )
 )
 
-findstr /b "GEMINI_API_KEY=" ".env" >nul 2>nul
+rem Pide la clave de Gemini solo si todavía no está guardada (se guarda en AppData\Local\Jarvis)
+node configurar.mjs
 if errorlevel 1 (
-  node configurar.mjs
-  if errorlevel 1 (
-    pause
-    exit /b 1
-  )
+  pause
+  exit /b 1
 )
 
 if not exist "datos\acceso-directo.txt" call "Crear acceso directo.bat"

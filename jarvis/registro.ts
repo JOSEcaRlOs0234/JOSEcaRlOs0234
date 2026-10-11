@@ -1,15 +1,15 @@
 /**
  * Registro de actividad de Jarvis.
  * Cada cosa que hace Jarvis se anota con fecha y hora en registro/jarvis.log
- * (un archivo de texto normal que puedes abrir con el Bloc de notas).
+ * (un archivo de texto normal que puedes abrir con el Bloc de notas), dentro de la carpeta de datos de Jarvis.
  */
 
 import { appendFileSync, mkdirSync } from "fs";
 import { readFile } from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
+import { CARPETA_REGISTRO } from "./ubicacion.mjs";
 
-const CARPETA = path.join(path.dirname(fileURLToPath(import.meta.url)), "registro");
+const CARPETA = CARPETA_REGISTRO;
 const ARCHIVO = path.join(CARPETA, "jarvis.log");
 const MAX_LARGO = 500;
 

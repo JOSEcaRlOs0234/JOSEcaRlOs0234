@@ -26,8 +26,6 @@ abrir documentos/fotos, y bloquear, suspender, reiniciar o apagar la laptop.
 ## Si algo falla
 Abre **Encender Jarvis.bat** (con ventana negra) para ver los mensajes, y mándale una foto a Claude.
 
-## Cambiar la clave de Gemini
-Borra el archivo `.env` y vuelve a abrir **Encender Jarvis.bat**.
 
 ## Elegir el modelo de Gemini
 Arriba a la derecha hay un menú con **todos los modelos de Gemini** que tu clave puede usar (la misma clave sirve para todos).
@@ -64,3 +62,12 @@ Ignora ruidos sueltos, portazos, golpes en la mesa, voces y tres golpes seguidos
   Si no te detecta, sube la sensibilidad; si se activa solo, bájala.
 - Casilla **Encender Jarvis solo al prender la laptop** (activada desde el inicio).
 - El sonido se analiza en tu laptop: no se graba ni se envía a internet.
+
+## Dónde se guardan tus datos (desde la versión 2.0)
+Tu clave, memoria, historial, pizarra, permisos y registro viven en `C:\Users\<tú>\AppData\Local\Jarvis`.
+Por eso puedes extraer una actualización en cualquier carpeta y no te vuelve a pedir la clave.
+Para cambiar la clave de Gemini: doble clic en **Cambiar clave de Gemini.bat**.
+
+## Si no reconoce tus aplausos
+Panel **Activar con aplausos** → botón **Enseñarle mis aplausos** → aplaude 3 veces, despacio (uno por segundo).
+Jarvis aprende cómo suenan en tu cuarto. **Reiniciar** vuelve a las reglas de fábrica.
