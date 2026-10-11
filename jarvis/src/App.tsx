@@ -232,6 +232,13 @@ export default function App() {
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
   const ultimaActivacionRef = useRef<number | null>(null);
   const ultimoAvisoRef = useRef<number | null>(null);
+  // Si la ventana se abrió sola por un recordatorio (?aviso=N): mostrarlo (Windows ya lo dijo en voz alta)
+  const avisoInicialRef = useRef<number | null>(
+    (() => {
+      const n = Number(new URLSearchParams(window.location.search).get("aviso"));
+      return Number.isInteger(n) && n > 0 ? n : null;
+    })()
+  );
   const [microfonos, setMicrofonos] = useState<string[]>([]);
   const [clavePalabra, setClavePalabra] = useState("");
   const [guardandoClave, setGuardandoClave] = useState(false);
@@ -1000,11 +1007,17 @@ export default function App() {
         // Recordatorios que llegaron a su hora
         const avisos = datos.avisos ?? [];
         const maxId = avisos.reduce((m, a) => Math.max(m, a.id), 0);
-        if (ultimoAvisoRef.current === null) ultimoAvisoRef.current = maxId;
+        let yaDichoHasta = 0;
+        if (ultimoAvisoRef.current === null) {
+          const inicial = avisoInicialRef.current;
+          ultimoAvisoRef.current = inicial !== null && inicial <= maxId ? inicial - 1 : maxId;
+          yaDichoHasta = maxId;
+          if (inicial !== null) window.history.replaceState(null, "", "/");
+        }
         for (const a of avisos.filter((x) => x.id > (ultimoAvisoRef.current ?? 0))) {
           addMensaje("jarvis", `⏰ ${a.texto}`, true);
           showNotification(a.texto, "warning");
-          if (document.visibilityState === "visible") hablarRef.current(a.texto);
+          if (document.visibilityState === "visible" && a.id > yaDichoHasta) hablarRef.current(a.texto);
         }
         ultimoAvisoRef.current = Math.max(ultimoAvisoRef.current ?? 0, maxId);
       } catch {

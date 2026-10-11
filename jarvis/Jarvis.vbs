@@ -2,6 +2,7 @@
 ' Si Jarvis ya esta encendido (y es la version actual), solo abre su ventana.
 ' Con el argumento "fondo" (lo usa el arranque de Windows): enciende Jarvis escondido,
 ' sin abrir ventana, para que escuche los aplausos.
+' Con "recordatorio" (lo usa el Programador de tareas): igual que "fondo", para avisar un recordatorio.
 Option Explicit
 
 Dim sh, fso, carpeta, estado, fondo
@@ -10,7 +11,7 @@ Set fso = CreateObject("Scripting.FileSystemObject")
 carpeta = fso.GetParentFolderName(WScript.ScriptFullName)
 sh.CurrentDirectory = carpeta
 fondo = False
-If WScript.Arguments.Count > 0 Then fondo = (LCase(WScript.Arguments(0)) = "fondo")
+If WScript.Arguments.Count > 0 Then fondo = (LCase(WScript.Arguments(0)) = "fondo" Or LCase(WScript.Arguments(0)) = "recordatorio")
 
 ' Falta instalar, falta la clave o una actualizacion trae piezas nuevas: usar el encendido con ventana visible
 If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Then

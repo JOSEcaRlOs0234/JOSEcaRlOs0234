@@ -46,6 +46,10 @@ y Jarvis lo busca. No necesitas instalar ninguna base de datos.
 Pídele "escribe en la pizarra..." o "hazme una lista de...": aparece una pizarra sobre el reactor.
 Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba del reactor) la vuelve a abrir.
 
+## Recordatorios con Jarvis apagado (versión 2.4.1)
+Si tienes un recordatorio y Jarvis está apagado, Windows lo enciende solo un minuto antes (con la laptop prendida),
+te lo dice en voz alta y abre su ventana. Se ve en el Programador de tareas como "Jarvis - recordatorio".
+
 ## Notas, dibujos e investigación (versión 2.4)
 - **Notas**: "anota que mañana tengo examen", "apunta la receta...", "¿qué notas tengo?". Se ven en el botón
   "Notas" (arriba del reactor), donde también puedes escribir, copiar o borrar notas a mano.

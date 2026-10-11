@@ -18,6 +18,12 @@ export interface Recordatorio {
 const ARCHIVO = path.join(CARPETA_DATOS, "recordatorios.json");
 const MAX_RECORDATORIOS = 100;
 
+// Se llama cada vez que cambia la lista (el servidor lo usa para programar el encendido automático de Jarvis)
+let alCambiar: (() => void) | null = null;
+export function cuandoCambienRecordatorios(f: () => void): void {
+  alCambiar = f;
+}
+
 export function leerRecordatorios(): Recordatorio[] {
   try {
     const lista = JSON.parse(readFileSync(ARCHIVO, "utf8"));
@@ -32,6 +38,7 @@ export function leerRecordatorios(): Recordatorio[] {
 function guardar(lista: Recordatorio[]): void {
   if (!existsSync(CARPETA_DATOS)) mkdirSync(CARPETA_DATOS, { recursive: true });
   writeFileSync(ARCHIVO, JSON.stringify(lista, null, 2), "utf8");
+  alCambiar?.();
 }
 
 export function agregarRecordatorio(texto: string, cuando: number): Recordatorio {

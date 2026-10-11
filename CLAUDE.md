@@ -44,7 +44,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.4.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.4.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -183,6 +183,13 @@
     PERSONALIDAD: anota/apunta → anotar; dibuja/diagrama → dibujar; info detallada → investigar_a_fondo.
   - Probado: limpiarSvg, notas, las 5 herramientas con IA simulada, endpoints, y en Playwright: panel de notas, dibujo
     de Jarvis con fuentes, dibujar a mano + guardar PNG. NO probado con Gemini real (dibujo/búsqueda).
+- v2.4.1 (pedido: "si tiene un recordatorio y la compu está prendida, que se prenda solo"; vio "mientras estaba
+  apagado se pasó un recordatorio"): `programarEncendido` (windows.ts) registra la tarea de usuario "Jarvis - recordatorio"
+  (Register-ScheduledTask, sin admin, StartWhenAvailable, sin límite de tiempo) → `wscript Jarvis.vbs recordatorio`
+  (= modo fondo) 1 min antes del recordatorio más próximo. `sincronizarEncendido` (server.ts) se llama al iniciar y cada
+  vez que cambia recordatorios.json (`cuandoCambienRecordatorios`); los que faltan <70 s los avisa el Jarvis ya encendido.
+  Al avisar sin ventana visible: Windows lo dice + se abre la ventana `/?aviso=N` (máx. 1 cada 15 s), que lo muestra
+  sin repetirlo en voz. Probado en Linux (sin la tarea real). NO probado en Windows.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

@@ -34,7 +34,8 @@ import { guardarDibujoPng, limpiarSvg, pedidoDeDibujo } from "./dibujos.ts";
 import { guardarEnHistorial } from "./historial.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
-import { cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
+import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
+import { programarEncendido } from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { enfriarModelo, guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -430,6 +431,7 @@ const oido = new OidoDeJarvis(async () => {
 // Avisos (recordatorios que llegaron a su hora): la ventana los muestra y los dice; si no hay ventana, los dice Windows
 let avisos: { id: number; texto: string }[] = [];
 let siguienteAviso = 1;
+let ventanaAbiertaPorAviso = 0;
 vigilarRecordatorios((r, atrasado) => {
   const hora = new Date(r.cuando).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false });
   const texto = atrasado ? `Señor, mientras estaba apagado se pasó un recordatorio de las ${hora}: ${r.texto}.` : `Señor, le recuerdo: ${r.texto}.`;
@@ -439,8 +441,37 @@ vigilarRecordatorios((r, atrasado) => {
   if (!hayVentanaVisible()) {
     oido.pausar(10000);
     void decirEnVoz(texto);
+    // Abrir la ventana para que se vea el recordatorio (ya lo dijo Windows, la ventana no lo repite).
+    // Si vencieron varios a la vez, una sola ventana los muestra todos.
+    if (Date.now() - ventanaAbiertaPorAviso > 15000) {
+      ventanaAbiertaPorAviso = Date.now();
+      abrirVentana(`http://localhost:${PORT}/?aviso=${siguienteAviso - 1}`);
+    }
   }
 });
+
+// Encendido automático: Windows enciende Jarvis 1 minuto antes del siguiente recordatorio, aunque esté apagado
+const ANTICIPO_ENCENDIDO = 60 * 1000;
+let temporizadorEncendido: ReturnType<typeof setTimeout> | undefined;
+let ultimoEncendido: number | null | undefined;
+function sincronizarEncendido() {
+  clearTimeout(temporizadorEncendido);
+  temporizadorEncendido = setTimeout(async () => {
+    // Los que tocan en menos de 1 minuto los avisa este mismo Jarvis (ya está encendido)
+    const siguiente = leerRecordatorios().find((r) => r.cuando - ANTICIPO_ENCENDIDO > Date.now() + 10_000);
+    const cuando = siguiente ? siguiente.cuando - ANTICIPO_ENCENDIDO : null;
+    if (cuando === ultimoEncendido) return;
+    try {
+      await programarEncendido(cuando, path.join(__dirname, "Jarvis.vbs"));
+      ultimoEncendido = cuando;
+      if (cuando !== null) registrar("RECORDAT.", `Jarvis se encenderá solo para el recordatorio de ${cuandoLegible(siguiente!.cuando)}.`);
+    } catch (err) {
+      registrar("ERROR", `No pude programar el encendido automático: ${err instanceof Error ? err.message : err}`);
+    }
+  }, 1000);
+}
+cuandoCambienRecordatorios(sincronizarEncendido);
+sincronizarEncendido();
 
 app.get("/api/aplausos", (req, res) => {
   if (req.query.visible === "1") ultimaVezVisible = Date.now();

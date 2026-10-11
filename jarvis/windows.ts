@@ -158,6 +158,35 @@ export async function carpetasUsuario(): Promise<CarpetasUsuario> {
   return base;
 }
 
+// ------------------------------------------------------------------ encender Jarvis para un recordatorio
+
+const TAREA_RECORDATORIO = "Jarvis - recordatorio";
+
+/**
+ * Deja una tarea en el Programador de tareas de Windows que enciende Jarvis (escondido) a la hora indicada,
+ * aunque esté apagado. Con `cuando` = null quita la tarea. Es una tarea del propio usuario: no pide administrador.
+ * Si la laptop estaba suspendida a esa hora, Windows la corre en cuanto vuelve.
+ */
+export async function programarEncendido(cuando: number | null, lanzador: string): Promise<void> {
+  if (!esWindows) return;
+  if (cuando === null) {
+    await powershell(
+      "Unregister-ScheduledTask -TaskName $env:JARVIS_TAREA -Confirm:$false -ErrorAction SilentlyContinue",
+      { JARVIS_TAREA: TAREA_RECORDATORIO }
+    );
+    return;
+  }
+  await powershell(
+    "$a=New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('\"' + $env:JARVIS_LANZADOR + '\" recordatorio');" +
+      "$t=New-ScheduledTaskTrigger -Once -At ([DateTimeOffset]::FromUnixTimeMilliseconds([long]$env:JARVIS_CUANDO).LocalDateTime);" +
+      "$s=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries " +
+      "-ExecutionTimeLimit ([TimeSpan]::Zero);" +
+      "Register-ScheduledTask -TaskName $env:JARVIS_TAREA -Action $a -Trigger $t -Settings $s " +
+      "-Description 'Enciende J.A.R.V.I.S. para avisar un recordatorio' -Force | Out-Null",
+    { JARVIS_TAREA: TAREA_RECORDATORIO, JARVIS_LANZADOR: lanzador, JARVIS_CUANDO: String(Math.round(cuando)) }
+  );
+}
+
 // ------------------------------------------------------------------ volumen y sistema
 
 // Teclas especiales de Windows: 173 silenciar, 174 bajar, 175 subir (cada toque = 2 %)
