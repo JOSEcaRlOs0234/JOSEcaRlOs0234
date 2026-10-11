@@ -455,7 +455,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         descripcion: `Abrir la página ${url}`,
         ejecutar: async () => {
           necesitaWindows();
-          win.abrirUrl(url);
+          await win.abrirUrl(url);
           return { resultado: `Abrí ${url}.` };
         },
       };
@@ -470,7 +470,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         descripcion: `Buscar en Google: "${consulta}"`,
         ejecutar: async () => {
           necesitaWindows();
-          win.abrirUrl(url);
+          await win.abrirUrl(url);
           return { resultado: "Abrí la búsqueda en el navegador." };
         },
       };
@@ -582,7 +582,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         ejecutar: async () => {
           necesitaWindows();
           if (!existsSync(ruta)) throw new ErrorHerramienta("Ese archivo no existe.");
-          win.abrirRuta(ruta);
+          await win.abrirRuta(ruta);
           return { resultado: `Abrí ${bonita}.` };
         },
       };

@@ -33,7 +33,9 @@ function powershell(script: string, env: Record<string, string> = {}): Promise<s
 
 /** Abre algo con Windows (programa, página web, archivo o carpeta) sin pasar por la consola. */
 function abrirConExplorer(destino: string): void {
-  const hijo = spawn("explorer.exe", [destino], { detached: true, stdio: "ignore", windowsHide: true });
+  // OJO: sin `windowsHide`. Si se pone, Windows le pasa la orden "escondido" al programa que se abre
+  // (por ejemplo el navegador) y se abre invisible. explorer.exe no muestra ventana negra de todos modos.
+  const hijo = spawn("explorer.exe", [destino], { detached: true, stdio: "ignore" });
   hijo.on("error", () => {});
   hijo.unref();
 }
@@ -89,12 +91,24 @@ export function lanzarBasico(destino: string): void {
 
 // ------------------------------------------------------------------ web, archivos
 
-export function abrirUrl(url: string): void {
-  abrirConExplorer(url);
+/**
+ * Abre una página o un archivo con su programa normal y en una ventana VISIBLE (Start-Process = "doble clic").
+ * El destino va como variable de entorno, nunca dentro del comando. Si PowerShell falla, se intenta con explorer.
+ */
+async function abrirVisible(destino: string): Promise<void> {
+  try {
+    await powershell("Start-Process -FilePath $env:JARVIS_DESTINO -WindowStyle Normal", { JARVIS_DESTINO: destino });
+  } catch {
+    abrirConExplorer(destino);
+  }
 }
 
-export function abrirRuta(ruta: string): void {
-  abrirConExplorer(ruta);
+export function abrirUrl(url: string): Promise<void> {
+  return abrirVisible(url);
+}
+
+export function abrirRuta(ruta: string): Promise<void> {
+  return abrirVisible(ruta);
 }
 
 /** Manda un archivo a la Papelera de reciclaje (se puede recuperar). */

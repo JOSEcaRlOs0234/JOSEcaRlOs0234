@@ -43,7 +43,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.3.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.3.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -161,6 +161,10 @@
   - Modelos: `enfriarModelo` — tras 429/503 se salta ese modelo 1 min (404: 1 h) para no perder tiempo.
   - Probado con micrófono/voz simulados en Playwright: conversación completa (pedido → permiso por voz "sí" → sigue →
     "gracias" → se duerme), despertar con resumen oculto, recordatorio en pantalla y en servidor.
+- BUG REAL v2.3 (usuario): "abre el navegador"/búsquedas decían "Hecho" pero no aparecía nada. Causa: `spawn(explorer.exe,
+  {windowsHide:true})` → Windows pasa SW_HIDE al programa abierto y el navegador salía invisible. v2.3.1: explorer sin
+  windowsHide; `abrirUrl`/`abrirRuta` = PowerShell `Start-Process -WindowStyle Normal` (destino por variable de entorno).
+  NUNCA volver a poner windowsHide al lanzar programas/páginas para el usuario.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
