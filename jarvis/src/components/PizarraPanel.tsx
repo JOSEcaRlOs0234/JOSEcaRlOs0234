@@ -317,6 +317,7 @@ function Lienzo({ fondoSvg, onGuardar }: { fondoSvg?: string; onGuardar: (png: s
 /** La pizarra de Jarvis: aparece sobre el reactor cuando Jarvis escribe o dibuja algo. También puedes dibujar tú. */
 export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onCopiar, onGuardarDibujo }) => {
   const [aMano, setAMano] = useState(false);
+  const [grande, setGrande] = useState(false);
   const vacia = !pizarra.contenido && !pizarra.dibujo;
 
   return (
@@ -371,6 +372,20 @@ export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onC
           </button>
         </div>
       </div>
+      {grande && pizarra.dibujo && (
+        // Dibujo en pantalla completa; clic en cualquier parte para cerrarlo
+        <div
+          className="fixed inset-0 z-50 bg-[#020c18]/95 flex items-center justify-center p-4 cursor-zoom-out"
+          onClick={() => setGrande(false)}
+          title="Clic para cerrar"
+        >
+          <img
+            src={enlaceSvg(pizarra.dibujo)}
+            alt={pizarra.titulo || "Dibujo de Jarvis"}
+            className="w-full h-full object-contain"
+          />
+        </div>
+      )}
       {aMano ? (
         <div className="flex-1 min-h-0 p-3">
           <Lienzo fondoSvg={pizarra.dibujo} onGuardar={onGuardarDibujo} />
@@ -381,7 +396,9 @@ export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onC
             <img
               src={enlaceSvg(pizarra.dibujo)}
               alt={pizarra.titulo || "Dibujo de Jarvis"}
-              className="w-full max-h-[70vh] object-contain mb-3 border border-[#00e5ff]/20"
+              onClick={() => setGrande(true)}
+              title="Clic para verlo en grande"
+              className="w-full max-h-[70vh] object-contain mb-3 border border-[#00e5ff]/20 cursor-zoom-in"
             />
           )}
           {pizarra.contenido && <Contenido texto={pizarra.contenido} />}

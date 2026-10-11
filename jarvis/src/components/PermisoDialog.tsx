@@ -40,7 +40,7 @@ export const PermisoDialog: React.FC<Props> = ({ confirmacion, onResponder }) =>
         <p className="text-sm text-[#e2f8ff] leading-relaxed">
           Jarvis quiere:
           <br />
-          <strong className="text-base">{confirmacion.descripcion}</strong>
+          <strong className="text-base block whitespace-pre-wrap break-words max-h-64 overflow-y-auto">{confirmacion.descripcion}</strong>
         </p>
 
         {confirmacion.nombreTipo && (

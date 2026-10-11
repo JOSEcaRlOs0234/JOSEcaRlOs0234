@@ -50,8 +50,10 @@ export async function investigarAFondo(ai: GoogleGenAI, modelo: string, tema: st
         "información actual y confiable. Responde EXACTAMENTE así:\n" +
         "RESUMEN: (1 o 2 frases con lo más importante)\n" +
         "Después, un informe ordenado con títulos que empiecen con '## ', viñetas con '- ', pasos con '1. ' y " +
-        "**negritas** para lo clave. Incluye datos concretos (fechas, cifras, nombres). Máximo unas 400 palabras. " +
-        "No inventes: si algo no está claro, dilo.",
+        "**negritas** para lo clave. Organízalo en estas secciones (las que apliquen): Qué es, Cómo funciona, Partes o " +
+        "tipos, Historia o contexto, Datos y cifras actuales, Ejemplos, Ventajas y desventajas, Curiosidades y Resumen. " +
+        "Explica a profundidad pero con palabras sencillas, con ejemplos de la vida diaria. Incluye datos concretos " +
+        "(fechas, cifras, nombres). Entre 600 y 1000 palabras. No inventes: si algo no está claro, dilo.",
     },
   });
   const texto = respuesta.text?.trim() || "";

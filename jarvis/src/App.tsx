@@ -27,6 +27,7 @@ import {
   RotateCcw,
   PenLine,
   StickyNote,
+  Mail,
 } from "lucide-react";
 import {
   CONFIG,
@@ -263,6 +264,12 @@ export default function App() {
   const [pizarraAbierta, setPizarraAbierta] = useState(false);
   const pizarraVistaRef = useRef(0);
 
+  // Correo de Gmail
+  const [correo, setCorreo] = useState<{ conectado: boolean; usuario: string }>({ conectado: false, usuario: "" });
+  const [correoForm, setCorreoForm] = useState({ usuario: "", clave: "" });
+  const [correoAbierto, setCorreoAbierto] = useState(false);
+  const [correoProbando, setCorreoProbando] = useState(false);
+
   // Notas
   const [notas, setNotas] = useState<Nota[]>([]);
   const [notasAbiertas, setNotasAbiertas] = useState(false);
@@ -482,6 +489,49 @@ export default function App() {
     } catch {
       showNotification("No pude copiar la nota.", "error");
     }
+  };
+
+  const cargarCorreo = useCallback(async () => {
+    try {
+      const r = await fetch("/api/correo");
+      if (r.ok) setCorreo(await r.json());
+    } catch {
+      // Se reintenta al abrir de nuevo
+    }
+  }, []);
+
+  const conectarCorreo = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCorreoProbando(true);
+    try {
+      const r = await fetch("/api/correo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(correoForm),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setCorreo(datos);
+      setCorreoForm({ usuario: "", clave: "" });
+      setCorreoAbierto(false);
+      showNotification(`Correo conectado: ${datos.usuario}`, "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude conectar el correo.", "error");
+    } finally {
+      setCorreoProbando(false);
+      cargarRegistro();
+    }
+  };
+
+  const desconectarCorreo = async () => {
+    if (!window.confirm("¿Desconectar tu correo de Jarvis? Podrás volver a conectarlo cuando quieras.")) return;
+    try {
+      const r = await fetch("/api/correo", { method: "DELETE" });
+      if (r.ok) setCorreo(await r.json());
+    } catch {
+      showNotification("No pude desconectar el correo.", "error");
+    }
+    cargarRegistro();
   };
 
   /** Guarda en Documentos\Jarvis\Dibujos lo que dibujaste a mano en la pizarra. */
@@ -1005,9 +1055,10 @@ export default function App() {
     cargarRecuerdos();
     cargarPizarra(false);
     cargarNotas(false);
+    cargarCorreo();
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas, cargarCorreo]);
 
   // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
   useEffect(() => {
@@ -1580,6 +1631,92 @@ export default function App() {
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </form>
+          </div>
+
+          {/* CORREO (GMAIL) */}
+          <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+            <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-[#00e5ff]" />
+                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                  Correo (Gmail)
+                </h2>
+              </div>
+              <span className={`font-hud-mono text-[10px] ${correo.conectado ? "text-[#00f5a0]" : "text-[#68a8d8]"}`}>
+                {correo.conectado ? "CONECTADO" : "SIN CONECTAR"}
+              </span>
+            </div>
+            {correo.conectado ? (
+              <>
+                <p className="text-[11px] font-hud-mono text-[#e2f8ff] break-all">{correo.usuario}</p>
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Dile: &ldquo;¿tengo correos nuevos?&rdquo;, &ldquo;léeme el último correo de...&rdquo; o &ldquo;mándale un
+                  correo a...&rdquo;. Antes de mandar uno siempre te pregunta.
+                </p>
+                <button
+                  type="button"
+                  onClick={desconectarCorreo}
+                  className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
+                >
+                  Desconectar
+                </button>
+              </>
+            ) : !correoAbierto ? (
+              <button
+                type="button"
+                onClick={() => setCorreoAbierto(true)}
+                className="px-2 py-1.5 text-[11px] font-hud-mono border border-[#00e5ff]/50 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer"
+              >
+                Conectar mi correo
+              </button>
+            ) : (
+              <form onSubmit={conectarCorreo} className="flex flex-col gap-1.5">
+                <input
+                  type="email"
+                  value={correoForm.usuario}
+                  onChange={(e) => setCorreoForm((f) => ({ ...f, usuario: e.target.value }))}
+                  placeholder="tunombre@gmail.com"
+                  autoComplete="off"
+                  className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                />
+                <input
+                  type="password"
+                  value={correoForm.clave}
+                  onChange={(e) => setCorreoForm((f) => ({ ...f, clave: e.target.value }))}
+                  placeholder="Contraseña de aplicación (16 letras)"
+                  autoComplete="off"
+                  className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                />
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  No es tu contraseña normal: se crea en{" "}
+                  <a
+                    href="https://myaccount.google.com/apppasswords"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#00e5ff] underline"
+                  >
+                    myaccount.google.com/apppasswords
+                  </a>
+                  . Se guarda solo en tu laptop.
+                </p>
+                <div className="flex gap-1.5">
+                  <button
+                    type="submit"
+                    disabled={correoProbando || !correoForm.usuario.trim() || !correoForm.clave.trim()}
+                    className="flex-1 px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                  >
+                    {correoProbando ? "Probando..." : "Conectar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCorreoAbierto(false)}
+                    className="px-2 py-1 text-[11px] font-hud-mono border border-[#68a8d8]/40 text-[#68a8d8] cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </section>
 

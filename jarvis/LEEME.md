@@ -46,6 +46,11 @@ y Jarvis lo busca. No necesitas instalar ninguna base de datos.
 Pídele "escribe en la pizarra..." o "hazme una lista de...": aparece una pizarra sobre el reactor.
 Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba del reactor) la vuelve a abrir.
 
+## Correo de Gmail (versión 2.5)
+Panel "Correo (Gmail)": pon tu correo y una "contraseña de aplicación" (se crea en myaccount.google.com/apppasswords;
+necesitas tener activada la verificación en 2 pasos). Luego dile "¿tengo correos nuevos?", "léeme el correo de..." o
+"contéstale que sí". Antes de mandar cualquier correo, Jarvis te enseña el texto y te pide permiso. No puede borrar correos.
+
 ## Sonido de entrada (versión 2.4.2)
 Cada vez que se abre la ventana de Jarvis suena su música de entrada; se baja sola cuando Jarvis habla o te escucha.
 
