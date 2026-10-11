@@ -12,6 +12,7 @@ import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
 import { borrarPizarra, escribirPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { buscarEnHistorial } from "./historial.ts";
+import { consultarClima, consultarNoticias } from "./informacion.ts";
 import { claudeConfigurado, consultarAClaude, explicarErrorClaude } from "./consultas.ts";
 
 // El servidor conecta aquí la búsqueda con Gemini + Google (necesita la clave y el modelo actual)
@@ -155,6 +156,25 @@ export const DECLARACIONES = [
       type: "object",
       properties: { id: { type: "string" } },
       required: ["id"],
+    },
+  },
+  {
+    name: "consultar_clima",
+    description:
+      "Clima actual y pronóstico de 3 días de una ciudad. Si el usuario no dice ciudad, usa la que tengas en sus recuerdos o Monterrey.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { ciudad: { type: "string", description: "Por ejemplo 'Monterrey' o 'Madrid, España'" } },
+      required: ["ciudad"],
+    },
+  },
+  {
+    name: "consultar_noticias",
+    description:
+      "Titulares de noticias recientes de Google Noticias (México). Sin tema da las principales; con tema busca noticias de ese tema.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { tema: { type: "string", description: "Opcional: 'deportes', 'tecnología', 'Rayados'..." } },
     },
   },
   {
@@ -585,6 +605,38 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           const extra =
             a === "apagar" || a === "reiniciar" ? " Dile al usuario que puede pedir cancelarlo en el próximo minuto." : "";
           return { resultado: `Hecho: ${descripciones[a]}.${extra}` };
+        },
+      };
+    }
+
+    case "consultar_clima": {
+      const ciudad = texto(args.ciudad ?? "Monterrey", "ciudad", 100);
+      return {
+        nivel: "libre",
+        tipo: "clima",
+        descripcion: `Consultar el clima de ${ciudad}`,
+        ejecutar: async () => {
+          try {
+            return await consultarClima(ciudad);
+          } catch {
+            throw new ErrorHerramienta("No pude consultar el clima en este momento (¿hay internet?).");
+          }
+        },
+      };
+    }
+
+    case "consultar_noticias": {
+      const tema = typeof args.tema === "string" && args.tema.trim() ? args.tema.trim().slice(0, 100) : undefined;
+      return {
+        nivel: "libre",
+        tipo: "noticias",
+        descripcion: tema ? `Buscar noticias de ${tema}` : "Ver las noticias principales",
+        ejecutar: async () => {
+          try {
+            return await consultarNoticias(tema);
+          } catch {
+            throw new ErrorHerramienta("No pude consultar las noticias en este momento (¿hay internet?).");
+          }
         },
       };
     }

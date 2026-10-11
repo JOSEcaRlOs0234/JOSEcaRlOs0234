@@ -52,3 +52,7 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - **Investigar** (gratis): busca en Google con Gemini; lo hace solo cuando necesita datos actuales.
 - **Consultar a Claude** (opcional, de pago, unos centavos por pregunta): doble clic en `Configurar Claude.bat`
   y pega una clave de https://console.anthropic.com. Siempre te pide permiso antes de cada consulta.
+
+## Clima y noticias
+Pregúntale "¿cómo va a estar el clima mañana?" o "¿qué noticias hay de deportes?". Es gratis y no necesita claves.
+Para verlo en tu navegador: "búscame en Google ..." o "abre youtube.com" (te pide permiso).

@@ -24,7 +24,8 @@
 - Registro (log) de todo lo que hace Jarvis.
 
 ## Estado actual
-- Laptop del usuario: **Windows**, Jarvis instalado en `C:\Jarvis\jarvis`. El usuario delegó todas las decisiones técnicas.
+- Laptop del usuario: **Windows**, Jarvis instalado en `C:\Jarvis\jarvis` (en la v1.5 lo reinstaló en otra carpeta:
+  pidió la clave de nuevo; para saber dónde está: clic derecho en el icono → "Abrir ubicación del archivo"). El usuario delegó todas las decisiones técnicas.
 - El código vive en la carpeta `jarvis/` de este repo (repo de perfil de GitHub, público → nunca subir secretos).
 - GitHub: el usuario dio acceso; el trabajo se sube a la rama `claude/zealous-bardeen-xz2fta` (no a main).
   Al usuario se le entrega además un zip (`git archive HEAD jarvis`) con SendUserFile para instalarlo en su laptop.
@@ -32,7 +33,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.5.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.6.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -80,6 +81,9 @@
     `fallbacks: "default"` (beta server-side-fallback-2026-07-01), web_search_20260209 (max 3), maneja pause_turn y refusal.
     Necesita `ANTHROPIC_API_KEY` en `.env` (opcional, de pago): `Configurar Claude.bat` → `configurar-claude.mjs`.
     Probado: rechazo con clave falsa (401) se explica bien. No probado con clave real ni googleSearch real.
+  - `informacion.ts` (pedido: "acceso al clima y noticias"): `consultar_clima` (Open-Meteo, sin clave, 3 días) y
+    `consultar_noticias` (RSS de Google Noticias MX, opcional tema, 8 titulares). Libres. La nube de Claude NO puede
+    llegar a esos sitios (proxy), se probó el parseo con datos simulados; en la laptop del usuario Open-Meteo sí funciona.
   - `revisar-piezas.cjs`: los lanzadores corren `npm install` si falta alguna dependencia (las actualizaciones pueden traer nuevas).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
