@@ -30,6 +30,8 @@ export interface HudMessage {
   timestamp: string;
   // Mensajes que no se mandan a Gemini (saludo inicial, avisos de error)
   local?: boolean;
+  // Mensajes que se mandan a Gemini pero no se muestran (por ejemplo, el pedido automático del resumen del día)
+  oculto?: boolean;
 }
 
 export interface WeatherData {

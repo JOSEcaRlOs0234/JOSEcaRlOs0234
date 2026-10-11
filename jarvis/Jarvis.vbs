@@ -31,7 +31,7 @@ estado = Pedir("GET", "http://127.0.0.1:3000/api/estado")
 
 If estado <> "" And InStr(estado, """version"":""" & VersionInstalada() & """") > 0 Then
   ' Ya esta encendido y actualizado: solo abrir la ventana (en modo fondo no hace falta nada)
-  If Not fondo Then sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900", 0, False
+  If Not fondo Then sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900 --autoplay-policy=no-user-gesture-required", 0, False
 Else
   If estado <> "" Then
     ' Esta encendida una version vieja: apagarla primero

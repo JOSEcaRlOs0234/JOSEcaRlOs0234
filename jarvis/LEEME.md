@@ -76,3 +76,11 @@ Jarvis aprende cómo suenan en tu cuarto. **Reiniciar** vuelve a las reglas de f
 Necesita una clave GRATIS de Picovoice (https://console.picovoice.ai). Pégala en el panel **Despertar a Jarvis**.
 Funciona sin internet: el sonido nunca sale de tu laptop. "Qué tan fácil te oye": súbelo si no te escucha, bájalo si
 se despierta solo con palabras parecidas. Los aplausos siguen disponibles como opción.
+
+## Platicar de corrido (versión 2.3)
+Di "Jarvis" (o pulsa "Hablar con Jarvis"): suena un "bip" y te escucha. Después de cada respuesta te sigue
+escuchando solo, como una plática. Para terminar di "gracias", "eso es todo" o simplemente quédate callado.
+- Permisos con la voz: contesta "sí" o "no". Las acciones delicadas (borrar, apagar) piden que digas "confirmo".
+- La primera vez de cada día te da un resumen: clima, noticias y tus recordatorios.
+- Recordatorios y alarmas: "recuérdame en 20 minutos sacar la comida", "avísame mañana a las 7 que tengo examen",
+  "¿qué recordatorios tengo?". Si la laptop estaba apagada a esa hora, te avisa al encender.

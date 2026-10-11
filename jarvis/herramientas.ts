@@ -13,6 +13,7 @@ import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.t
 import { borrarPizarra, escribirPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { buscarEnHistorial } from "./historial.ts";
 import { consultarClima, consultarNoticias } from "./informacion.ts";
+import { agregarRecordatorio, cancelarRecordatorio, cuandoLegible, leerRecordatorios } from "./recordatorios.ts";
 import { claudeConfigurado, consultarAClaude, explicarErrorClaude } from "./consultas.ts";
 
 // El servidor conecta aquí la búsqueda con Gemini + Google (necesita la clave y el modelo actual)
@@ -157,6 +158,30 @@ export const DECLARACIONES = [
       properties: { id: { type: "string" } },
       required: ["id"],
     },
+  },
+  {
+    name: "programar_recordatorio",
+    description:
+      "Programa un recordatorio o alarma: Jarvis lo dirá en voz alta a la hora indicada. Usa 'minutos' para 'en X minutos/horas', o 'fecha_hora' (hora local, formato AAAA-MM-DDTHH:MM) para una hora exacta.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        texto: { type: "string", description: "Qué hay que recordar, por ejemplo 'sacar la comida del horno'" },
+        minutos: { type: "number", description: "Dentro de cuántos minutos (por ejemplo 20, o 90 para hora y media)" },
+        fecha_hora: { type: "string", description: "Hora exacta local, por ejemplo 2026-10-12T07:00" },
+      },
+      required: ["texto"],
+    },
+  },
+  {
+    name: "ver_recordatorios",
+    description: "Lista los recordatorios y alarmas pendientes (con su id).",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "cancelar_recordatorio",
+    description: "Cancela un recordatorio pendiente por su id.",
+    parametersJsonSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
   },
   {
     name: "consultar_clima",
@@ -605,6 +630,58 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           const extra =
             a === "apagar" || a === "reiniciar" ? " Dile al usuario que puede pedir cancelarlo en el próximo minuto." : "";
           return { resultado: `Hecho: ${descripciones[a]}.${extra}` };
+        },
+      };
+    }
+
+    case "programar_recordatorio": {
+      const que = texto(args.texto, "texto", 300);
+      let cuando: number;
+      if (typeof args.fecha_hora === "string" && args.fecha_hora.trim()) {
+        // Hora local de la laptop (sin zona horaria = hora de aquí)
+        cuando = new Date(args.fecha_hora.trim().replace(" ", "T")).getTime();
+        if (!Number.isFinite(cuando)) throw new ErrorHerramienta("No entendí la fecha y hora.");
+      } else {
+        const minutos = Number(args.minutos);
+        if (!Number.isFinite(minutos) || minutos <= 0) throw new ErrorHerramienta("Falta cuándo (minutos o fecha_hora).");
+        cuando = Date.now() + minutos * 60 * 1000;
+      }
+      if (cuando < Date.now() - 60 * 1000) throw new ErrorHerramienta("Esa hora ya pasó.");
+      if (cuando > Date.now() + 366 * 24 * 60 * 60 * 1000) throw new ErrorHerramienta("Solo puedo programar hasta un año.");
+      return {
+        nivel: "libre",
+        tipo: "recordatorios",
+        descripcion: `Recordar "${que}" ${cuandoLegible(cuando)}`,
+        ejecutar: async () => {
+          const r = agregarRecordatorio(que, cuando);
+          return { resultado: `Listo: te lo recordaré ${cuandoLegible(cuando)}.`, id: r.id };
+        },
+      };
+    }
+
+    case "ver_recordatorios":
+      return {
+        nivel: "libre",
+        tipo: "recordatorios",
+        descripcion: "Ver los recordatorios pendientes",
+        ejecutar: async () => {
+          const lista = leerRecordatorios();
+          return lista.length
+            ? { pendientes: lista.map((r) => ({ id: r.id, texto: r.texto, cuando: cuandoLegible(r.cuando) })) }
+            : { resultado: "No hay recordatorios pendientes." };
+        },
+      };
+
+    case "cancelar_recordatorio": {
+      const id = texto(args.id, "id", 40);
+      return {
+        nivel: "libre",
+        tipo: "recordatorios",
+        descripcion: `Cancelar el recordatorio ${id}`,
+        ejecutar: async () => {
+          const r = cancelarRecordatorio(id);
+          if (!r) throw new ErrorHerramienta("No encontré ese recordatorio.");
+          return { resultado: `Cancelé: "${r.texto}".` };
         },
       };
     }

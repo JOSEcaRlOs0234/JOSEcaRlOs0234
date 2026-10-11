@@ -77,7 +77,22 @@ export function guardarModelo(id: string): void {
   writeFileSync(ARCHIVO_CONFIG, JSON.stringify({ modelo: id }, null, 2), "utf8");
 }
 
-/** Lista de modelos a probar en orden: el elegido y luego los de respaldo. */
+// Modelos que hace poco dijeron "límite alcanzado" o "no existe": se saltan un rato para no perder tiempo
+const enfriando = new Map<string, number>();
+
+/** Marca un modelo para no usarlo durante `ms` milisegundos. */
+export function enfriarModelo(modelo: string, ms: number): void {
+  enfriando.set(modelo, Date.now() + ms);
+}
+
+/**
+ * Lista de modelos a probar en orden: el elegido y luego los de respaldo.
+ * Los que están "enfriándose" van al final (por si todos fallan, igual se intentan).
+ */
 export function ordenDePrueba(elegido: string): string[] {
-  return [elegido, ...RESPALDOS.filter((m) => m !== elegido)];
+  const todos = [elegido, ...RESPALDOS.filter((m) => m !== elegido)];
+  const ahora = Date.now();
+  const listos = todos.filter((m) => (enfriando.get(m) ?? 0) <= ahora);
+  const frios = todos.filter((m) => (enfriando.get(m) ?? 0) > ahora);
+  return [...listos, ...frios];
 }

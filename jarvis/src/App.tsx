@@ -68,6 +68,7 @@ interface EstadoAplausos {
   sinSonido: boolean;
   arranqueConWindows: boolean;
   activacion: number;
+  avisos?: { id: number; texto: string }[];
 }
 
 const horaActual = () =>
@@ -107,6 +108,43 @@ function elegirVoz(): SpeechSynthesisVoice | undefined {
   };
   return [...voces].sort((a, b) => puntuar(b) - puntuar(a))[0];
 }
+
+/** Minúsculas y sin acentos ("Sí" → "si"), para entender respuestas habladas. */
+const normalizar = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+// Frases con las que el usuario termina la conversación por voz
+const DESPEDIDA = /^(muchas gracias|gracias|eso es todo|es todo|adios|nada mas|hasta luego|ya no|ya esta|descansa|duermete|duerme)\b/;
+
+/** Tono corto "bip-bip" de que Jarvis te está escuchando. */
+function tono(): void {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const vol = ctx.createGain();
+    osc.frequency.setValueAtTime(880, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(1320, ctx.currentTime + 0.12);
+    vol.gain.setValueAtTime(0.0001, ctx.currentTime);
+    vol.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.02);
+    vol.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.25);
+    osc.connect(vol).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.26);
+    window.setTimeout(() => ctx.close().catch(() => {}), 600);
+  } catch {
+    // Sin sonido no pasa nada
+  }
+}
+
+function saludoCorto(): string {
+  const h = new Date().getHours();
+  return `${h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches"}, señor. ¿En qué le ayudo?`;
+}
+
+// Pedido automático (no se muestra) la primera vez que se despierta a Jarvis cada día
+const PEDIDO_RESUMEN =
+  "(Mensaje automático: el usuario acaba de despertar a Jarvis por primera vez hoy.) Salúdalo según la hora y dale un " +
+  "resumen hablado y breve del día: el clima de hoy (consultar_clima con su ciudad si la conoces, si no Monterrey), " +
+  "2 o 3 titulares importantes (consultar_noticias) y sus recordatorios de hoy si hay. Termina preguntando en qué le ayudas.";
 
 const MENSAJE_INICIAL: HudMessage = {
   id: "msg-inicio",
@@ -186,6 +224,7 @@ export default function App() {
   // Detector de aplausos en segundo plano (lo maneja el servidor)
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
   const ultimaActivacionRef = useRef<number | null>(null);
+  const ultimoAvisoRef = useRef<number | null>(null);
   const [microfonos, setMicrofonos] = useState<string[]>([]);
   const [clavePalabra, setClavePalabra] = useState("");
   const [guardandoClave, setGuardandoClave] = useState(false);
@@ -208,13 +247,14 @@ export default function App() {
     setNotifications((prev) => prev.filter((item) => item.id !== id));
   }, []);
 
-  const addMensaje = useCallback((rol: MessageRole, texto: string, local = false) => {
+  const addMensaje = useCallback((rol: MessageRole, texto: string, local = false, oculto = false) => {
     const nuevo: HudMessage = {
       id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       rol,
       texto,
       timestamp: horaActual(),
       local,
+      oculto,
     };
     messagesRef.current = [...messagesRef.current, nuevo];
     setMessages(messagesRef.current);
@@ -387,9 +427,15 @@ export default function App() {
 
   // ---------------------------------------------------------------- voz de Jarvis
 
-  const hablar = useCallback((texto: string) => {
+  /** Dice un texto en voz alta. `alTerminar` se llama cuando termina de hablar (para seguir escuchando). */
+  const hablar = useCallback((texto: string, alTerminar?: () => void) => {
+    const terminar = () => {
+      setEstado((prev) => (prev === "hablando" ? "reposo" : prev));
+      alTerminar?.();
+    };
     if (!vozActivaRef.current || !("speechSynthesis" in window)) {
       setEstado("reposo");
+      alTerminar?.();
       return;
     }
     window.speechSynthesis.cancel();
@@ -403,8 +449,22 @@ export default function App() {
       frase.lang = voz.lang;
     }
     frase.onstart = () => setEstado("hablando");
-    frase.onend = () => setEstado((prev) => (prev === "hablando" ? "reposo" : prev));
-    frase.onerror = () => setEstado((prev) => (prev === "hablando" ? "reposo" : prev));
+    frase.onend = terminar;
+    frase.onerror = (ev) => {
+      if (ev.error === "not-allowed") {
+        // El navegador no deja hablar sin un clic (por ejemplo, al abrirse solo): que hable Windows
+        fetch("/api/decir", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ texto }),
+        })
+          .catch(() => {})
+          .finally(terminar);
+        return;
+      }
+      // "interrupted"/"canceled": alguien la calló a propósito; no seguir escuchando automáticamente
+      setEstado((prev) => (prev === "hablando" ? "reposo" : prev));
+    };
     setEstado("hablando");
     window.speechSynthesis.speak(frase);
   }, []);
@@ -425,6 +485,16 @@ export default function App() {
    * Manda algo al servidor (un mensaje nuevo o una respuesta de permiso) y procesa lo que conteste:
    * una respuesta de Jarvis, o una nueva pregunta de permiso.
    */
+  // Modo conversación: después de cada respuesta Jarvis vuelve a escuchar, hasta que el usuario se despide o calla
+  const conversacionRef = useRef(false);
+  const [conversando, setConversando] = useState(false);
+  const fijarConversacion = (activa: boolean) => {
+    conversacionRef.current = activa;
+    setConversando(activa);
+  };
+  const escucharSiguienteRef = useRef<() => void>(() => {});
+  const pedirPermisoPorVozRef = useRef<(c: Confirmacion) => void>(() => {});
+
   const hablarConServidor = useCallback(
     async (url: string, cuerpo: unknown) => {
       enviandoRef.current = true;
@@ -442,10 +512,12 @@ export default function App() {
         if (datos.confirmacion) {
           esperaPermiso = true;
           setConfirmacion(datos.confirmacion);
-          hablar("Necesito su permiso, señor.");
+          if (conversacionRef.current) pedirPermisoPorVozRef.current(datos.confirmacion);
+          else hablar("Necesito su permiso, señor.");
         } else {
           addMensaje("jarvis", datos.texto);
-          hablar(datos.texto);
+          // Al terminar de hablar, si estamos platicando, volver a escuchar
+          hablar(datos.texto, () => escucharSiguienteRef.current());
         }
       } catch (err: any) {
         const aviso =
@@ -455,6 +527,7 @@ export default function App() {
         addMensaje("jarvis", aviso, true);
         showNotification(aviso, "error");
         setEstado("reposo");
+        fijarConversacion(false);
       } finally {
         // Mientras se espera el permiso, no se pueden mandar mensajes nuevos
         if (!esperaPermiso) {
@@ -482,12 +555,30 @@ export default function App() {
     [addMensaje, hablarConServidor]
   );
 
-  const responderPermiso = (aprobado: boolean, recordar: boolean) => {
-    if (!confirmacion) return;
-    const { id, descripcion } = confirmacion;
+  /** Manda a Gemini un pedido que no se muestra en el chat (por ejemplo, el resumen del día). */
+  const enviarOculto = useCallback(
+    async (texto: string) => {
+      if (enviandoRef.current) return;
+      addMensaje("usuario", texto, false, true);
+      const historial = messagesRef.current.filter((m) => !m.local).map((m) => ({ rol: m.rol, texto: m.texto }));
+      await hablarConServidor("/api/chat", { mensajes: historial });
+    },
+    [addMensaje, hablarConServidor]
+  );
+
+  const responderPermisoCon = (conf: Confirmacion, aprobado: boolean, recordar: boolean) => {
     setConfirmacion(null);
-    addMensaje("usuario", `${aprobado ? "✔ Permitido" : "✖ No permitido"}: ${descripcion}`, true);
-    hablarConServidor("/api/permiso", { id, aprobado, recordar });
+    try {
+      reconocimientoRef.current?.abort();
+    } catch {
+      // No estaba escuchando
+    }
+    addMensaje("usuario", `${aprobado ? "✔ Permitido" : "✖ No permitido"}: ${conf.descripcion}`, true);
+    hablarConServidor("/api/permiso", { id: conf.id, aprobado, recordar });
+  };
+
+  const responderPermiso = (aprobado: boolean, recordar: boolean) => {
+    if (confirmacion) responderPermisoCon(confirmacion, aprobado, recordar);
   };
 
   const handleSendMessage = (e: React.FormEvent) => {
@@ -510,7 +601,9 @@ export default function App() {
     setTextoParcial("");
   }, []);
 
-  const iniciarDictado = useCallback(() => {
+  /** Escucha una frase. `alTexto` recibe lo que dijo; `alNada` se llama si no dijo nada. */
+  const escuchar = useCallback((alTexto: (t: string) => void, alNada?: () => void) => {
+    if (reconocimientoRef.current) return;
     const Reconocimiento = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!Reconocimiento) {
       showNotification("Este navegador no puede escuchar tu voz. Usa Google Chrome o Microsoft Edge.", "warning");
@@ -538,7 +631,8 @@ export default function App() {
       if (event.error === "not-allowed" || event.error === "service-not-allowed") {
         showNotification("No tengo permiso para usar el micrófono. Dale \"Permitir\" en el navegador.", "error");
       } else if (event.error === "no-speech") {
-        showNotification("No escuché nada. Pulsa el botón e inténtalo otra vez.", "warning");
+        // En conversación, quedarse callado es la forma normal de terminar
+        if (!conversacionRef.current) showNotification("No escuché nada. Pulsa el botón e inténtalo otra vez.", "warning");
       } else if (event.error === "network") {
         showNotification("El reconocimiento de voz necesita internet.", "error");
       } else if (event.error !== "aborted") {
@@ -550,7 +644,8 @@ export default function App() {
       setDictando(false);
       setTextoParcial("");
       setEstado((prev) => (prev === "escuchando" ? "reposo" : prev));
-      if (textoFinal.trim()) enviarMensaje(textoFinal);
+      if (textoFinal.trim()) alTexto(textoFinal.trim());
+      else alNada?.();
     };
 
     reconocimientoRef.current = rec;
@@ -561,11 +656,89 @@ export default function App() {
     } catch {
       detenerDictado();
     }
-  }, [detenerDictado, enviarMensaje, showNotification]);
+  }, [detenerDictado, showNotification]);
 
-  const toggleDictado = () => (dictando ? detenerDictado() : iniciarDictado());
-  const iniciarDictadoRef = useRef(iniciarDictado);
-  iniciarDictadoRef.current = iniciarDictado;
+  /** Lo que el usuario dijo en la conversación: si se despide, Jarvis contesta y deja de escuchar. */
+  const porVoz = useCallback(
+    (texto: string) => {
+      if (DESPEDIDA.test(normalizar(texto))) fijarConversacion(false);
+      enviarMensaje(texto);
+    },
+    [enviarMensaje]
+  );
+
+  /** Seguir escuchando (modo conversación). Si el usuario se queda callado, la conversación termina. */
+  const escucharSiguiente = useCallback(() => {
+    if (!conversacionRef.current || enviandoRef.current) return;
+    escuchar(porVoz, () => fijarConversacion(false));
+  }, [escuchar, porVoz]);
+  escucharSiguienteRef.current = escucharSiguiente;
+
+  /** Pedir permiso con la voz: "sí"/"no" (o "confirmo" en acciones delicadas). Los botones siguen funcionando. */
+  const pedirPermisoPorVoz = useCallback(
+    (conf: Confirmacion) => {
+      const frase = conf.delicada
+        ? `Esto es delicado, señor: ${conf.descripcion}. Si lo autoriza, diga: confirmo.`
+        : `Necesito su permiso para: ${conf.descripcion}. ¿Lo autorizo?`;
+      hablar(frase, () =>
+        escuchar((t) => {
+          const n = normalizar(t);
+          const no = /\b(no|cancela|cancelar|negativo|mejor no|detente|alto)\b/.test(n);
+          const si = conf.delicada
+            ? /\bconfirm/.test(n)
+            : /\b(si|claro|adelante|hazlo|autorizo|dale|ok|okay|confirmo|de acuerdo|esta bien|por favor)\b/.test(n);
+          if (no) responderPermisoCon(conf, false, false);
+          else if (si) responderPermisoCon(conf, true, false);
+          else hablar("No le entendí, señor. Use los botones de la pantalla, por favor.");
+        })
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [escuchar, hablar]
+  );
+  pedirPermisoPorVozRef.current = pedirPermisoPorVoz;
+
+  /** Botón "Hablar con Jarvis": empieza una conversación. */
+  const iniciarDictado = useCallback(() => {
+    fijarConversacion(true);
+    escuchar(porVoz, () => fijarConversacion(false));
+  }, [escuchar, porVoz]);
+
+  /** Despertar a Jarvis (por la palabra "Jarvis", aplausos o al abrirse solo). */
+  const despertar = useCallback(
+    (alAbrirse: boolean) => {
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      detenerDictado();
+      fijarConversacion(true);
+      const hoy = new Date().toDateString();
+      if (leerPreferencia("jarvis_resumen_dia", "") !== hoy) {
+        // Primera vez del día: saludo con clima, noticias y recordatorios
+        guardarPreferencia("jarvis_resumen_dia", hoy);
+        tono();
+        enviarOculto(PEDIDO_RESUMEN);
+      } else if (alAbrirse) {
+        const t = saludoCorto();
+        addMensaje("jarvis", t, true);
+        hablar(t, () => escucharSiguienteRef.current());
+      } else {
+        tono();
+        addMensaje("jarvis", "¿Sí, señor?", true);
+        window.setTimeout(() => escucharSiguienteRef.current(), 350);
+      }
+    },
+    [addMensaje, detenerDictado, enviarOculto, hablar]
+  );
+  const despertarRef = useRef(despertar);
+  despertarRef.current = despertar;
+  const hablarRef = useRef(hablar);
+  hablarRef.current = hablar;
+
+  const toggleDictado = () => {
+    if (dictando) {
+      fijarConversacion(false);
+      detenerDictado();
+    } else iniciarDictado();
+  };
 
   // ---------------------------------------------------------------- detector de aplausos (segundo plano)
 
@@ -735,13 +908,21 @@ export default function App() {
         const datos: EstadoAplausos = await r.json();
         setAplausos(datos);
         if (ultimaActivacionRef.current !== null && datos.activacion > ultimaActivacionRef.current) {
-          addMensaje("jarvis", "A sus órdenes, señor. Le escucho.", true);
-          // Esperar a que termine el saludo hablado antes de escuchar
-          window.setTimeout(() => {
-            if (!enviandoRef.current) iniciarDictadoRef.current?.();
-          }, 2500);
+          // Dijeron "Jarvis" (o aplaudieron) con esta ventana a la vista: bip y a escuchar
+          if (document.visibilityState === "visible" && !enviandoRef.current) despertarRef.current(false);
         }
         ultimaActivacionRef.current = datos.activacion;
+
+        // Recordatorios que llegaron a su hora
+        const avisos = datos.avisos ?? [];
+        const maxId = avisos.reduce((m, a) => Math.max(m, a.id), 0);
+        if (ultimoAvisoRef.current === null) ultimoAvisoRef.current = maxId;
+        for (const a of avisos.filter((x) => x.id > (ultimoAvisoRef.current ?? 0))) {
+          addMensaje("jarvis", `⏰ ${a.texto}`, true);
+          showNotification(a.texto, "warning");
+          if (document.visibilityState === "visible") hablarRef.current(a.texto);
+        }
+        ultimoAvisoRef.current = Math.max(ultimoAvisoRef.current ?? 0, maxId);
       } catch {
         // Servidor apagado: lo indica la barra superior
       }
@@ -753,7 +934,16 @@ export default function App() {
       vivo = false;
       clearInterval(id);
     };
-  }, [addMensaje]);
+  }, [addMensaje, showNotification]);
+
+  // Si la ventana se abrió sola porque dijeron "Jarvis" (?despertar=1): saludar y escuchar
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("despertar") !== "1") return;
+    window.history.replaceState(null, "", "/");
+    const id = window.setTimeout(() => despertarRef.current(true), 900);
+    return () => clearTimeout(id);
+  }, []);
 
   // ---------------------------------------------------------------- pantalla
 
@@ -1312,7 +1502,7 @@ export default function App() {
             </div>
 
             <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1">
-              {messages.map((msg) => {
+              {messages.filter((m) => !m.oculto).map((msg) => {
                 const isJarvis = msg.rol === "jarvis";
                 return (
                   <div
@@ -1343,6 +1533,22 @@ export default function App() {
               )}
               <div ref={transcriptEndRef} />
             </div>
+
+            {conversando && (
+              <div className="flex items-center justify-between gap-2 px-2 py-1 border border-[#00f5a0]/50 bg-[#04241e]/60 text-[10px] font-hud-mono text-[#00f5a0]">
+                <span>🗣️ Conversación activa · di &ldquo;gracias&rdquo; para terminar</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    fijarConversacion(false);
+                    detenerDictado();
+                  }}
+                  className="underline hover:text-[#e2f8ff] cursor-pointer"
+                >
+                  Terminar
+                </button>
+              </div>
+            )}
 
             <form onSubmit={handleSendMessage} className="flex gap-1.5 pt-1">
               <input

@@ -31,9 +31,10 @@ import { conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herrami
 import { buscarEnInternet, claudeConfigurado } from "./consultas.ts";
 import { guardarEnHistorial } from "./historial.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
-import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis, saludo } from "./aplausos.ts";
+import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
+import { cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
-import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
+import { enfriarModelo, guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Tus datos viven en un lugar fijo (AppData\Local\Jarvis); la primera vez se traen de copias viejas
@@ -74,13 +75,20 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Si el usuario quiere VER algo en su navegador ("búscame en Google", "abre YouTube"), usa buscar_en_internet o abrir_pagina_web.
 - Si no sabes algo, usa investigar. Si aun así no basta,
   o el usuario lo pide, usa consultar_a_claude. No inventes.
+- Recordatorios y alarmas: usa programar_recordatorio ("en 20 minutos" → minutos; "mañana a las 7" → fecha_hora con
+  la fecha correcta según la fecha de hoy). Confirma en una frase cuándo será.
+- Si el usuario se despide ("gracias", "eso es todo", "adiós"), contesta con una despedida muy corta.
 - Cuando el usuario pida una pizarra, apuntar algo, una lista, pasos o una explicación larga, usa escribir_en_pizarra
   y en tu respuesta hablada solo di brevemente qué escribiste (no lo leas completo).`;
 
-/** Instrucciones para Gemini: personalidad + fecha de hoy + todo lo que Jarvis recuerda. */
+/** Instrucciones para Gemini: personalidad + fecha de hoy + recordatorios + todo lo que Jarvis recuerda. */
 function instrucciones(): string {
   const hoy = new Date().toLocaleString("es-MX", { dateStyle: "full", timeStyle: "short" });
-  return `${PERSONALIDAD}\n\nFecha y hora actual: ${hoy}.\n\n${recuerdosParaGemini()}`;
+  const pendientes = leerRecordatorios();
+  const textoPendientes = pendientes.length
+    ? "Recordatorios pendientes:\n" + pendientes.slice(0, 15).map((r) => `- [${r.id}] ${cuandoLegible(r.cuando)}: ${r.texto}`).join("\n")
+    : "No hay recordatorios pendientes.";
+  return `${PERSONALIDAD}\n\nFecha y hora actual: ${hoy}.\n\n${textoPendientes}\n\n${recuerdosParaGemini()}`;
 }
 
 const ai = new GoogleGenAI({ apiKey: CLAVE || "sin-clave" });
@@ -159,7 +167,10 @@ async function preguntarAGemini(contents: any[]) {
     } catch (err) {
       ultimoError = err;
       if (!convieneOtroModelo(err)) throw err;
-      registrar("AVISO", `El modelo ${modelo} falló (${String((err as any)?.status ?? "")}); probando otro.`);
+      // Límite gratuito (429) o saturado: descansar 1 minuto; si no existe (404): 1 hora
+      const estado = Number((err as any)?.status ?? 0);
+      enfriarModelo(modelo, estado === 404 ? 60 * 60 * 1000 : 60 * 1000);
+      registrar("AVISO", `El modelo ${modelo} falló (${estado || "?"}); probando otro.`);
     }
   }
   if (!respuesta) throw ultimoError;
@@ -338,17 +349,34 @@ app.delete("/api/pizarra", (_req, res) => {
 let ultimaVezVisible = 0;
 let contadorActivaciones = 0;
 
+const hayVentanaVisible = () => Date.now() - ultimaVezVisible < 4000;
+
+// Al despertar: si la ventana está a la vista, ella suena un tono y escucha al instante (ve subir `activacion`);
+// si no, se abre la ventana con ?despertar=1 y ella saluda y escucha.
 const oido = new OidoDeJarvis(async () => {
   oido.pausar(8000);
   contadorActivaciones++;
-  const hayVentanaVisible = Date.now() - ultimaVezVisible < 4000;
-  if (!hayVentanaVisible) abrirVentana(`http://localhost:${PORT}`);
-  await decirEnVoz(saludo());
+  if (!hayVentanaVisible()) abrirVentana(`http://localhost:${PORT}/?despertar=1`);
 }, registrar);
+
+// Avisos (recordatorios que llegaron a su hora): la ventana los muestra y los dice; si no hay ventana, los dice Windows
+let avisos: { id: number; texto: string }[] = [];
+let siguienteAviso = 1;
+vigilarRecordatorios((r, atrasado) => {
+  const hora = new Date(r.cuando).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const texto = atrasado ? `Señor, mientras estaba apagado se pasó un recordatorio de las ${hora}: ${r.texto}.` : `Señor, le recuerdo: ${r.texto}.`;
+  avisos = [...avisos, { id: siguienteAviso++, texto }].slice(-20);
+  registrar("RECORDAT.", texto);
+  guardarEnHistorial("jarvis", texto);
+  if (!hayVentanaVisible()) {
+    oido.pausar(10000);
+    void decirEnVoz(texto);
+  }
+});
 
 app.get("/api/aplausos", (req, res) => {
   if (req.query.visible === "1") ultimaVezVisible = Date.now();
-  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones, avisos });
 });
 
 app.post("/api/aplausos/config", async (req, res) => {
@@ -408,6 +436,15 @@ app.post("/api/aplausos/arranque", async (req, res) => {
   }
 });
 
+// Que hable Windows (cuando el navegador no deja hablar sin un clic)
+app.post("/api/decir", async (req, res) => {
+  const texto = typeof req.body?.texto === "string" ? req.body.texto.slice(0, 600) : "";
+  if (!texto.trim()) return res.status(400).json({ error: "Falta el texto." });
+  oido.pausar(Math.min(30000, 2000 + texto.length * 80));
+  await decirEnVoz(texto);
+  res.json({ ok: true });
+});
+
 // Botón "Apagar Jarvis"
 app.post("/api/apagar", (_req, res) => {
   registrar("SISTEMA", "Jarvis apagado desde la interfaz.");
@@ -433,7 +470,8 @@ app.use(vite.middlewares);
 
 /** Abre Jarvis en su propia ventana (modo aplicación de Microsoft Edge); si falla, en el navegador normal. */
 function abrirVentana(url: string) {
-  exec(`start "" msedge --app=${url} --window-size=1400,900`, (err) => {
+  // --autoplay-policy: que Jarvis pueda hablar y sonar aunque la ventana se abra sola (sin un clic)
+  exec(`start "" msedge --app=${url} --window-size=1400,900 --autoplay-policy=no-user-gesture-required`, (err) => {
     if (err) exec(`start "" "${url}"`);
   });
 }

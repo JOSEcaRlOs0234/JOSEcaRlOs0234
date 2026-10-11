@@ -43,7 +43,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.2.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.3.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -143,6 +143,24 @@
     Probado: clave falsa → "La clave de Picovoice no es válida" y no se guarda; panel con y sin clave. NO probado con
     clave real ni voz real.
   - En su registro se vio 429 en gemini-3.8-flash y 3.5-flash (límite gratuito) y respondió el respaldo: funciona.
+- v2.3 "que se sienta como un Jarvis real" (pedido del usuario: "todo lo que puedas mejorar, menos manual"):
+  - Modo conversación (App.tsx): `conversacionRef`/`conversando`. "Hablar con Jarvis" o despertarlo inicia; tras cada
+    respuesta `hablar(texto, alTerminar)` → `escucharSiguiente()`; silencio (no-speech) o despedida (`DESPEDIDA`:
+    gracias / eso es todo / adiós...) termina. Insignia "Conversación activa · Terminar" en el chat.
+  - Permiso por voz: en conversación, `pedirPermisoPorVoz` lo pregunta en voz; "sí/claro/adelante..." aprueba;
+    acciones delicadas exigen decir "confirmo"; "no/cancela" rechaza; los botones siguen sirviendo.
+  - Despertar: con la ventana visible → tono "bip" y escucha al instante (sin saludo largo); sin ventana → el servidor
+    abre `/?despertar=1` y la interfaz saluda y escucha. Primera vez del día → mensaje OCULTO `PEDIDO_RESUMEN`
+    (clima + 3 titulares + recordatorios). Mensajes `oculto` se mandan a Gemini pero no se pintan.
+  - Si el navegador no deja hablar sin un clic (`not-allowed`), `POST /api/decir` hace hablar a Windows (System.Speech).
+    Edge se abre con `--autoplay-policy=no-user-gesture-required`.
+  - `recordatorios.ts`: `programar_recordatorio` (minutos o fecha_hora local), `ver_recordatorios`,
+    `cancelar_recordatorio` (libres). `datos/recordatorios.json`; `vigilarRecordatorios` cada 15 s; vencidos con la
+    laptop apagada se avisan al encender ("se pasó..."). Aviso → `avisos` en `GET /api/aplausos` (la ventana lo
+    muestra con ⏰ y lo dice) o, sin ventana visible, lo dice Windows. Pendientes van en `instrucciones()`.
+  - Modelos: `enfriarModelo` — tras 429/503 se salta ese modelo 1 min (404: 1 h) para no perder tiempo.
+  - Probado con micrófono/voz simulados en Playwright: conversación completa (pedido → permiso por voz "sí" → sigue →
+    "gracias" → se duerme), despertar con resumen oculto, recordatorio en pantalla y en servidor.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
