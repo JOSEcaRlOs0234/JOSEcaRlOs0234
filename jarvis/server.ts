@@ -8,11 +8,21 @@
  */
 
 import express from "express";
+import { existsSync, writeFileSync } from "fs";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
 import { exec } from "child_process";
 import { readFileSync } from "fs";
+
+/** Guarda (o reemplaza) una clave en el archivo secreto .env. */
+function guardarEnEnv(nombre: string, valor: string): void {
+  const lineas = existsSync(ARCHIVO_ENV)
+    ? readFileSync(ARCHIVO_ENV, "utf8").split(/\r?\n/).filter((l) => l && !l.startsWith(`${nombre}=`))
+    : ["# Claves secretas de Jarvis. NO compartas ni subas este archivo a internet."];
+  lineas.push(`${nombre}=${valor}`);
+  writeFileSync(ARCHIVO_ENV, lineas.join("\r\n") + "\r\n", "utf8");
+}
 import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
 import { ARCHIVO_ENV, CARPETA_DATOS, prepararDatos } from "./ubicacion.mjs";
@@ -21,7 +31,7 @@ import { conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herrami
 import { buscarEnInternet, claudeConfigurado } from "./consultas.ts";
 import { guardarEnHistorial } from "./historial.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
-import { decirEnVoz, OidoDeJarvis, saludo } from "./aplausos.ts";
+import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis, saludo } from "./aplausos.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -342,11 +352,14 @@ app.get("/api/aplausos", (req, res) => {
 });
 
 app.post("/api/aplausos/config", async (req, res) => {
-  const { activo, sensibilidad, dispositivo } = req.body ?? {};
+  const { activo, sensibilidad, dispositivo, usarPalabra, usarAplausos, sensibilidadPalabra } = req.body ?? {};
   await oido.cambiarConfig({
     activo: typeof activo === "boolean" ? activo : undefined,
     sensibilidad: typeof sensibilidad === "number" ? sensibilidad : undefined,
     dispositivo: typeof dispositivo === "number" ? dispositivo : undefined,
+    usarPalabra: typeof usarPalabra === "boolean" ? usarPalabra : undefined,
+    usarAplausos: typeof usarAplausos === "boolean" ? usarAplausos : undefined,
+    sensibilidadPalabra: typeof sensibilidadPalabra === "number" ? sensibilidadPalabra : undefined,
   });
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
 });
@@ -354,6 +367,29 @@ app.post("/api/aplausos/config", async (req, res) => {
 app.post("/api/aplausos/aprender", (req, res) => {
   if (req.body?.accion === "restablecer") oido.restablecerCalibracion();
   else oido.aprender();
+  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+});
+
+// Guardar la clave gratuita de Picovoice (para despertar a Jarvis diciendo "Jarvis")
+app.post("/api/palabra/clave", async (req, res) => {
+  const clave = typeof req.body?.clave === "string" ? req.body.clave.trim().replace(/^["']|["']$/g, "") : "";
+  if (clave.length < 20 || clave.length > 300 || /\s/.test(clave)) {
+    return res.status(400).json({ error: "Esa clave parece incompleta. Cópiala de nuevo completa." });
+  }
+  try {
+    // Probarla de verdad antes de guardarla
+    (await crearPorcupine(clave, oido.config.sensibilidadPalabra)).release();
+  } catch (err) {
+    const explicacion = explicarErrorPorcupine(err);
+    registrar("ERROR", `Clave de Picovoice rechazada: ${explicacion}`);
+    return res.status(400).json({ error: explicacion });
+  }
+  guardarEnEnv("PICOVOICE_ACCESS_KEY", clave);
+  process.env.PICOVOICE_ACCESS_KEY = clave;
+  registrar("APLAUSOS", 'Clave de Picovoice guardada: ya puedes despertar a Jarvis diciendo "Jarvis".');
+  // El usuario prefiere la palabra a los aplausos: se apagan (puede volver a activarlos con su casilla)
+  await oido.cambiarConfig({ usarPalabra: true, usarAplausos: false });
+  await oido.reiniciar();
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
 });
 

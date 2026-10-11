@@ -49,13 +49,22 @@ import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { umbralPorSensibilidad } from "../detector-aplausos.ts";
 
 interface EstadoAplausos {
-  config: { activo: boolean; sensibilidad: number; dispositivo: number };
+  config: {
+    activo: boolean;
+    sensibilidad: number;
+    dispositivo: number;
+    usarPalabra: boolean;
+    usarAplausos: boolean;
+    sensibilidadPalabra: number;
+  };
   estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible" | "buscando";
   microfono: string;
   nivel: number;
   eventos: { hora: string; texto: string }[];
   activaciones: number;
   aprendiendo: boolean;
+  palabra: "activa" | "sin_clave" | "error" | "apagada";
+  errorPalabra: string;
   sinSonido: boolean;
   arranqueConWindows: boolean;
   activacion: number;
@@ -178,6 +187,8 @@ export default function App() {
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
   const ultimaActivacionRef = useRef<number | null>(null);
   const [microfonos, setMicrofonos] = useState<string[]>([]);
+  const [clavePalabra, setClavePalabra] = useState("");
+  const [guardandoClave, setGuardandoClave] = useState(false);
 
   useEffect(() => {
     vozActivaRef.current = vozActiva;
@@ -567,7 +578,14 @@ export default function App() {
     }
   };
 
-  const cambiarAplausos = async (cambios: { activo?: boolean; sensibilidad?: number; dispositivo?: number }) => {
+  const cambiarAplausos = async (cambios: {
+    activo?: boolean;
+    sensibilidad?: number;
+    dispositivo?: number;
+    usarPalabra?: boolean;
+    usarAplausos?: boolean;
+    sensibilidadPalabra?: number;
+  }) => {
     try {
       const r = await fetch("/api/aplausos/config", {
         method: "POST",
@@ -577,6 +595,27 @@ export default function App() {
       if (r.ok) setAplausos(await r.json());
     } catch {
       showNotification("No pude cambiar el detector de aplausos.", "error");
+    }
+  };
+
+  const guardarClavePalabra = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuardandoClave(true);
+    try {
+      const r = await fetch("/api/palabra/clave", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clave: clavePalabra }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setAplausos(datos);
+      setClavePalabra("");
+      showNotification('¡Listo! Ahora di "Jarvis" para despertarlo.', "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude guardar la clave.", "error");
+    } finally {
+      setGuardandoClave(false);
     }
   };
 
@@ -882,7 +921,7 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <Wifi className="w-4 h-4 text-[#00e5ff]" />
                 <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                  Activar con aplausos
+                  Despertar a Jarvis
                 </h2>
               </div>
               <span
@@ -915,8 +954,82 @@ export default function App() {
               }`}
             >
               {aplausos?.config.activo ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-              <span>{aplausos?.config.activo ? "Detector encendido" : "Detector apagado"}</span>
+              <span>{aplausos?.config.activo ? "Oído encendido" : "Oído apagado"}</span>
             </button>
+
+            {/* PALABRA "JARVIS" */}
+            <div className="bg-[#041226]/80 border border-[#00e5ff]/30 p-2 flex flex-col gap-1.5 font-hud-mono">
+              <label className="flex items-center gap-2 text-[11px] text-[#e2f8ff] font-bold cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={!!aplausos?.config.usarPalabra}
+                  disabled={!aplausos}
+                  onChange={(e) => cambiarAplausos({ usarPalabra: e.target.checked })}
+                  className="accent-[#00e5ff] cursor-pointer"
+                />
+                🗣️ Al decir &ldquo;Jarvis&rdquo;
+                {aplausos?.palabra === "activa" && <span className="ml-auto text-[10px] text-[#00f5a0]">● LISTO</span>}
+              </label>
+              {aplausos?.config.usarPalabra && (aplausos.palabra === "sin_clave" || aplausos.palabra === "error") && (
+                <div className="flex flex-col gap-1.5">
+                  {aplausos.palabra === "error" ? (
+                    <p className="text-[10px] text-[#ffb8c6] leading-snug">⚠ {aplausos.errorPalabra}</p>
+                  ) : (
+                    <p className="text-[10px] text-[#b8f4ff] leading-snug">
+                      Necesita una clave gratuita de Picovoice. Sácala en{" "}
+                      <a href="https://console.picovoice.ai/" target="_blank" rel="noopener noreferrer" className="text-[#00e5ff] underline">
+                        console.picovoice.ai
+                      </a> y pégala aquí:
+                    </p>
+                  )}
+                  <form onSubmit={guardarClavePalabra} className="flex gap-1.5">
+                    <input
+                      type="password"
+                      value={clavePalabra}
+                      onChange={(e) => setClavePalabra(e.target.value)}
+                      placeholder="Pega la clave (AccessKey)"
+                      autoComplete="off"
+                      className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={guardandoClave || !clavePalabra.trim()}
+                      className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[11px] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                    >
+                      {guardandoClave ? "Probando..." : "Guardar"}
+                    </button>
+                  </form>
+                </div>
+              )}
+              {aplausos?.config.usarPalabra && aplausos.palabra === "activa" && (
+                <>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-[#68a8d8]">QUÉ TAN FÁCIL TE OYE (1 a 10)</span>
+                    <span className="text-[#00e5ff] font-bold">{aplausos.config.sensibilidadPalabra}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={aplausos.config.sensibilidadPalabra}
+                    onChange={(e) => cambiarAplausos({ sensibilidadPalabra: Number(e.target.value) })}
+                    className="w-full accent-[#00e5ff] cursor-pointer"
+                  />
+                </>
+              )}
+            </div>
+
+            <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] font-bold cursor-pointer select-none px-2">
+              <input
+                type="checkbox"
+                checked={!!aplausos?.config.usarAplausos}
+                disabled={!aplausos}
+                onChange={(e) => cambiarAplausos({ usarAplausos: e.target.checked })}
+                className="accent-[#00e5ff] cursor-pointer"
+              />
+              👏 Con doble aplauso
+            </label>
 
             {aplausos?.sinSonido && (
               <div className="p-2 border border-[#ff9933] bg-[#241505]/90 text-[11px] font-hud-mono text-[#ffcc99] leading-snug">
@@ -953,7 +1066,7 @@ export default function App() {
                   className="h-full bg-[#00e5ff] transition-all duration-100"
                   style={{ width: `${Math.min(100, Math.round((aplausos?.nivel ?? 0) * 100))}%` }}
                 />
-                {aplausos && (
+                {aplausos?.config.usarAplausos && (
                   <div
                     className="absolute top-0 bottom-0 w-0.5 bg-[#ff9933]"
                     style={{ left: `${Math.round(umbralPorSensibilidad(aplausos.config.sensibilidad) * 100)}%` }}
@@ -961,8 +1074,10 @@ export default function App() {
                   />
                 )}
               </div>
+              {aplausos?.config.usarAplausos && (
+              <>
               <div className="flex items-center justify-between text-[10px] mt-2">
-                <span className="text-[#68a8d8]">SENSIBILIDAD (1 = poca, 10 = mucha)</span>
+                <span className="text-[#68a8d8]">SENSIBILIDAD DE APLAUSOS (1 = poca, 10 = mucha)</span>
                 <span className="text-[#00e5ff] font-bold">{aplausos?.config.sensibilidad ?? "-"}</span>
               </div>
               <input
@@ -975,8 +1090,11 @@ export default function App() {
                 onChange={(e) => cambiarAplausos({ sensibilidad: Number(e.target.value) })}
                 className="w-full mt-1.5 accent-[#00e5ff] cursor-pointer"
               />
+              </>
+              )}
             </div>
 
+            {aplausos?.config.usarAplausos && (
             <div className="grid grid-cols-[1fr_auto] gap-1.5">
               <button
                 type="button"
@@ -1000,6 +1118,7 @@ export default function App() {
                 Reiniciar
               </button>
             </div>
+            )}
 
             <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#b8f4ff] cursor-pointer select-none">
               <input
@@ -1018,7 +1137,7 @@ export default function App() {
                   <div
                     key={`${e.hora}-${i}`}
                     className={`text-[10px] font-hud-mono leading-snug ${
-                      e.texto.startsWith("¡Doble") ? "text-[#00f5a0] font-bold" : e.texto.startsWith("Ignorado") ? "text-[#68a8d8]" : "text-[#e2f8ff]"
+                      e.texto.startsWith("¡Doble") || e.texto.startsWith("¡Escuché") ? "text-[#00f5a0] font-bold" : e.texto.startsWith("Ignorado") ? "text-[#68a8d8]" : "text-[#e2f8ff]"
                     }`}
                   >
                     {e.hora} · {e.texto}
@@ -1027,8 +1146,8 @@ export default function App() {
               </div>
             )}
             <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-              Aplaude dos veces seguidas. Si no te detecta, sube la sensibilidad; si se activa solo, bájala.
-              El sonido se analiza en tu laptop y no se graba.
+              Di &ldquo;Jarvis&rdquo; (o aplaude dos veces) y te contesta. El sonido se analiza en tu laptop, sin
+              internet, y no se graba.
             </p>
           </div>
 

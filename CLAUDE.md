@@ -9,7 +9,8 @@
 1. Platicar con Jarvis desde la interfaz (Gemini). ✅ el usuario confirmó que funciona.
 2. Spotify (poner canción/playlist, pausar, siguiente, qué suena).
 3. Activación con doble aplauso (programa en segundo plano, ignora ruidos sueltos, arranca al prender, sensibilidad ajustable).
-   ← código listo en v1.7 (pedido por el usuario), esperando prueba en su laptop.
+   Los aplausos no funcionaron bien con su micrófono (muy bajito/filtrado). El usuario pidió: "mejor que prenda
+   cuando le diga Jarvis" → v2.2 palabra "Jarvis" con Porcupine (ver abajo). ← esperando que saque la clave de Picovoice.
 4. Control de la laptop (abrir programas/webs, volumen, crear/leer archivos en UNA carpeta).
    ← ACTUAL (adelantada a pedido del usuario, junto con "Jarvis como app"): código listo, esperando prueba del usuario.
    Después: volver a la Fase 2 (Spotify).
@@ -42,7 +43,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.1.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.2.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -132,6 +133,15 @@
     escucha con sensibilidad 10 y al terminar fija la sensibilidad más baja cuyo umbral ≤ 0.6 × el aplauso más suave
     (evento "calibrado" trae `sensibilidad`). Probado: aplausos de 0.035–0.05 → aprende, pone sens 7 y activa.
     Recomendado al usuario: subir "Volumen de entrada" del micrófono en Windows al 100%.
+  - v2.2 PALABRA "JARVIS" (pedido del usuario, preferida sobre aplausos): `@picovoice/porcupine-node` con la palabra
+    integrada `BuiltinKeyword.JARVIS` (offline, preciso; binarios Windows incluidos). Necesita AccessKey GRATIS de
+    console.picovoice.ai → `PICOVOICE_ACCESS_KEY` en el `.env` central. Se pega en el panel "Despertar a Jarvis"
+    (`POST /api/palabra/clave`: valida creando Porcupine, guarda con `guardarEnEnv`, apaga aplausos, reinicia el oído).
+    `OidoDeJarvis`: si hay Porcupine, PvRecorder usa frameLength 512 y los aplausos (si `usarAplausos`) se procesan en
+    trozos de 256. Config nueva: `usarPalabra`, `usarAplausos`, `sensibilidadPalabra` (1..10 → 0.30..0.85).
+    Estado `palabra`: activa / sin_clave / error (`errorPalabra`, `explicarErrorPorcupine`) / apagada.
+    Probado: clave falsa → "La clave de Picovoice no es válida" y no se guarda; panel con y sin clave. NO probado con
+    clave real ni voz real.
   - En su registro se vio 429 en gemini-3.8-flash y 3.5-flash (límite gratuito) y respondió el respaldo: funciona.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.

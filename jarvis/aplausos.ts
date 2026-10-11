@@ -1,6 +1,6 @@
 /**
- * Escucha el micrófono en segundo plano (mientras Jarvis está encendido) y, al oír dos aplausos,
- * saluda en voz alta y abre la ventana de Jarvis.
+ * Escucha el micrófono en segundo plano (mientras Jarvis está encendido) y, al oír la palabra "Jarvis"
+ * (con Porcupine, sin internet) o dos aplausos, saluda en voz alta y abre la ventana de Jarvis.
  * También maneja el "arranque con Windows" (un acceso directo en la carpeta Inicio de Windows).
  */
 
@@ -18,6 +18,10 @@ const esWindows = process.platform === "win32";
 export interface ConfigAplausos {
   activo: boolean;
   sensibilidad: number;
+  // Formas de despertar a Jarvis
+  usarPalabra: boolean; // decir "Jarvis" (necesita la clave gratuita de Picovoice)
+  usarAplausos: boolean; // doble aplauso
+  sensibilidadPalabra: number; // 1 a 10
   // Micrófono a usar: -1 = el predeterminado de Windows; 0, 1, 2... = uno de la lista
   dispositivo: number;
   // Nombre de ese micrófono (los números pueden cambiar si conectas audífonos)
@@ -38,6 +42,9 @@ export interface EstadoAplausos {
   eventos: { hora: string; texto: string }[];
   activaciones: number;
   aprendiendo: boolean;
+  // Estado de la palabra "Jarvis": activa, sin clave, con error (clave mala, sin internet la 1.ª vez...) o apagada
+  palabra: "activa" | "sin_clave" | "error" | "apagada";
+  errorPalabra: string;
   sinSonido: boolean;
   arranqueConWindows: boolean;
 }
@@ -62,6 +69,10 @@ export class OidoDeJarvis {
   private eventos: EstadoAplausos["eventos"] = [];
   private activaciones = 0;
   private reintentando = false;
+  private pausaPalabraHasta = 0;
+  private porcupine: any = null;
+  private estadoPalabra: EstadoAplausos["palabra"] = "apagada";
+  private errorPalabra = "";
   private inicioEscucha = 0;
   private yaBusque = false;
   private ultimoSonido = 0;
@@ -82,6 +93,9 @@ export class OidoDeJarvis {
     const base: ConfigAplausos = {
       activo: true,
       sensibilidad: 5,
+      usarPalabra: true,
+      usarAplausos: true,
+      sensibilidadPalabra: 6,
       dispositivo: -1,
       nombreDispositivo: "",
       microfonoManual: false,
@@ -143,9 +157,15 @@ export class OidoDeJarvis {
         // Se usa el número guardado
       }
     }
+    if (!this.config.usarPalabra && !this.config.usarAplausos) {
+      this.estado = "apagado";
+      return;
+    }
+    await this.prepararPalabra();
     try {
-      // 256 muestras a 16 kHz = pedacitos de 16 milisegundos; -1 = micrófono predeterminado de Windows
-      this.grabadora = new PvRecorder(256, this.config.dispositivo);
+      // Porcupine pide pedacitos de 512 muestras (32 ms); solo aplausos usa 256 (16 ms). -1 = micrófono predeterminado
+      const largo = this.porcupine?.frameLength ?? 256;
+      this.grabadora = new PvRecorder(largo, this.config.dispositivo);
       this.grabadora.start();
       this.microfono = this.grabadora.getSelectedDevice?.() ?? "";
     } catch (err: any) {
@@ -165,7 +185,8 @@ export class OidoDeJarvis {
     this.inicioEscucha = performance.now();
     this.ultimoSonido = 0;
     this.estado = "escuchando";
-    this.registrar("APLAUSOS", `Escuchando aplausos con: ${this.microfono || "micrófono predeterminado"}`);
+    const formas = [this.porcupine ? 'la palabra "Jarvis"' : "", this.config.usarAplausos ? "aplausos" : ""].filter(Boolean);
+    this.registrar("APLAUSOS", `Escuchando ${formas.join(" y ")} con: ${this.microfono || "micrófono predeterminado"}`);
     void this.bucle();
   }
 
@@ -177,7 +198,21 @@ export class OidoDeJarvis {
         const ahora = performance.now();
         // ¿Llega sonido de verdad? Si Windows bloquea el micrófono, solo llegan ceros
         if (pedazo.some((x) => x !== 0)) this.ultimoSonido = ahora;
-        this.detector.procesar(pedazo, ahora);
+        // ¿Dijeron "Jarvis"?
+        if (this.porcupine && this.porcupine.process(pedazo) >= 0 && ahora > this.pausaPalabraHasta) {
+          this.pausaPalabraHasta = ahora + 8000;
+          this.detector.pausar(8000, ahora);
+          this.activaciones++;
+          this.anotar('¡Escuché "Jarvis"! Activado');
+          this.registrar("APLAUSOS", 'Palabra "Jarvis" detectada: Jarvis activado.');
+          this.alActivarse();
+        }
+        // Aplausos: el detector trabaja con pedacitos de 256 muestras
+        if (this.config.usarAplausos) {
+          for (let i = 0; i < pedazo.length; i += 256) {
+            this.detector.procesar(pedazo.subarray(i, i + 256), ahora + (i / 16000) * 1000);
+          }
+        }
         // 3 segundos de puro silencio: este micrófono no sirve; buscar otro que sí oiga (una vez por encendido)
         if (!this.ultimoSonido && ahora - this.inicioEscucha > 3000 && !this.yaBusque && !this.config.microfonoManual) {
           this.yaBusque = true;
@@ -208,6 +243,12 @@ export class OidoDeJarvis {
       // Ya estaba liberada
     }
     this.grabadora = null;
+    try {
+      this.porcupine?.release();
+    } catch {
+      // Ya estaba liberado
+    }
+    this.porcupine = null;
     this.estado = "apagado";
   }
 
@@ -281,6 +322,35 @@ export class OidoDeJarvis {
     this.anotar("Reglas de aplausos de fábrica restablecidas");
   }
 
+  /** Prepara Porcupine para oír "Jarvis" (si está activado y hay clave). */
+  private async prepararPalabra(): Promise<void> {
+    this.porcupine = null;
+    if (!this.config.usarPalabra) {
+      this.estadoPalabra = "apagada";
+      return;
+    }
+    const clave = process.env.PICOVOICE_ACCESS_KEY?.trim();
+    if (!clave) {
+      this.estadoPalabra = "sin_clave";
+      return;
+    }
+    try {
+      this.porcupine = await crearPorcupine(clave, this.config.sensibilidadPalabra);
+      this.estadoPalabra = "activa";
+      this.errorPalabra = "";
+    } catch (err) {
+      this.estadoPalabra = "error";
+      this.errorPalabra = explicarErrorPorcupine(err);
+      this.registrar("ERROR", `No pude activar la palabra "Jarvis": ${this.errorPalabra}`);
+    }
+  }
+
+  /** Reinicia la escucha (por ejemplo, después de guardar la clave de Picovoice). */
+  async reiniciar(): Promise<void> {
+    this.detener();
+    await this.iniciar();
+  }
+
   /** Pausa la detección unos segundos (mientras Jarvis habla por las bocinas). */
   pausar(ms: number): void {
     this.detector.pausar(ms, performance.now());
@@ -296,7 +366,34 @@ export class OidoDeJarvis {
     }
   }
 
-  async cambiarConfig(cambios: { activo?: boolean; sensibilidad?: number; dispositivo?: number }): Promise<void> {
+  async cambiarConfig(cambios: {
+    activo?: boolean;
+    sensibilidad?: number;
+    dispositivo?: number;
+    usarPalabra?: boolean;
+    usarAplausos?: boolean;
+    sensibilidadPalabra?: number;
+  }): Promise<void> {
+    let reiniciar = false;
+    if (typeof cambios.usarPalabra === "boolean" && cambios.usarPalabra !== this.config.usarPalabra) {
+      this.config.usarPalabra = cambios.usarPalabra;
+      reiniciar = true;
+    }
+    if (typeof cambios.usarAplausos === "boolean" && cambios.usarAplausos !== this.config.usarAplausos) {
+      this.config.usarAplausos = cambios.usarAplausos;
+      reiniciar = true;
+    }
+    if (typeof cambios.sensibilidadPalabra === "number" && Number.isFinite(cambios.sensibilidadPalabra)) {
+      const s = Math.min(10, Math.max(1, Math.round(cambios.sensibilidadPalabra)));
+      if (s !== this.config.sensibilidadPalabra) {
+        this.config.sensibilidadPalabra = s;
+        reiniciar = true;
+      }
+    }
+    if (reiniciar) {
+      this.guardarConfig();
+      await this.reiniciar();
+    }
     if (typeof cambios.dispositivo === "number" && Number.isInteger(cambios.dispositivo) && cambios.dispositivo >= -1) {
       if (cambios.dispositivo !== this.config.dispositivo || !this.config.microfonoManual) {
         const lista = await this.listarMicrofonos();
@@ -335,6 +432,8 @@ export class OidoDeJarvis {
       eventos: this.eventos,
       activaciones: this.activaciones,
       aprendiendo: this.detector.aprendiendo,
+      palabra: this.config.usarPalabra ? this.estadoPalabra : "apagada",
+      errorPalabra: this.errorPalabra,
       // Escuchando hace más de 4 segundos y solo llegan ceros: Windows no deja oír o es el micrófono equivocado
       sinSonido:
         this.estado === "escuchando" &&
@@ -417,4 +516,32 @@ export function saludo(): string {
   const h = new Date().getHours();
   const parte = h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches";
   return `${parte}, señor. A sus órdenes.`;
+}
+
+// ------------------------------------------------------------------ Porcupine ("Jarvis")
+
+/** Sensibilidad 1..10 → 0.3..0.85 (más alta = lo oye más fácil, pero puede activarse con palabras parecidas). */
+function sensibilidadPorcupine(s: number): number {
+  return Math.round((0.3 + ((Math.min(10, Math.max(1, s)) - 1) * 0.55) / 9) * 100) / 100;
+}
+
+/** Crea el detector de la palabra "Jarvis". Lanza error si la clave no sirve. */
+export async function crearPorcupine(clave: string, sensibilidad: number): Promise<any> {
+  const { Porcupine, BuiltinKeyword, getBuiltinKeywordPath } = await import("@picovoice/porcupine-node");
+  return new Porcupine(clave, [getBuiltinKeywordPath(BuiltinKeyword.JARVIS)], [sensibilidadPorcupine(sensibilidad)]);
+}
+
+/** Traduce los errores de Picovoice a palabras sencillas. */
+export function explicarErrorPorcupine(err: any): string {
+  const nombre = String(err?.constructor?.name ?? "");
+  const texto = String(err?.message ?? err ?? "");
+  if (/ActivationLimitReached/i.test(nombre)) return "Tu clave de Picovoice llegó a su límite de uso.";
+  if (/ActivationThrottled/i.test(nombre)) return "Picovoice pide esperar un momento; intenta en unos minutos.";
+  if (/ActivationRefused|Key|InvalidArgument/i.test(nombre) || /AccessKey/i.test(texto)) {
+    return "La clave de Picovoice no es válida. Revisa que la copiaste completa.";
+  }
+  if (/Activation/i.test(nombre) || /network|connect/i.test(texto)) {
+    return "No pude comprobar la clave de Picovoice (¿hay internet?).";
+  }
+  return "Ocurrió un error al preparar la palabra \"Jarvis\".";
 }

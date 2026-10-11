@@ -71,3 +71,8 @@ Para cambiar la clave de Gemini: doble clic en **Cambiar clave de Gemini.bat**.
 ## Si no reconoce tus aplausos
 Panel **Activar con aplausos** → botón **Enseñarle mis aplausos** → aplaude 3 veces, despacio (uno por segundo).
 Jarvis aprende cómo suenan en tu cuarto. **Reiniciar** vuelve a las reglas de fábrica.
+
+## Despertar a Jarvis diciendo "Jarvis"
+Necesita una clave GRATIS de Picovoice (https://console.picovoice.ai). Pégala en el panel **Despertar a Jarvis**.
+Funciona sin internet: el sonido nunca sale de tu laptop. "Qué tan fácil te oye": súbelo si no te escucha, bájalo si
+se despierta solo con palabras parecidas. Los aplausos siguen disponibles como opción.
