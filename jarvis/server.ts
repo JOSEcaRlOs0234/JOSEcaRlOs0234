@@ -339,12 +339,17 @@ app.get("/api/aplausos", (req, res) => {
 });
 
 app.post("/api/aplausos/config", async (req, res) => {
-  const { activo, sensibilidad } = req.body ?? {};
+  const { activo, sensibilidad, dispositivo } = req.body ?? {};
   await oido.cambiarConfig({
     activo: typeof activo === "boolean" ? activo : undefined,
     sensibilidad: typeof sensibilidad === "number" ? sensibilidad : undefined,
+    dispositivo: typeof dispositivo === "number" ? dispositivo : undefined,
   });
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+});
+
+app.get("/api/aplausos/microfonos", async (_req, res) => {
+  res.json({ microfonos: await oido.listarMicrofonos() });
 });
 
 app.post("/api/aplausos/arranque", async (req, res) => {

@@ -49,12 +49,13 @@ import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { umbralPorSensibilidad } from "../detector-aplausos.ts";
 
 interface EstadoAplausos {
-  config: { activo: boolean; sensibilidad: number };
+  config: { activo: boolean; sensibilidad: number; dispositivo: number };
   estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible";
   microfono: string;
   nivel: number;
   eventos: { hora: string; texto: string }[];
   activaciones: number;
+  sinSonido: boolean;
   arranqueConWindows: boolean;
   activacion: number;
 }
@@ -175,6 +176,7 @@ export default function App() {
   // Detector de aplausos en segundo plano (lo maneja el servidor)
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
   const ultimaActivacionRef = useRef<number | null>(null);
+  const [microfonos, setMicrofonos] = useState<string[]>([]);
 
   useEffect(() => {
     vozActivaRef.current = vozActiva;
@@ -555,7 +557,16 @@ export default function App() {
 
   // ---------------------------------------------------------------- detector de aplausos (segundo plano)
 
-  const cambiarAplausos = async (cambios: { activo?: boolean; sensibilidad?: number }) => {
+  const cargarMicrofonos = async () => {
+    try {
+      const r = await fetch("/api/aplausos/microfonos");
+      if (r.ok) setMicrofonos((await r.json()).microfonos ?? []);
+    } catch {
+      // Se reintenta al abrir el menú
+    }
+  };
+
+  const cambiarAplausos = async (cambios: { activo?: boolean; sensibilidad?: number; dispositivo?: number }) => {
     try {
       const r = await fetch("/api/aplausos/config", {
         method: "POST",
@@ -683,6 +694,7 @@ export default function App() {
       }
     };
     preguntar();
+    cargarMicrofonos();
     const id = window.setInterval(preguntar, 300);
     return () => {
       vivo = false;
@@ -889,6 +901,31 @@ export default function App() {
               {aplausos?.config.activo ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
               <span>{aplausos?.config.activo ? "Detector encendido" : "Detector apagado"}</span>
             </button>
+
+            {aplausos?.sinSonido && (
+              <div className="p-2 border border-[#ff9933] bg-[#241505]/90 text-[11px] font-hud-mono text-[#ffcc99] leading-snug">
+                ⚠ No llega sonido del micrófono. Revisa que Windows permita usar el micrófono a las aplicaciones de
+                escritorio, o elige otro micrófono aquí abajo.
+              </div>
+            )}
+
+            <div className="flex flex-col gap-1 font-hud-mono">
+              <span className="text-[10px] text-[#68a8d8]">MICRÓFONO</span>
+              <select
+                value={aplausos?.config.dispositivo ?? -1}
+                disabled={!aplausos}
+                onFocus={cargarMicrofonos}
+                onChange={(e) => cambiarAplausos({ dispositivo: Number(e.target.value) })}
+                className="w-full bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-1 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
+              >
+                <option value={-1}>Predeterminado de Windows{aplausos?.config.dispositivo === -1 && aplausos.microfono ? ` (${aplausos.microfono})` : ""}</option>
+                {microfonos.map((m, i) => (
+                  <option key={`${i}-${m}`} value={i}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 font-hud-mono">
               <div className="flex items-center justify-between text-[10px] text-[#68a8d8]">

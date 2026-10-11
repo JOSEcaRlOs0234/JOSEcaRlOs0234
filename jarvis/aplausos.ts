@@ -17,6 +17,8 @@ const esWindows = process.platform === "win32";
 export interface ConfigAplausos {
   activo: boolean;
   sensibilidad: number;
+  // Micrófono a usar: -1 = el predeterminado de Windows; 0, 1, 2... = uno de la lista
+  dispositivo: number;
   // Ya se configuró el arranque con Windows la primera vez (para no volver a crearlo si el usuario lo quitó)
   arranqueConfigurado: boolean;
 }
@@ -28,6 +30,7 @@ export interface EstadoAplausos {
   nivel: number;
   eventos: { hora: string; texto: string }[];
   activaciones: number;
+  sinSonido: boolean;
   arranqueConWindows: boolean;
 }
 
@@ -51,6 +54,8 @@ export class OidoDeJarvis {
   private eventos: EstadoAplausos["eventos"] = [];
   private activaciones = 0;
   private reintentando = false;
+  private inicioEscucha = 0;
+  private ultimoSonido = 0;
   private temporizador: ReturnType<typeof setTimeout> | undefined;
   config: ConfigAplausos;
 
@@ -64,7 +69,7 @@ export class OidoDeJarvis {
   }
 
   private leerConfig(): ConfigAplausos {
-    const base: ConfigAplausos = { activo: true, sensibilidad: 5, arranqueConfigurado: false };
+    const base: ConfigAplausos = { activo: true, sensibilidad: 5, dispositivo: -1, arranqueConfigurado: false };
     try {
       return { ...base, ...JSON.parse(readFileSync(ARCHIVO_CONFIG, "utf8")) };
     } catch {
@@ -106,7 +111,7 @@ export class OidoDeJarvis {
     }
     try {
       // 256 muestras a 16 kHz = pedacitos de 16 milisegundos; -1 = micrófono predeterminado de Windows
-      this.grabadora = new PvRecorder(256, -1);
+      this.grabadora = new PvRecorder(256, this.config.dispositivo);
       this.grabadora.start();
       this.microfono = this.grabadora.getSelectedDevice?.() ?? "";
     } catch (err: any) {
@@ -123,6 +128,8 @@ export class OidoDeJarvis {
     }
     this.corriendo = true;
     this.reintentando = false;
+    this.inicioEscucha = performance.now();
+    this.ultimoSonido = 0;
     this.estado = "escuchando";
     this.registrar("APLAUSOS", `Escuchando aplausos con: ${this.microfono || "micrófono predeterminado"}`);
     void this.bucle();
@@ -133,7 +140,10 @@ export class OidoDeJarvis {
     while (this.corriendo && this.grabadora) {
       try {
         const pedazo: Int16Array = await this.grabadora.read();
-        this.detector.procesar(pedazo, performance.now());
+        const ahora = performance.now();
+        // ¿Llega sonido de verdad? Si Windows bloquea el micrófono, solo llegan ceros
+        if (pedazo.some((x) => x !== 0)) this.ultimoSonido = ahora;
+        this.detector.procesar(pedazo, ahora);
         fallos = 0;
       } catch (err: any) {
         // Por ejemplo, si se desconectan los audífonos: reintentar unas veces
@@ -166,7 +176,26 @@ export class OidoDeJarvis {
     this.detector.pausar(ms, performance.now());
   }
 
-  async cambiarConfig(cambios: { activo?: boolean; sensibilidad?: number }): Promise<void> {
+  /** Lista de micrófonos que ve Windows. */
+  async listarMicrofonos(): Promise<string[]> {
+    try {
+      const { PvRecorder } = await import("@picovoice/pvrecorder-node");
+      return PvRecorder.getAvailableDevices();
+    } catch {
+      return [];
+    }
+  }
+
+  async cambiarConfig(cambios: { activo?: boolean; sensibilidad?: number; dispositivo?: number }): Promise<void> {
+    if (typeof cambios.dispositivo === "number" && Number.isInteger(cambios.dispositivo) && cambios.dispositivo >= -1) {
+      if (cambios.dispositivo !== this.config.dispositivo) {
+        this.config.dispositivo = cambios.dispositivo;
+        this.guardarConfig();
+        this.detener();
+        this.registrar("APLAUSOS", `Micrófono cambiado (número ${cambios.dispositivo}).`);
+        await this.iniciar();
+      }
+    }
     if (typeof cambios.sensibilidad === "number" && Number.isFinite(cambios.sensibilidad)) {
       this.config.sensibilidad = Math.min(10, Math.max(1, Math.round(cambios.sensibilidad)));
       this.detector.sensibilidad = this.config.sensibilidad;
@@ -190,6 +219,11 @@ export class OidoDeJarvis {
       nivel: Math.round(this.detector.nivel * 100) / 100,
       eventos: this.eventos,
       activaciones: this.activaciones,
+      // Escuchando hace más de 4 segundos y solo llegan ceros: Windows no deja oír o es el micrófono equivocado
+      sinSonido:
+        this.estado === "escuchando" &&
+        performance.now() - this.inicioEscucha > 4000 &&
+        performance.now() - this.ultimoSonido > 4000,
     };
   }
 

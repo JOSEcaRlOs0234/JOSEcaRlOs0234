@@ -34,7 +34,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.7.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.8.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -102,6 +102,12 @@
   - Se quitó el detector de prueba del navegador; el panel "Activar con aplausos" muestra estado, nivel, sensibilidad,
     casilla de arranque con Windows y los últimos eventos (para ajustar la sensibilidad).
   - No probado con micrófono real (la nube no tiene); sí que sin micrófono no se rompe.
+  - PRUEBA REAL v1.7 (usuario): estado "ESCUCHANDO" pero volumen 0% y ningún evento, aun con sensibilidad 10 →
+    le llegan solo ceros. Causas probables: privacidad de Windows ("Permitir que las aplicaciones de escritorio
+    accedan al micrófono") o micrófono equivocado. v1.8: `config.dispositivo` (-1 = predeterminado),
+    `GET /api/aplausos/microfonos` (PvRecorder.getAvailableDevices), menú "Micrófono" en el panel y aviso `sinSonido`
+    (escuchando >4 s y solo ceros). Esperando que el usuario revise la privacidad / elija micrófono.
+  - En su registro se vio 429 en gemini-3.8-flash y 3.5-flash (límite gratuito) y respondió el respaldo: funciona.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
