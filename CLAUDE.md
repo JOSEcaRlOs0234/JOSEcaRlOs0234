@@ -34,7 +34,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.8.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.9.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -106,7 +106,12 @@
     le llegan solo ceros. Causas probables: privacidad de Windows ("Permitir que las aplicaciones de escritorio
     accedan al micrófono") o micrófono equivocado. v1.8: `config.dispositivo` (-1 = predeterminado),
     `GET /api/aplausos/microfonos` (PvRecorder.getAvailableDevices), menú "Micrófono" en el panel y aviso `sinSonido`
-    (escuchando >4 s y solo ceros). Esperando que el usuario revise la privacidad / elija micrófono.
+    (escuchando >4 s y solo ceros).
+  - El usuario revisó privacidad: todo activado y "Node.js JavaScript Runtime — Actualmente en uso" → el permiso NO era
+    el problema; probablemente el micrófono predeterminado equivocado. Pidió "hazlo tú" → v1.9: si hay 3 s de puro
+    silencio (y el micrófono no fue elegido a mano), `buscarMicrofono()` prueba cada dispositivo ~1.2 s y se queda con
+    el primero que manda sonido; guarda `dispositivo` + `nombreDispositivo` (el número se re-busca por nombre al iniciar)
+    y `microfonoManual`. Estado "buscando" en el panel. Probado con un PvRecorder falso (elige el 3.º de 3).
   - En su registro se vio 429 en gemini-3.8-flash y 3.5-flash (límite gratuito) y respondió el respaldo: funciona.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.

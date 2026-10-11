@@ -19,13 +19,17 @@ export interface ConfigAplausos {
   sensibilidad: number;
   // Micrófono a usar: -1 = el predeterminado de Windows; 0, 1, 2... = uno de la lista
   dispositivo: number;
+  // Nombre de ese micrófono (los números pueden cambiar si conectas audífonos)
+  nombreDispositivo: string;
+  // true si el usuario lo eligió a mano (entonces Jarvis no lo cambia solo)
+  microfonoManual: boolean;
   // Ya se configuró el arranque con Windows la primera vez (para no volver a crearlo si el usuario lo quitó)
   arranqueConfigurado: boolean;
 }
 
 export interface EstadoAplausos {
   config: ConfigAplausos;
-  estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible";
+  estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible" | "buscando";
   microfono: string;
   nivel: number;
   eventos: { hora: string; texto: string }[];
@@ -55,6 +59,7 @@ export class OidoDeJarvis {
   private activaciones = 0;
   private reintentando = false;
   private inicioEscucha = 0;
+  private yaBusque = false;
   private ultimoSonido = 0;
   private temporizador: ReturnType<typeof setTimeout> | undefined;
   config: ConfigAplausos;
@@ -69,7 +74,14 @@ export class OidoDeJarvis {
   }
 
   private leerConfig(): ConfigAplausos {
-    const base: ConfigAplausos = { activo: true, sensibilidad: 5, dispositivo: -1, arranqueConfigurado: false };
+    const base: ConfigAplausos = {
+      activo: true,
+      sensibilidad: 5,
+      dispositivo: -1,
+      nombreDispositivo: "",
+      microfonoManual: false,
+      arranqueConfigurado: false,
+    };
     try {
       return { ...base, ...JSON.parse(readFileSync(ARCHIVO_CONFIG, "utf8")) };
     } catch {
@@ -109,6 +121,15 @@ export class OidoDeJarvis {
       this.registrar("AVISO", "No está instalada la pieza para escuchar el micrófono (pvrecorder).");
       return;
     }
+    // Si se guardó el nombre del micrófono, buscar su número actual (cambia al conectar o quitar aparatos)
+    if (this.config.nombreDispositivo) {
+      try {
+        const indice = (PvRecorder.getAvailableDevices() as string[]).indexOf(this.config.nombreDispositivo);
+        if (indice >= 0) this.config.dispositivo = indice;
+      } catch {
+        // Se usa el número guardado
+      }
+    }
     try {
       // 256 muestras a 16 kHz = pedacitos de 16 milisegundos; -1 = micrófono predeterminado de Windows
       this.grabadora = new PvRecorder(256, this.config.dispositivo);
@@ -144,6 +165,12 @@ export class OidoDeJarvis {
         // ¿Llega sonido de verdad? Si Windows bloquea el micrófono, solo llegan ceros
         if (pedazo.some((x) => x !== 0)) this.ultimoSonido = ahora;
         this.detector.procesar(pedazo, ahora);
+        // 3 segundos de puro silencio: este micrófono no sirve; buscar otro que sí oiga (una vez por encendido)
+        if (!this.ultimoSonido && ahora - this.inicioEscucha > 3000 && !this.yaBusque && !this.config.microfonoManual) {
+          this.yaBusque = true;
+          void this.buscarMicrofono();
+          return;
+        }
         fallos = 0;
       } catch (err: any) {
         // Por ejemplo, si se desconectan los audífonos: reintentar unas veces
@@ -171,6 +198,62 @@ export class OidoDeJarvis {
     this.estado = "apagado";
   }
 
+  /** Prueba cada micrófono de la laptop y se queda con el primero que de verdad manda sonido. */
+  private async buscarMicrofono(): Promise<void> {
+    const anterior = this.config.dispositivo;
+    this.detener();
+    this.estado = "buscando";
+    this.anotar("El micrófono no manda sonido: probando los demás...");
+    this.registrar("APLAUSOS", "El micrófono no manda sonido; probando los demás micrófonos.");
+
+    let PvRecorder: any;
+    let lista: string[] = [];
+    try {
+      ({ PvRecorder } = await import("@picovoice/pvrecorder-node"));
+      lista = PvRecorder.getAvailableDevices();
+    } catch {
+      // Sin lista no se puede buscar
+    }
+
+    for (let i = 0; i < lista.length; i++) {
+      if (!this.config.activo) return;
+      let prueba: any = null;
+      try {
+        prueba = new PvRecorder(256, i);
+        prueba.start();
+        let conSonido = 0;
+        // Escuchar ~1.2 segundos: un micrófono real siempre capta algo de ruido del cuarto
+        for (let f = 0; f < 75; f++) {
+          const pedazo: Int16Array = await prueba.read();
+          if (pedazo.some((x) => Math.abs(x) > 2)) conSonido++;
+        }
+        prueba.release();
+        prueba = null;
+        if (conSonido > 10) {
+          this.config.dispositivo = i;
+          this.config.nombreDispositivo = lista[i];
+          this.guardarConfig();
+          this.anotar(`Micrófono elegido solo: ${lista[i]}`);
+          this.registrar("APLAUSOS", `Elegí automáticamente el micrófono: ${lista[i]}`);
+          await this.iniciar();
+          return;
+        }
+      } catch {
+        try {
+          prueba?.release();
+        } catch {
+          // Nada que liberar
+        }
+      }
+    }
+
+    // Ninguno mandó sonido: volver al de antes y dejar el aviso en pantalla
+    this.config.dispositivo = anterior;
+    this.anotar("Ningún micrófono mandó sonido. ¿Está silenciado o tapado?");
+    this.registrar("ERROR", "Ningún micrófono mandó sonido para los aplausos.");
+    await this.iniciar();
+  }
+
   /** Pausa la detección unos segundos (mientras Jarvis habla por las bocinas). */
   pausar(ms: number): void {
     this.detector.pausar(ms, performance.now());
@@ -188,8 +271,13 @@ export class OidoDeJarvis {
 
   async cambiarConfig(cambios: { activo?: boolean; sensibilidad?: number; dispositivo?: number }): Promise<void> {
     if (typeof cambios.dispositivo === "number" && Number.isInteger(cambios.dispositivo) && cambios.dispositivo >= -1) {
-      if (cambios.dispositivo !== this.config.dispositivo) {
+      if (cambios.dispositivo !== this.config.dispositivo || !this.config.microfonoManual) {
+        const lista = await this.listarMicrofonos();
         this.config.dispositivo = cambios.dispositivo;
+        this.config.nombreDispositivo = lista[cambios.dispositivo] ?? "";
+        // Elegir "Predeterminado" vuelve al modo automático
+        this.config.microfonoManual = cambios.dispositivo !== -1;
+        this.yaBusque = false;
         this.guardarConfig();
         this.detener();
         this.registrar("APLAUSOS", `Micrófono cambiado (número ${cambios.dispositivo}).`);

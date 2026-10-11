@@ -50,7 +50,7 @@ import { umbralPorSensibilidad } from "../detector-aplausos.ts";
 
 interface EstadoAplausos {
   config: { activo: boolean; sensibilidad: number; dispositivo: number };
-  estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible";
+  estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible" | "buscando";
   microfono: string;
   nivel: number;
   eventos: { hora: string; texto: string }[];
@@ -884,6 +884,8 @@ export default function App() {
                   ? "APAGADO"
                   : aplausos.estado === "sin_microfono"
                   ? "SIN MICRÓFONO"
+                  : aplausos.estado === "buscando"
+                  ? "BUSCANDO MICRÓFONO..."
                   : "NO DISPONIBLE"}
               </span>
             </div>
