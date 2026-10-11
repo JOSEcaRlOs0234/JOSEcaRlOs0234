@@ -44,7 +44,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.4.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.4.2). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -190,6 +190,13 @@
   vez que cambia recordatorios.json (`cuandoCambienRecordatorios`); los que faltan <70 s los avisa el Jarvis ya encendido.
   Al avisar sin ventana visible: Windows lo dice + se abre la ventana `/?aviso=N` (máx. 1 cada 15 s), que lo muestra
   sin repetirlo en voz. Probado en Linux (sin la tarea real). NO probado en Windows.
+- v2.4.2 (pedido: "solo agrégale este sonido cuando se abra"; mp3 de 25 s que mandó el usuario):
+  `sonidos/jarvis-intro.mp3` NO está en git (repo público, posible audio con derechos; `.gitignore`): se agrega a mano
+  al zip (`zip -r` tras `git archive`). server.ts lo copia a `%LOCALAPPDATA%\Jarvis\sonidos\intro.mp3` al iniciar, así
+  zips futuros sin el mp3 siguen sonando. `GET /api/sonido-intro`; si el navegador bloquea el sonido (NotAllowedError)
+  `POST /api/sonido-intro/tocar` lo toca Windows (`tocarSonido`: PowerShell MediaPlayer) y `/parar` lo calla.
+  App.tsx: `tocarIntro()` una vez por ventana (sessionStorage), no con `?aviso`; `callarIntro()` lo desvanece cuando
+  Jarvis habla o escucha; con `?despertar=1` espera 3.5 s antes de saludar. Probado en Playwright.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

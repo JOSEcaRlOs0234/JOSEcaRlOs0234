@@ -8,7 +8,7 @@
  */
 
 import express from "express";
-import { existsSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from "fs";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
@@ -35,7 +35,7 @@ import { guardarEnHistorial } from "./historial.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
 import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
-import { programarEncendido } from "./windows.ts";
+import { programarEncendido, tocarSonido } from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { enfriarModelo, guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -541,6 +541,39 @@ app.post("/api/decir", async (req, res) => {
   if (!texto.trim()) return res.status(400).json({ error: "Falta el texto." });
   oido.pausar(Math.min(30000, 2000 + texto.length * 80));
   await decirEnVoz(texto);
+  res.json({ ok: true });
+});
+
+// Sonido de entrada (se toca al abrir la ventana). Se copia a la carpeta de datos para que no se pierda
+// aunque una actualización futura no lo traiga.
+const SONIDO_INTRO = path.join(CARPETA_DATOS, "sonidos", "intro.mp3");
+try {
+  const origen = path.join(__dirname, "sonidos", "jarvis-intro.mp3");
+  if (existsSync(origen) && (!existsSync(SONIDO_INTRO) || statSync(origen).size !== statSync(SONIDO_INTRO).size)) {
+    mkdirSync(path.dirname(SONIDO_INTRO), { recursive: true });
+    copyFileSync(origen, SONIDO_INTRO);
+  }
+} catch (err) {
+  registrar("ERROR", `No pude preparar el sonido de entrada: ${err instanceof Error ? err.message : err}`);
+}
+
+app.get("/api/sonido-intro", (_req, res) => {
+  if (!existsSync(SONIDO_INTRO)) return res.status(404).end();
+  res.sendFile(SONIDO_INTRO);
+});
+
+// Si el navegador no deja sonar la ventana, lo toca Windows
+let callarIntroWindows: (() => void) | null = null;
+app.post("/api/sonido-intro/tocar", (_req, res) => {
+  if (existsSync(SONIDO_INTRO)) {
+    callarIntroWindows?.();
+    callarIntroWindows = tocarSonido(SONIDO_INTRO);
+  }
+  res.json({ ok: true });
+});
+app.post("/api/sonido-intro/parar", (_req, res) => {
+  callarIntroWindows?.();
+  callarIntroWindows = null;
   res.json({ ok: true });
 });
 

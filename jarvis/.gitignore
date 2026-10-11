@@ -7,3 +7,5 @@ registro/
 !.env.example
 package-lock.json
 datos/
+# Sonido de entrada del usuario: se entrega en el zip, no se sube al repositorio público
+sonidos/*.mp3

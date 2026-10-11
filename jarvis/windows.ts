@@ -158,6 +158,33 @@ export async function carpetasUsuario(): Promise<CarpetasUsuario> {
   return base;
 }
 
+// ------------------------------------------------------------------ sonido
+
+/**
+ * Toca un sonido (mp3) con el reproductor de Windows, sin ventanas. Se usa si la ventana de Jarvis no puede
+ * sonar sola (el navegador a veces bloquea el sonido hasta que haces clic). Devuelve una función para callarlo.
+ */
+export function tocarSonido(ruta: string): () => void {
+  if (!esWindows) return () => {};
+  const hijo = spawn(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-Command",
+      "Add-Type -AssemblyName PresentationCore; $p=New-Object System.Windows.Media.MediaPlayer; " +
+        "$p.Open([Uri]$env:JARVIS_SONIDO); Start-Sleep -Milliseconds 300; $p.Play(); Start-Sleep -Seconds 40",
+    ],
+    { env: { ...process.env, JARVIS_SONIDO: ruta }, windowsHide: true, stdio: "ignore" }
+  );
+  hijo.on("error", () => {});
+  return () => {
+    if (hijo.exitCode === null) hijo.kill();
+  };
+}
+
 // ------------------------------------------------------------------ encender Jarvis para un recordatorio
 
 const TAREA_RECORDATORIO = "Jarvis - recordatorio";

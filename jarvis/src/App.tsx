@@ -117,6 +117,52 @@ const normalizar = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0
 // Frases con las que el usuario termina la conversación por voz
 const DESPEDIDA = /^(muchas gracias|gracias|eso es todo|es todo|adios|nada mas|hasta luego|ya no|ya esta|descansa|duermete|duerme)\b/;
 
+// Sonido de entrada: se toca una vez cada vez que se abre la ventana de Jarvis
+let intro: HTMLAudioElement | null = null;
+let introEnWindows = false;
+
+function tocarIntro(): void {
+  try {
+    // Solo una vez por ventana (no al recargar)
+    if (sessionStorage.getItem("jarvis_intro")) return;
+    sessionStorage.setItem("jarvis_intro", "1");
+  } catch {
+    // Sin sessionStorage se toca igual
+  }
+  const audio = new Audio("/api/sonido-intro");
+  audio.volume = 0.85;
+  intro = audio;
+  audio.onended = () => {
+    if (intro === audio) intro = null;
+  };
+  audio.play().catch((err) => {
+    if (intro === audio) intro = null;
+    // El navegador no deja sonar sin un clic: que lo toque Windows
+    if (err?.name === "NotAllowedError") {
+      introEnWindows = true;
+      fetch("/api/sonido-intro/tocar", { method: "POST" }).catch(() => {});
+    }
+  });
+}
+
+/** Baja el sonido de entrada poco a poco (cuando Jarvis va a hablar o a escuchar). */
+function callarIntro(): void {
+  if (introEnWindows) {
+    introEnWindows = false;
+    fetch("/api/sonido-intro/parar", { method: "POST" }).catch(() => {});
+  }
+  const audio = intro;
+  if (!audio) return;
+  intro = null;
+  const paso = audio.volume / 12;
+  const id = window.setInterval(() => {
+    if (audio.volume - paso <= 0.01) {
+      audio.pause();
+      clearInterval(id);
+    } else audio.volume -= paso;
+  }, 80);
+}
+
 /** Tono corto "bip-bip" de que Jarvis te está escuchando. */
 function tono(): void {
   try {
@@ -522,6 +568,7 @@ export default function App() {
       setEstado((prev) => (prev === "hablando" ? "reposo" : prev));
       alTerminar?.();
     };
+    callarIntro();
     if (!vozActivaRef.current || !("speechSynthesis" in window)) {
       setEstado("reposo");
       alTerminar?.();
@@ -694,6 +741,7 @@ export default function App() {
   /** Escucha una frase. `alTexto` recibe lo que dijo; `alNada` se llama si no dijo nada. */
   const escuchar = useCallback((alTexto: (t: string) => void, alNada?: () => void) => {
     if (reconocimientoRef.current) return;
+    callarIntro();
     const Reconocimiento = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!Reconocimiento) {
       showNotification("Este navegador no puede escuchar tu voz. Usa Google Chrome o Microsoft Edge.", "warning");
@@ -1033,12 +1081,18 @@ export default function App() {
     };
   }, [addMensaje, showNotification]);
 
+  // Sonido de entrada al abrir la ventana (no cuando se abre sola por un recordatorio: ese lo está diciendo Windows)
+  useEffect(() => {
+    if (avisoInicialRef.current === null) tocarIntro();
+  }, []);
+
   // Si la ventana se abrió sola porque dijeron "Jarvis" (?despertar=1): saludar y escuchar
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("despertar") !== "1") return;
     window.history.replaceState(null, "", "/");
-    const id = window.setTimeout(() => despertarRef.current(true), 900);
+    // Si suena la entrada, se deja escuchar unos segundos antes de saludar
+    const id = window.setTimeout(() => despertarRef.current(true), intro || introEnWindows ? 3500 : 900);
     return () => clearTimeout(id);
   }, []);
 
