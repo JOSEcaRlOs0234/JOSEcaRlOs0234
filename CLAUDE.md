@@ -16,7 +16,8 @@
    ← ACTUAL (adelantada a pedido del usuario, junto con "Jarvis como app"): código listo, esperando prueba del usuario.
    Después: volver a la Fase 2 (Spotify).
 5. WhatsApp (antes: explicar opciones, riesgos de bloqueo, recomendar).
-   Extra v2.5: correo Gmail ← esperando que el usuario cree su contraseña de aplicación.
+   Extra v2.5: correo Gmail. v2.5.1: el usuario NO quiere el panel del correo → se quitó de la interfaz; el código del
+   servidor (correo.ts, herramientas, /api/correo) sigue ahí sin usar. Si lo pide: será su Gmail PERSONAL.
 
 ## Reglas de seguridad (aplican a todas las fases)
 - Claves (Gemini, Spotify...) solo en archivo `.env` en la laptop; nunca en GitHub (`.env*` está en .gitignore).
@@ -45,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.5.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.5.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -218,6 +219,11 @@
     muestra destinatario/asunto/texto completo; `responder_a` toma remitente y "Re:"; máx. 5 destinatarios). No hay
     herramienta para borrar correos. PermisoDialog ahora respeta saltos de línea. NO probado con Gmail real (la nube no
     llega a imap.gmail.com).
+- v2.5.1 (pedido: "que la interfaz se vea más limpia", "mantén todo lo que hiciste", "no pongas el panel del correo"):
+  pantalla principal = reloj/clima + tarjeta "Estado" (Despertar/Memoria/Permisos, clic → Ajustes) | reactor con
+  Notas/Pizarra | chat a toda la altura. Botón "Ajustes" en la barra superior abre un cajón lateral (`ajustesAbiertos`)
+  con: Cerebro (modelo de Gemini + volver a comprobar), Despertar a Jarvis, Permisos, Memoria y Registro. Se quitó el
+  pie de página (la nota "cerrar no apaga" quedó en el title del botón Apagar). Panel de correo eliminado de App.tsx.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

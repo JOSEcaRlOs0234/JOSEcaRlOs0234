@@ -27,7 +27,7 @@ import {
   RotateCcw,
   PenLine,
   StickyNote,
-  Mail,
+  Settings,
 } from "lucide-react";
 import {
   CONFIG,
@@ -264,11 +264,8 @@ export default function App() {
   const [pizarraAbierta, setPizarraAbierta] = useState(false);
   const pizarraVistaRef = useRef(0);
 
-  // Correo de Gmail
-  const [correo, setCorreo] = useState<{ conectado: boolean; usuario: string }>({ conectado: false, usuario: "" });
-  const [correoForm, setCorreoForm] = useState({ usuario: "", clave: "" });
-  const [correoAbierto, setCorreoAbierto] = useState(false);
-  const [correoProbando, setCorreoProbando] = useState(false);
+  // Cajón de Ajustes
+  const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
 
   // Notas
   const [notas, setNotas] = useState<Nota[]>([]);
@@ -489,49 +486,6 @@ export default function App() {
     } catch {
       showNotification("No pude copiar la nota.", "error");
     }
-  };
-
-  const cargarCorreo = useCallback(async () => {
-    try {
-      const r = await fetch("/api/correo");
-      if (r.ok) setCorreo(await r.json());
-    } catch {
-      // Se reintenta al abrir de nuevo
-    }
-  }, []);
-
-  const conectarCorreo = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setCorreoProbando(true);
-    try {
-      const r = await fetch("/api/correo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(correoForm),
-      });
-      const datos = await r.json();
-      if (!r.ok) throw new Error(datos.error);
-      setCorreo(datos);
-      setCorreoForm({ usuario: "", clave: "" });
-      setCorreoAbierto(false);
-      showNotification(`Correo conectado: ${datos.usuario}`, "info");
-    } catch (err: any) {
-      showNotification(err?.message || "No pude conectar el correo.", "error");
-    } finally {
-      setCorreoProbando(false);
-      cargarRegistro();
-    }
-  };
-
-  const desconectarCorreo = async () => {
-    if (!window.confirm("¿Desconectar tu correo de Jarvis? Podrás volver a conectarlo cuando quieras.")) return;
-    try {
-      const r = await fetch("/api/correo", { method: "DELETE" });
-      if (r.ok) setCorreo(await r.json());
-    } catch {
-      showNotification("No pude desconectar el correo.", "error");
-    }
-    cargarRegistro();
   };
 
   /** Guarda en Documentos\Jarvis\Dibujos lo que dibujaste a mano en la pizarra. */
@@ -1055,10 +1009,9 @@ export default function App() {
     cargarRecuerdos();
     cargarPizarra(false);
     cargarNotas(false);
-    cargarCorreo();
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas, cargarCorreo]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas]);
 
   // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
   useEffect(() => {
@@ -1176,6 +1129,429 @@ export default function App() {
       <NotificationStack notifications={notifications} onDismiss={dismissNotification} />
       {confirmacion && <PermisoDialog confirmacion={confirmacion} onResponder={responderPermiso} />}
 
+      {/* AJUSTES (cajón lateral): todo lo de configuración, para que la pantalla principal quede limpia */}
+      {ajustesAbiertos && (
+        <div className="fixed inset-0 z-40 flex justify-end">
+          <div className="absolute inset-0 bg-[#020c18]/60 backdrop-blur-[2px]" onClick={() => setAjustesAbiertos(false)} />
+          <aside className="relative w-full max-w-[420px] h-full overflow-y-auto bg-[#030d1c] border-l border-[#00e5ff]/40 shadow-[0_0_40px_rgba(0,229,255,0.2)] p-3 flex flex-col gap-2.5">
+            <div className="flex items-center justify-between px-1 pb-1 border-b border-[#00e5ff]/25">
+              <div className="flex items-center gap-2 text-[#00e5ff]">
+                <Settings className="w-4 h-4" />
+                <span className="font-hud-display text-sm font-bold tracking-widest uppercase">Ajustes</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAjustesAbiertos(false)}
+                className="p-1 text-[#68a8d8] hover:text-[#e2f8ff] cursor-pointer"
+                title="Cerrar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* MODELO DE GEMINI */}
+            <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+              <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">Cerebro (Gemini)</h2>
+                <span className={`font-hud-mono text-[10px] ${estadoServidor.color}`}>● {estadoServidor.texto}</span>
+              </div>
+              <div className="flex items-center gap-2 font-hud-mono text-xs">
+              {servidor && servidor !== "sin_conexion" && servidor.claveConfigurada && (
+                <select
+                  value={servidor.modelo}
+                  onChange={(e) => cambiarModelo(e.target.value)}
+                  onFocus={() => modelos.length === 0 && cargarModelos()}
+                  className="max-w-[220px] bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-0.5 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
+                  title="Elige qué modelo de Gemini usa Jarvis"
+                >
+                  {!modelos.some((m) => m.id === servidor.modelo) && (
+                    <option value={servidor.modelo}>{servidor.modelo}</option>
+                  )}
+                  {modelos.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.nombre} ({m.id})
+                    </option>
+                  ))}
+                </select>
+              )}
+              <button
+                type="button"
+                onClick={comprobarServidor}
+                className="p-1 text-[#00e5ff] hover:bg-[#00e5ff]/15 cursor-pointer"
+                title="Volver a comprobar"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </button>
+              </div>
+            </div>
+
+              {/* DETECTOR DE APLAUSOS (en segundo plano) */}
+              <div className="hud-panel p-3 flex flex-col gap-2.5 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Wifi className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                      Despertar a Jarvis
+                    </h2>
+                  </div>
+                  <span
+                    className={`font-hud-mono text-[10px] ${
+                      aplausos?.estado === "escuchando" ? "text-[#00f5a0]" : aplausos?.estado === "apagado" ? "text-[#68a8d8]" : "text-[#ff9933]"
+                    }`}
+                  >
+                    {!aplausos
+                      ? "..."
+                      : aplausos.estado === "escuchando"
+                      ? "● ESCUCHANDO"
+                      : aplausos.estado === "apagado"
+                      ? "APAGADO"
+                      : aplausos.estado === "sin_microfono"
+                      ? "SIN MICRÓFONO"
+                      : aplausos.estado === "buscando"
+                      ? "BUSCANDO MICRÓFONO..."
+                      : "NO DISPONIBLE"}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => cambiarAplausos({ activo: !aplausos?.config.activo })}
+                  disabled={!aplausos}
+                  className={`w-full py-2 px-3 text-xs font-hud-display font-bold uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    aplausos?.config.activo
+                      ? "bg-[#00f5a0]/20 border-[#00f5a0] text-[#00f5a0]"
+                      : "bg-[#00e5ff]/25 border-[#00e5ff] text-[#e2f8ff] hover:bg-[#00e5ff]/40"
+                  }`}
+                >
+                  {aplausos?.config.activo ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                  <span>{aplausos?.config.activo ? "Oído encendido" : "Oído apagado"}</span>
+                </button>
+
+                {/* PALABRA "JARVIS" */}
+                <div className="bg-[#041226]/80 border border-[#00e5ff]/30 p-2 flex flex-col gap-1.5 font-hud-mono">
+                  <label className="flex items-center gap-2 text-[11px] text-[#e2f8ff] font-bold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!aplausos?.config.usarPalabra}
+                      disabled={!aplausos}
+                      onChange={(e) => cambiarAplausos({ usarPalabra: e.target.checked })}
+                      className="accent-[#00e5ff] cursor-pointer"
+                    />
+                    🗣️ Al decir &ldquo;Jarvis&rdquo;
+                    {aplausos?.palabra === "activa" && <span className="ml-auto text-[10px] text-[#00f5a0]">● LISTO</span>}
+                  </label>
+                  {aplausos?.config.usarPalabra && (aplausos.palabra === "sin_clave" || aplausos.palabra === "error") && (
+                    <div className="flex flex-col gap-1.5">
+                      {aplausos.palabra === "error" ? (
+                        <p className="text-[10px] text-[#ffb8c6] leading-snug">⚠ {aplausos.errorPalabra}</p>
+                      ) : (
+                        <p className="text-[10px] text-[#b8f4ff] leading-snug">
+                          Necesita una clave gratuita de Picovoice. Sácala en{" "}
+                          <a href="https://console.picovoice.ai/" target="_blank" rel="noopener noreferrer" className="text-[#00e5ff] underline">
+                            console.picovoice.ai
+                          </a> y pégala aquí:
+                        </p>
+                      )}
+                      <form onSubmit={guardarClavePalabra} className="flex gap-1.5">
+                        <input
+                          type="password"
+                          value={clavePalabra}
+                          onChange={(e) => setClavePalabra(e.target.value)}
+                          placeholder="Pega la clave (AccessKey)"
+                          autoComplete="off"
+                          className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                        />
+                        <button
+                          type="submit"
+                          disabled={guardandoClave || !clavePalabra.trim()}
+                          className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[11px] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                        >
+                          {guardandoClave ? "Probando..." : "Guardar"}
+                        </button>
+                      </form>
+                    </div>
+                  )}
+                  {aplausos?.config.usarPalabra && aplausos.palabra === "activa" && (
+                    <>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[#68a8d8]">QUÉ TAN FÁCIL TE OYE (1 a 10)</span>
+                        <span className="text-[#00e5ff] font-bold">{aplausos.config.sensibilidadPalabra}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="1"
+                        max="10"
+                        step="1"
+                        value={aplausos.config.sensibilidadPalabra}
+                        onChange={(e) => cambiarAplausos({ sensibilidadPalabra: Number(e.target.value) })}
+                        className="w-full accent-[#00e5ff] cursor-pointer"
+                      />
+                    </>
+                  )}
+                </div>
+
+                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] font-bold cursor-pointer select-none px-2">
+                  <input
+                    type="checkbox"
+                    checked={!!aplausos?.config.usarAplausos}
+                    disabled={!aplausos}
+                    onChange={(e) => cambiarAplausos({ usarAplausos: e.target.checked })}
+                    className="accent-[#00e5ff] cursor-pointer"
+                  />
+                  👏 Con doble aplauso
+                </label>
+
+                {aplausos?.sinSonido && (
+                  <div className="p-2 border border-[#ff9933] bg-[#241505]/90 text-[11px] font-hud-mono text-[#ffcc99] leading-snug">
+                    ⚠ No llega sonido del micrófono. Revisa que Windows permita usar el micrófono a las aplicaciones de
+                    escritorio, o elige otro micrófono aquí abajo.
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1 font-hud-mono">
+                  <span className="text-[10px] text-[#68a8d8]">MICRÓFONO</span>
+                  <select
+                    value={aplausos?.config.dispositivo ?? -1}
+                    disabled={!aplausos}
+                    onFocus={cargarMicrofonos}
+                    onChange={(e) => cambiarAplausos({ dispositivo: Number(e.target.value) })}
+                    className="w-full bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-1 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
+                  >
+                    <option value={-1}>Predeterminado de Windows{aplausos?.config.dispositivo === -1 && aplausos.microfono ? ` (${aplausos.microfono})` : ""}</option>
+                    {microfonos.map((m, i) => (
+                      <option key={`${i}-${m}`} value={i}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 font-hud-mono">
+                  <div className="flex items-center justify-between text-[10px] text-[#68a8d8]">
+                    <span>VOLUMEN DEL MICRÓFONO</span>
+                    <span className="text-[#e2f8ff]">{Math.round((aplausos?.nivel ?? 0) * 100)}%</span>
+                  </div>
+                  <div className="relative mt-1.5 h-3 w-full bg-[#020813] border border-[#00e5ff]/30 overflow-hidden">
+                    <div
+                      className="h-full bg-[#00e5ff] transition-all duration-100"
+                      style={{ width: `${Math.min(100, Math.round((aplausos?.nivel ?? 0) * 100))}%` }}
+                    />
+                    {aplausos?.config.usarAplausos && (
+                      <div
+                        className="absolute top-0 bottom-0 w-0.5 bg-[#ff9933]"
+                        style={{ left: `${Math.round(umbralPorSensibilidad(aplausos.config.sensibilidad) * 100)}%` }}
+                        title="Un aplauso debe pasar esta línea"
+                      />
+                    )}
+                  </div>
+                  {aplausos?.config.usarAplausos && (
+                  <>
+                  <div className="flex items-center justify-between text-[10px] mt-2">
+                    <span className="text-[#68a8d8]">SENSIBILIDAD DE APLAUSOS (1 = poca, 10 = mucha)</span>
+                    <span className="text-[#00e5ff] font-bold">{aplausos?.config.sensibilidad ?? "-"}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={aplausos?.config.sensibilidad ?? 5}
+                    disabled={!aplausos}
+                    onChange={(e) => cambiarAplausos({ sensibilidad: Number(e.target.value) })}
+                    className="w-full mt-1.5 accent-[#00e5ff] cursor-pointer"
+                  />
+                  </>
+                  )}
+                </div>
+
+                {aplausos?.config.usarAplausos && (
+                <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => ensenarAplausos("aprender")}
+                    disabled={!aplausos || aplausos.estado !== "escuchando" || aplausos.aprendiendo}
+                    className={`px-2 py-1.5 text-[11px] font-hud-mono font-bold border cursor-pointer disabled:cursor-not-allowed ${
+                      aplausos?.aprendiendo
+                        ? "border-[#ff9933] text-[#ff9933] bg-[#ff9933]/15 animate-pulse"
+                        : "border-[#00e5ff] text-[#e2f8ff] bg-[#00e5ff]/15 hover:bg-[#00e5ff]/30 disabled:opacity-40"
+                    }`}
+                  >
+                    {aplausos?.aprendiendo ? "👏 Aplaude 3 veces, despacio..." : "👏 Enseñarle mis aplausos"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => ensenarAplausos("restablecer")}
+                    disabled={!aplausos}
+                    className="px-2 py-1.5 text-[10px] font-hud-mono border border-[#68a8d8]/40 text-[#68a8d8] hover:text-[#e2f8ff] cursor-pointer"
+                    title="Volver a las reglas de fábrica"
+                  >
+                    Reiniciar
+                  </button>
+                </div>
+                )}
+
+                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#b8f4ff] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!aplausos?.arranqueConWindows}
+                    disabled={!aplausos}
+                    onChange={(e) => cambiarArranque(e.target.checked)}
+                    className="accent-[#00e5ff] cursor-pointer"
+                  />
+                  Encender Jarvis solo al prender la laptop
+                </label>
+
+                {aplausos && aplausos.eventos.length > 0 && (
+                  <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 max-h-28 overflow-y-auto flex flex-col gap-0.5">
+                    {aplausos.eventos.map((e, i) => (
+                      <div
+                        key={`${e.hora}-${i}`}
+                        className={`text-[10px] font-hud-mono leading-snug ${
+                          e.texto.startsWith("¡Doble") || e.texto.startsWith("¡Escuché") ? "text-[#00f5a0] font-bold" : e.texto.startsWith("Ignorado") ? "text-[#68a8d8]" : "text-[#e2f8ff]"
+                        }`}
+                      >
+                        {e.hora} · {e.texto}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Di &ldquo;Jarvis&rdquo; (o aplaude dos veces) y te contesta. El sonido se analiza en tu laptop, sin
+                  internet, y no se graba.
+                </p>
+              </div>
+
+              {/* PERMISOS RECORDADOS */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center gap-2 border-b border-[#00e5ff]/20 pb-1.5">
+                  <ShieldCheck className="w-4 h-4 text-[#00e5ff]" />
+                  <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                    Permisos sin preguntar
+                  </h2>
+                </div>
+                {permisos.length === 0 ? (
+                  <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
+                    Jarvis te pide permiso antes de cada acción en tu laptop.
+                  </p>
+                ) : (
+                  permisos.map((p) => (
+                    <div
+                      key={p.tipo}
+                      className="flex items-center justify-between gap-2 text-[11px] font-hud-mono text-[#b8f4ff] bg-[#041226]/80 border border-[#00e5ff]/20 px-2 py-1"
+                    >
+                      <span>{p.nombre}</span>
+                      <button
+                        type="button"
+                        onClick={() => quitarPermiso(p.tipo)}
+                        className="text-[#ff9933] hover:text-[#ff3355] cursor-pointer"
+                        title="Volver a pedir permiso para esto"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))
+                )}
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Borrar archivos, reemplazarlos o apagar la laptop siempre piden permiso.
+                </p>
+              </div>
+
+              {/* MEMORIA DE JARVIS */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Brain className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                      Memoria de Jarvis
+                    </h2>
+                  </div>
+                  <span className="font-hud-mono text-[10px] text-[#00e5ff]">{recuerdos.length}</span>
+                </div>
+                {recuerdos.length === 0 ? (
+                  <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
+                    Dile por ejemplo: &ldquo;Recuerda que me llamo...&rdquo; y lo guardará aquí.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-1">
+                    {[...recuerdos].reverse().map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex items-start justify-between gap-2 text-[11px] text-[#e2f8ff] bg-[#041226]/80 border border-[#00e5ff]/20 px-2 py-1"
+                      >
+                        <span className="leading-snug break-words">{r.texto}</span>
+                        <button
+                          type="button"
+                          onClick={() => borrarRecuerdo(r.id)}
+                          className="text-[#ff9933] hover:text-[#ff3355] cursor-pointer shrink-0 mt-0.5"
+                          title="Olvidar esto"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <form onSubmit={agregarRecuerdoManual} className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={nuevoRecuerdo}
+                    onChange={(e) => setNuevoRecuerdo(e.target.value)}
+                    maxLength={300}
+                    placeholder="Agregar un recuerdo..."
+                    className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!nuevoRecuerdo.trim()}
+                    className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                    title="Guardar recuerdo"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                </form>
+              </div>
+
+              {/* REGISTRO DE ACTIVIDAD */}
+              <div className="hud-panel p-3 flex flex-col gap-2 h-72 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <ScrollText className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
+                      Registro de actividad
+                    </h2>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={cargarRegistro}
+                    className="p-1 text-[#00e5ff] hover:bg-[#00e5ff]/15 cursor-pointer"
+                    title="Actualizar"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto flex flex-col-reverse gap-1 pr-1">
+                  {registro.length === 0 ? (
+                    <div className="text-[11px] font-hud-mono text-[#68a8d8]">Sin actividad todavía.</div>
+                  ) : (
+                    [...registro].reverse().map((linea, i) => (
+                      <div
+                        key={`${i}-${linea}`}
+                        className={`text-[10px] font-hud-mono leading-snug break-words ${
+                          linea.includes("| ERROR") || linea.includes("| SEGURIDAD")
+                            ? "text-[#ffb8c6]"
+                            : "text-[#68a8d8]"
+                        }`}
+                      >
+                        {linea}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+          </aside>
+        </div>
+      )}
+
       {/* BARRA SUPERIOR */}
       <header className="flex items-center justify-between gap-4 px-3 py-1.5 border-b border-[#00e5ff]/25 bg-[#041022]/80 backdrop-blur-md z-20 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
@@ -1189,37 +1565,20 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2 shrink-0 font-hud-mono text-xs">
           <span className={estadoServidor.color}>● {estadoServidor.texto}</span>
-          {servidor && servidor !== "sin_conexion" && servidor.claveConfigurada && (
-            <select
-              value={servidor.modelo}
-              onChange={(e) => cambiarModelo(e.target.value)}
-              onFocus={() => modelos.length === 0 && cargarModelos()}
-              className="max-w-[220px] bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-0.5 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
-              title="Elige qué modelo de Gemini usa Jarvis"
-            >
-              {!modelos.some((m) => m.id === servidor.modelo) && (
-                <option value={servidor.modelo}>{servidor.modelo}</option>
-              )}
-              {modelos.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.nombre} ({m.id})
-                </option>
-              ))}
-            </select>
-          )}
           <button
             type="button"
-            onClick={comprobarServidor}
-            className="p-1 text-[#00e5ff] hover:bg-[#00e5ff]/15 cursor-pointer"
-            title="Volver a comprobar"
+            onClick={() => setAjustesAbiertos(true)}
+            className="ml-1 px-2 py-0.5 border border-[#00e5ff]/40 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer flex items-center gap-1"
+            title="Ajustes: despertar, permisos, memoria, modelo y registro"
           >
-            <RefreshCw className="w-3.5 h-3.5" />
+            <Settings className="w-3.5 h-3.5" />
+            Ajustes
           </button>
           <button
             type="button"
             onClick={apagarJarvis}
-            className="ml-2 px-2 py-0.5 border border-[#ff3355]/50 text-[#ff3355] hover:bg-[#ff3355]/15 cursor-pointer flex items-center gap-1"
-            title="Apagar a Jarvis por completo"
+            className="ml-1 px-2 py-0.5 border border-[#ff3355]/50 text-[#ff3355] hover:bg-[#ff3355]/15 cursor-pointer flex items-center gap-1"
+            title="Apagar a Jarvis por completo (cerrar la ventana no lo apaga)"
           >
             <Power className="w-3.5 h-3.5" />
             Apagar
@@ -1307,416 +1666,45 @@ export default function App() {
             </div>
           </div>
 
-          {/* DETECTOR DE APLAUSOS (en segundo plano) */}
-          <div className="hud-panel p-3 flex flex-col gap-2.5 shrink-0">
-            <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
-              <div className="flex items-center gap-2">
-                <Wifi className="w-4 h-4 text-[#00e5ff]" />
-                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                  Despertar a Jarvis
-                </h2>
-              </div>
-              <span
-                className={`font-hud-mono text-[10px] ${
-                  aplausos?.estado === "escuchando" ? "text-[#00f5a0]" : aplausos?.estado === "apagado" ? "text-[#68a8d8]" : "text-[#ff9933]"
-                }`}
-              >
-                {!aplausos
+          {/* ESTADO (resumen; los detalles están en Ajustes) */}
+          <div className="hud-panel p-3 flex flex-col gap-1.5 shrink-0">
+            {[
+              {
+                icono: <Wifi className="w-3.5 h-3.5" />,
+                nombre: "Despertar",
+                valor: !aplausos
                   ? "..."
-                  : aplausos.estado === "escuchando"
-                  ? "● ESCUCHANDO"
-                  : aplausos.estado === "apagado"
-                  ? "APAGADO"
-                  : aplausos.estado === "sin_microfono"
-                  ? "SIN MICRÓFONO"
-                  : aplausos.estado === "buscando"
-                  ? "BUSCANDO MICRÓFONO..."
-                  : "NO DISPONIBLE"}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => cambiarAplausos({ activo: !aplausos?.config.activo })}
-              disabled={!aplausos}
-              className={`w-full py-2 px-3 text-xs font-hud-display font-bold uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                aplausos?.config.activo
-                  ? "bg-[#00f5a0]/20 border-[#00f5a0] text-[#00f5a0]"
-                  : "bg-[#00e5ff]/25 border-[#00e5ff] text-[#e2f8ff] hover:bg-[#00e5ff]/40"
-              }`}
-            >
-              {aplausos?.config.activo ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-              <span>{aplausos?.config.activo ? "Oído encendido" : "Oído apagado"}</span>
-            </button>
-
-            {/* PALABRA "JARVIS" */}
-            <div className="bg-[#041226]/80 border border-[#00e5ff]/30 p-2 flex flex-col gap-1.5 font-hud-mono">
-              <label className="flex items-center gap-2 text-[11px] text-[#e2f8ff] font-bold cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={!!aplausos?.config.usarPalabra}
-                  disabled={!aplausos}
-                  onChange={(e) => cambiarAplausos({ usarPalabra: e.target.checked })}
-                  className="accent-[#00e5ff] cursor-pointer"
-                />
-                🗣️ Al decir &ldquo;Jarvis&rdquo;
-                {aplausos?.palabra === "activa" && <span className="ml-auto text-[10px] text-[#00f5a0]">● LISTO</span>}
-              </label>
-              {aplausos?.config.usarPalabra && (aplausos.palabra === "sin_clave" || aplausos.palabra === "error") && (
-                <div className="flex flex-col gap-1.5">
-                  {aplausos.palabra === "error" ? (
-                    <p className="text-[10px] text-[#ffb8c6] leading-snug">⚠ {aplausos.errorPalabra}</p>
-                  ) : (
-                    <p className="text-[10px] text-[#b8f4ff] leading-snug">
-                      Necesita una clave gratuita de Picovoice. Sácala en{" "}
-                      <a href="https://console.picovoice.ai/" target="_blank" rel="noopener noreferrer" className="text-[#00e5ff] underline">
-                        console.picovoice.ai
-                      </a> y pégala aquí:
-                    </p>
-                  )}
-                  <form onSubmit={guardarClavePalabra} className="flex gap-1.5">
-                    <input
-                      type="password"
-                      value={clavePalabra}
-                      onChange={(e) => setClavePalabra(e.target.value)}
-                      placeholder="Pega la clave (AccessKey)"
-                      autoComplete="off"
-                      className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={guardandoClave || !clavePalabra.trim()}
-                      className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[11px] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
-                    >
-                      {guardandoClave ? "Probando..." : "Guardar"}
-                    </button>
-                  </form>
-                </div>
-              )}
-              {aplausos?.config.usarPalabra && aplausos.palabra === "activa" && (
-                <>
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-[#68a8d8]">QUÉ TAN FÁCIL TE OYE (1 a 10)</span>
-                    <span className="text-[#00e5ff] font-bold">{aplausos.config.sensibilidadPalabra}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="1"
-                    max="10"
-                    step="1"
-                    value={aplausos.config.sensibilidadPalabra}
-                    onChange={(e) => cambiarAplausos({ sensibilidadPalabra: Number(e.target.value) })}
-                    className="w-full accent-[#00e5ff] cursor-pointer"
-                  />
-                </>
-              )}
-            </div>
-
-            <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] font-bold cursor-pointer select-none px-2">
-              <input
-                type="checkbox"
-                checked={!!aplausos?.config.usarAplausos}
-                disabled={!aplausos}
-                onChange={(e) => cambiarAplausos({ usarAplausos: e.target.checked })}
-                className="accent-[#00e5ff] cursor-pointer"
-              />
-              👏 Con doble aplauso
-            </label>
-
-            {aplausos?.sinSonido && (
-              <div className="p-2 border border-[#ff9933] bg-[#241505]/90 text-[11px] font-hud-mono text-[#ffcc99] leading-snug">
-                ⚠ No llega sonido del micrófono. Revisa que Windows permita usar el micrófono a las aplicaciones de
-                escritorio, o elige otro micrófono aquí abajo.
-              </div>
-            )}
-
-            <div className="flex flex-col gap-1 font-hud-mono">
-              <span className="text-[10px] text-[#68a8d8]">MICRÓFONO</span>
-              <select
-                value={aplausos?.config.dispositivo ?? -1}
-                disabled={!aplausos}
-                onFocus={cargarMicrofonos}
-                onChange={(e) => cambiarAplausos({ dispositivo: Number(e.target.value) })}
-                className="w-full bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-1 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
-              >
-                <option value={-1}>Predeterminado de Windows{aplausos?.config.dispositivo === -1 && aplausos.microfono ? ` (${aplausos.microfono})` : ""}</option>
-                {microfonos.map((m, i) => (
-                  <option key={`${i}-${m}`} value={i}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 font-hud-mono">
-              <div className="flex items-center justify-between text-[10px] text-[#68a8d8]">
-                <span>VOLUMEN DEL MICRÓFONO</span>
-                <span className="text-[#e2f8ff]">{Math.round((aplausos?.nivel ?? 0) * 100)}%</span>
-              </div>
-              <div className="relative mt-1.5 h-3 w-full bg-[#020813] border border-[#00e5ff]/30 overflow-hidden">
-                <div
-                  className="h-full bg-[#00e5ff] transition-all duration-100"
-                  style={{ width: `${Math.min(100, Math.round((aplausos?.nivel ?? 0) * 100))}%` }}
-                />
-                {aplausos?.config.usarAplausos && (
-                  <div
-                    className="absolute top-0 bottom-0 w-0.5 bg-[#ff9933]"
-                    style={{ left: `${Math.round(umbralPorSensibilidad(aplausos.config.sensibilidad) * 100)}%` }}
-                    title="Un aplauso debe pasar esta línea"
-                  />
-                )}
-              </div>
-              {aplausos?.config.usarAplausos && (
-              <>
-              <div className="flex items-center justify-between text-[10px] mt-2">
-                <span className="text-[#68a8d8]">SENSIBILIDAD DE APLAUSOS (1 = poca, 10 = mucha)</span>
-                <span className="text-[#00e5ff] font-bold">{aplausos?.config.sensibilidad ?? "-"}</span>
-              </div>
-              <input
-                type="range"
-                min="1"
-                max="10"
-                step="1"
-                value={aplausos?.config.sensibilidad ?? 5}
-                disabled={!aplausos}
-                onChange={(e) => cambiarAplausos({ sensibilidad: Number(e.target.value) })}
-                className="w-full mt-1.5 accent-[#00e5ff] cursor-pointer"
-              />
-              </>
-              )}
-            </div>
-
-            {aplausos?.config.usarAplausos && (
-            <div className="grid grid-cols-[1fr_auto] gap-1.5">
+                  : !aplausos.config.activo
+                  ? "Oído apagado"
+                  : aplausos.palabra === "activa"
+                  ? 'Di "Jarvis"'
+                  : aplausos.config.usarAplausos
+                  ? "Doble aplauso"
+                  : "Falta configurar",
+                bien: !!aplausos?.config.activo && (aplausos.palabra === "activa" || aplausos.config.usarAplausos),
+              },
+              { icono: <Brain className="w-3.5 h-3.5" />, nombre: "Memoria", valor: `${recuerdos.length} recuerdos`, bien: true },
+              {
+                icono: <ShieldCheck className="w-3.5 h-3.5" />,
+                nombre: "Permisos",
+                valor: permisos.length ? `${permisos.length} sin preguntar` : "Siempre pregunta",
+                bien: true,
+              },
+            ].map((fila) => (
               <button
+                key={fila.nombre}
                 type="button"
-                onClick={() => ensenarAplausos("aprender")}
-                disabled={!aplausos || aplausos.estado !== "escuchando" || aplausos.aprendiendo}
-                className={`px-2 py-1.5 text-[11px] font-hud-mono font-bold border cursor-pointer disabled:cursor-not-allowed ${
-                  aplausos?.aprendiendo
-                    ? "border-[#ff9933] text-[#ff9933] bg-[#ff9933]/15 animate-pulse"
-                    : "border-[#00e5ff] text-[#e2f8ff] bg-[#00e5ff]/15 hover:bg-[#00e5ff]/30 disabled:opacity-40"
-                }`}
+                onClick={() => setAjustesAbiertos(true)}
+                className="flex items-center justify-between gap-2 px-1 py-1 text-[11px] font-hud-mono hover:bg-[#00e5ff]/10 cursor-pointer"
+                title="Ver en Ajustes"
               >
-                {aplausos?.aprendiendo ? "👏 Aplaude 3 veces, despacio..." : "👏 Enseñarle mis aplausos"}
+                <span className="flex items-center gap-2 text-[#b8f4ff]">
+                  <span className="text-[#00e5ff]">{fila.icono}</span>
+                  {fila.nombre}
+                </span>
+                <span className={fila.bien ? "text-[#00f5a0]" : "text-[#ff9933]"}>{fila.valor}</span>
               </button>
-              <button
-                type="button"
-                onClick={() => ensenarAplausos("restablecer")}
-                disabled={!aplausos}
-                className="px-2 py-1.5 text-[10px] font-hud-mono border border-[#68a8d8]/40 text-[#68a8d8] hover:text-[#e2f8ff] cursor-pointer"
-                title="Volver a las reglas de fábrica"
-              >
-                Reiniciar
-              </button>
-            </div>
-            )}
-
-            <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#b8f4ff] cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={!!aplausos?.arranqueConWindows}
-                disabled={!aplausos}
-                onChange={(e) => cambiarArranque(e.target.checked)}
-                className="accent-[#00e5ff] cursor-pointer"
-              />
-              Encender Jarvis solo al prender la laptop
-            </label>
-
-            {aplausos && aplausos.eventos.length > 0 && (
-              <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 max-h-28 overflow-y-auto flex flex-col gap-0.5">
-                {aplausos.eventos.map((e, i) => (
-                  <div
-                    key={`${e.hora}-${i}`}
-                    className={`text-[10px] font-hud-mono leading-snug ${
-                      e.texto.startsWith("¡Doble") || e.texto.startsWith("¡Escuché") ? "text-[#00f5a0] font-bold" : e.texto.startsWith("Ignorado") ? "text-[#68a8d8]" : "text-[#e2f8ff]"
-                    }`}
-                  >
-                    {e.hora} · {e.texto}
-                  </div>
-                ))}
-              </div>
-            )}
-            <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-              Di &ldquo;Jarvis&rdquo; (o aplaude dos veces) y te contesta. El sonido se analiza en tu laptop, sin
-              internet, y no se graba.
-            </p>
-          </div>
-
-          {/* PERMISOS RECORDADOS */}
-          <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
-            <div className="flex items-center gap-2 border-b border-[#00e5ff]/20 pb-1.5">
-              <ShieldCheck className="w-4 h-4 text-[#00e5ff]" />
-              <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                Permisos sin preguntar
-              </h2>
-            </div>
-            {permisos.length === 0 ? (
-              <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
-                Jarvis te pide permiso antes de cada acción en tu laptop.
-              </p>
-            ) : (
-              permisos.map((p) => (
-                <div
-                  key={p.tipo}
-                  className="flex items-center justify-between gap-2 text-[11px] font-hud-mono text-[#b8f4ff] bg-[#041226]/80 border border-[#00e5ff]/20 px-2 py-1"
-                >
-                  <span>{p.nombre}</span>
-                  <button
-                    type="button"
-                    onClick={() => quitarPermiso(p.tipo)}
-                    className="text-[#ff9933] hover:text-[#ff3355] cursor-pointer"
-                    title="Volver a pedir permiso para esto"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              ))
-            )}
-            <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-              Borrar archivos, reemplazarlos o apagar la laptop siempre piden permiso.
-            </p>
-          </div>
-
-          {/* MEMORIA DE JARVIS */}
-          <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
-            <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
-              <div className="flex items-center gap-2">
-                <Brain className="w-4 h-4 text-[#00e5ff]" />
-                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                  Memoria de Jarvis
-                </h2>
-              </div>
-              <span className="font-hud-mono text-[10px] text-[#00e5ff]">{recuerdos.length}</span>
-            </div>
-            {recuerdos.length === 0 ? (
-              <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
-                Dile por ejemplo: &ldquo;Recuerda que me llamo...&rdquo; y lo guardará aquí.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-1 max-h-48 overflow-y-auto pr-1">
-                {[...recuerdos].reverse().map((r) => (
-                  <div
-                    key={r.id}
-                    className="flex items-start justify-between gap-2 text-[11px] text-[#e2f8ff] bg-[#041226]/80 border border-[#00e5ff]/20 px-2 py-1"
-                  >
-                    <span className="leading-snug break-words">{r.texto}</span>
-                    <button
-                      type="button"
-                      onClick={() => borrarRecuerdo(r.id)}
-                      className="text-[#ff9933] hover:text-[#ff3355] cursor-pointer shrink-0 mt-0.5"
-                      title="Olvidar esto"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <form onSubmit={agregarRecuerdoManual} className="flex gap-1.5">
-              <input
-                type="text"
-                value={nuevoRecuerdo}
-                onChange={(e) => setNuevoRecuerdo(e.target.value)}
-                maxLength={300}
-                placeholder="Agregar un recuerdo..."
-                className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
-              />
-              <button
-                type="submit"
-                disabled={!nuevoRecuerdo.trim()}
-                className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
-                title="Guardar recuerdo"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-            </form>
-          </div>
-
-          {/* CORREO (GMAIL) */}
-          <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
-            <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
-              <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-[#00e5ff]" />
-                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                  Correo (Gmail)
-                </h2>
-              </div>
-              <span className={`font-hud-mono text-[10px] ${correo.conectado ? "text-[#00f5a0]" : "text-[#68a8d8]"}`}>
-                {correo.conectado ? "CONECTADO" : "SIN CONECTAR"}
-              </span>
-            </div>
-            {correo.conectado ? (
-              <>
-                <p className="text-[11px] font-hud-mono text-[#e2f8ff] break-all">{correo.usuario}</p>
-                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                  Dile: &ldquo;¿tengo correos nuevos?&rdquo;, &ldquo;léeme el último correo de...&rdquo; o &ldquo;mándale un
-                  correo a...&rdquo;. Antes de mandar uno siempre te pregunta.
-                </p>
-                <button
-                  type="button"
-                  onClick={desconectarCorreo}
-                  className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
-                >
-                  Desconectar
-                </button>
-              </>
-            ) : !correoAbierto ? (
-              <button
-                type="button"
-                onClick={() => setCorreoAbierto(true)}
-                className="px-2 py-1.5 text-[11px] font-hud-mono border border-[#00e5ff]/50 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer"
-              >
-                Conectar mi correo
-              </button>
-            ) : (
-              <form onSubmit={conectarCorreo} className="flex flex-col gap-1.5">
-                <input
-                  type="email"
-                  value={correoForm.usuario}
-                  onChange={(e) => setCorreoForm((f) => ({ ...f, usuario: e.target.value }))}
-                  placeholder="tunombre@gmail.com"
-                  autoComplete="off"
-                  className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
-                />
-                <input
-                  type="password"
-                  value={correoForm.clave}
-                  onChange={(e) => setCorreoForm((f) => ({ ...f, clave: e.target.value }))}
-                  placeholder="Contraseña de aplicación (16 letras)"
-                  autoComplete="off"
-                  className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
-                />
-                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                  No es tu contraseña normal: se crea en{" "}
-                  <a
-                    href="https://myaccount.google.com/apppasswords"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[#00e5ff] underline"
-                  >
-                    myaccount.google.com/apppasswords
-                  </a>
-                  . Se guarda solo en tu laptop.
-                </p>
-                <div className="flex gap-1.5">
-                  <button
-                    type="submit"
-                    disabled={correoProbando || !correoForm.usuario.trim() || !correoForm.clave.trim()}
-                    className="flex-1 px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
-                  >
-                    {correoProbando ? "Probando..." : "Conectar"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCorreoAbierto(false)}
-                    className="px-2 py-1 text-[11px] font-hud-mono border border-[#68a8d8]/40 text-[#68a8d8] cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            )}
+            ))}
           </div>
         </section>
 
@@ -1778,7 +1766,7 @@ export default function App() {
         {/* ================= COLUMNA DERECHA ================= */}
         <section className="lg:col-span-3 flex flex-col gap-2.5 min-h-0 overflow-y-auto pl-0.5">
           {/* CONVERSACIÓN */}
-          <div className="hud-panel p-3 flex flex-col gap-2 flex-[2] min-h-[300px]">
+          <div className="hud-panel p-3 flex flex-col gap-2 flex-1 min-h-[300px]">
             <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
               <div className="flex items-center gap-2">
                 <MessageSquare className="w-4 h-4 text-[#00e5ff]" />
@@ -1878,50 +1866,10 @@ export default function App() {
             </form>
           </div>
 
-          {/* REGISTRO DE ACTIVIDAD */}
-          <div className="hud-panel p-3 flex flex-col gap-2 flex-1 min-h-[160px]">
-            <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
-              <div className="flex items-center gap-2">
-                <ScrollText className="w-4 h-4 text-[#00e5ff]" />
-                <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                  Registro de actividad
-                </h2>
-              </div>
-              <button
-                type="button"
-                onClick={cargarRegistro}
-                className="p-1 text-[#00e5ff] hover:bg-[#00e5ff]/15 cursor-pointer"
-                title="Actualizar"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto flex flex-col-reverse gap-1 pr-1">
-              {registro.length === 0 ? (
-                <div className="text-[11px] font-hud-mono text-[#68a8d8]">Sin actividad todavía.</div>
-              ) : (
-                [...registro].reverse().map((linea, i) => (
-                  <div
-                    key={`${i}-${linea}`}
-                    className={`text-[10px] font-hud-mono leading-snug break-words ${
-                      linea.includes("| ERROR") || linea.includes("| SEGURIDAD")
-                        ? "text-[#ffb8c6]"
-                        : "text-[#68a8d8]"
-                    }`}
-                  >
-                    {linea}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </section>
       </main>
 
-      <footer className="flex flex-wrap items-center justify-between gap-2 px-3 py-1 border-t border-[#00e5ff]/20 bg-[#030b18]/85 text-[11px] font-hud-mono text-[#68a8d8] z-20 shrink-0">
-        <span>CONVERSACIÓN · MEMORIA · PIZARRA · CONTROL DE LA LAPTOP CON PERMISO</span>
-        <span>Cerrar esta ventana no apaga a Jarvis: usa el botón "Apagar".</span>
-      </footer>
+
     </div>
   );
 }
