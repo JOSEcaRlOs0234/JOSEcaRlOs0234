@@ -46,6 +46,18 @@ import { NotificationStack } from "./components/NotificationStack";
 import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
+import { umbralPorSensibilidad } from "../detector-aplausos.ts";
+
+interface EstadoAplausos {
+  config: { activo: boolean; sensibilidad: number };
+  estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible";
+  microfono: string;
+  nivel: number;
+  eventos: { hora: string; texto: string }[];
+  activaciones: number;
+  arranqueConWindows: boolean;
+  activacion: number;
+}
 
 const horaActual = () =>
   new Date().toLocaleTimeString("es-MX", {
@@ -160,34 +172,10 @@ export default function App() {
   // Notificaciones
   const [notifications, setNotifications] = useState<HudNotification[]>([]);
 
-  // Micrófono para el detector de aplausos
-  const [micActive, setMicActive] = useState(false);
-  const [micVolume, setMicVolume] = useState(0);
-  const [frequencyData, setFrequencyData] = useState<Uint8Array | null>(null);
-  const [micDenegado, setMicDenegado] = useState(false);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const audioRafRef = useRef<number | null>(null);
+  // Detector de aplausos en segundo plano (lo maneja el servidor)
+  const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
+  const ultimaActivacionRef = useRef<number | null>(null);
 
-  // Detector de doble aplauso
-  const [umbralAplauso, setUmbralAplauso] = useState<number>(() => {
-    const v = parseFloat(leerPreferencia("jarvis_umbral_aplauso", String(CONFIG.UMBRAL_APLAUSO)));
-    return !Number.isNaN(v) && v >= 0.05 && v <= 0.95 ? v : CONFIG.UMBRAL_APLAUSO;
-  });
-  const [avisoAplauso, setAvisoAplauso] = useState("Pulsa \"Encender micrófono\" para probar el detector.");
-  const umbralRef = useRef(umbralAplauso);
-  const estadoRef = useRef<ReactorState>(estado);
-  const ultimoPicoMsRef = useRef(0);
-  const ultimaActivacionMsRef = useRef(0);
-  const enPicoRef = useRef(false);
-
-  useEffect(() => {
-    umbralRef.current = umbralAplauso;
-  }, [umbralAplauso]);
-  useEffect(() => {
-    estadoRef.current = estado;
-  }, [estado]);
   useEffect(() => {
     vozActivaRef.current = vozActiva;
   }, [vozActiva]);
@@ -562,113 +550,38 @@ export default function App() {
   }, [detenerDictado, enviarMensaje, showNotification]);
 
   const toggleDictado = () => (dictando ? detenerDictado() : iniciarDictado());
+  const iniciarDictadoRef = useRef(iniciarDictado);
+  iniciarDictadoRef.current = iniciarDictado;
 
-  // ---------------------------------------------------------------- detector de aplausos (navegador)
+  // ---------------------------------------------------------------- detector de aplausos (segundo plano)
 
-  const detenerMicrofono = useCallback(() => {
-    if (audioRafRef.current) cancelAnimationFrame(audioRafRef.current);
-    audioRafRef.current = null;
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaStreamRef.current = null;
-    audioContextRef.current?.close().catch(() => {});
-    audioContextRef.current = null;
-    analyserRef.current = null;
-    enPicoRef.current = false;
-    ultimoPicoMsRef.current = 0;
-    setMicActive(false);
-    setMicVolume(0);
-    setFrequencyData(null);
-    setAvisoAplauso("Micrófono apagado.");
-  }, []);
-
-  const detectarDobleAplauso = useCallback(
-    (volumen: number) => {
-      // Mientras Jarvis piensa o habla no se cuentan aplausos
-      if (estadoRef.current === "hablando" || estadoRef.current === "pensando") return;
-
-      const ahora = performance.now();
-      if (ultimaActivacionMsRef.current > 0 && ahora - ultimaActivacionMsRef.current < CONFIG.PAUSA_TRAS_ACTIVAR_MS) {
-        return;
-      }
-
-      const umbral = umbralRef.current;
-      if (volumen >= umbral && !enPicoRef.current) {
-        enPicoRef.current = true;
-        const diferencia = ahora - ultimoPicoMsRef.current;
-        if (
-          ultimoPicoMsRef.current > 0 &&
-          diferencia >= CONFIG.INTERVALO_APLAUSOS.MIN_MS &&
-          diferencia <= CONFIG.INTERVALO_APLAUSOS.MAX_MS
-        ) {
-          ultimaActivacionMsRef.current = ahora;
-          ultimoPicoMsRef.current = 0;
-          setAvisoAplauso("¡Doble aplauso detectado!");
-          const saludo = "A sus órdenes, señor.";
-          addMensaje("jarvis", saludo, true);
-          hablar(saludo);
-        } else {
-          ultimoPicoMsRef.current = ahora;
-          setAvisoAplauso(`Primer aplauso (${volumen.toFixed(2)}). Esperando el segundo...`);
-        }
-      } else if (volumen < umbral * 0.65) {
-        enPicoRef.current = false;
-      }
-    },
-    [addMensaje, hablar]
-  );
-
-  const medirVolumen = useCallback(() => {
-    const analyser = analyserRef.current;
-    if (!analyser) return;
-    const tiempo = new Uint8Array(analyser.fftSize);
-    const frecuencias = new Uint8Array(analyser.frequencyBinCount);
-    analyser.getByteTimeDomainData(tiempo);
-    analyser.getByteFrequencyData(frecuencias);
-
-    let suma = 0;
-    for (let i = 0; i < tiempo.length; i++) {
-      const n = (tiempo[i] - 128) / 128;
-      suma += n * n;
-    }
-    const volumen = Math.min(1, Math.sqrt(suma / tiempo.length) * 3.8);
-    setMicVolume(volumen);
-    setFrequencyData(frecuencias);
-    detectarDobleAplauso(volumen);
-    audioRafRef.current = requestAnimationFrame(medirVolumen);
-  }, [detectarDobleAplauso]);
-
-  const iniciarMicrofono = useCallback(async () => {
+  const cambiarAplausos = async (cambios: { activo?: boolean; sensibilidad?: number }) => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+      const r = await fetch("/api/aplausos/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cambios),
       });
-      mediaStreamRef.current = stream;
-      const ctx = new AudioContext();
-      audioContextRef.current = ctx;
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.35;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      analyserRef.current = analyser;
-      audioRafRef.current = requestAnimationFrame(medirVolumen);
-      setMicActive(true);
-      setMicDenegado(false);
-      setAvisoAplauso("Escuchando aplausos. Aplaude dos veces seguidas.");
-    } catch (err: any) {
-      setMicDenegado(true);
-      setMicActive(false);
-      const msg =
-        err?.name === "NotAllowedError"
-          ? "No diste permiso para usar el micrófono."
-          : "No pude usar el micrófono.";
-      setAvisoAplauso(msg);
-      showNotification(msg, "error");
+      if (r.ok) setAplausos(await r.json());
+    } catch {
+      showNotification("No pude cambiar el detector de aplausos.", "error");
     }
-  }, [medirVolumen, showNotification]);
+  };
 
-  const cambiarUmbral = (valor: number) => {
-    setUmbralAplauso(valor);
-    guardarPreferencia("jarvis_umbral_aplauso", String(valor));
+  const cambiarArranque = async (activo: boolean) => {
+    try {
+      const r = await fetch("/api/aplausos/arranque", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ activo }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setAplausos((prev) => (prev ? { ...prev, arranqueConWindows: datos.arranqueConWindows } : prev));
+      showNotification(activo ? "Jarvis se encenderá solo al prender la laptop." : "Jarvis ya no se encenderá solo.", "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude cambiar el arranque con Windows.", "error");
+    }
   };
 
   // ---------------------------------------------------------------- clima
@@ -743,11 +656,39 @@ export default function App() {
   }, [locationConfig, loadWeather]);
 
   useEffect(() => {
-    return () => {
-      detenerMicrofono();
-      detenerDictado();
+    return () => detenerDictado();
+  }, [detenerDictado]);
+
+  // Preguntar al servidor por el detector de aplausos (y avisarle si esta ventana está a la vista).
+  // Si hubo un doble aplauso con la ventana abierta, Jarvis se pone a escuchar.
+  useEffect(() => {
+    let vivo = true;
+    const preguntar = async () => {
+      try {
+        const visible = document.visibilityState === "visible" ? "1" : "0";
+        const r = await fetch(`/api/aplausos?visible=${visible}`);
+        if (!r.ok || !vivo) return;
+        const datos: EstadoAplausos = await r.json();
+        setAplausos(datos);
+        if (ultimaActivacionRef.current !== null && datos.activacion > ultimaActivacionRef.current) {
+          addMensaje("jarvis", "A sus órdenes, señor. Le escucho.", true);
+          // Esperar a que termine el saludo hablado antes de escuchar
+          window.setTimeout(() => {
+            if (!enviandoRef.current) iniciarDictadoRef.current?.();
+          }, 2500);
+        }
+        ultimaActivacionRef.current = datos.activacion;
+      } catch {
+        // Servidor apagado: lo indica la barra superior
+      }
     };
-  }, [detenerMicrofono, detenerDictado]);
+    preguntar();
+    const id = window.setInterval(preguntar, 300);
+    return () => {
+      vivo = false;
+      clearInterval(id);
+    };
+  }, [addMensaje]);
 
   // ---------------------------------------------------------------- pantalla
 
@@ -909,78 +850,108 @@ export default function App() {
             </div>
           </div>
 
-          {/* DETECTOR DE DOBLE APLAUSO (versión de prueba en el navegador) */}
+          {/* DETECTOR DE APLAUSOS (en segundo plano) */}
           <div className="hud-panel p-3 flex flex-col gap-2.5 shrink-0">
             <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
               <div className="flex items-center gap-2">
                 <Wifi className="w-4 h-4 text-[#00e5ff]" />
                 <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                  Detector de aplausos
+                  Activar con aplausos
                 </h2>
               </div>
-              <span className="font-hud-mono text-[10px] text-[#00e5ff]">{micActive ? "ACTIVO" : "APAGADO"}</span>
+              <span
+                className={`font-hud-mono text-[10px] ${
+                  aplausos?.estado === "escuchando" ? "text-[#00f5a0]" : aplausos?.estado === "apagado" ? "text-[#68a8d8]" : "text-[#ff9933]"
+                }`}
+              >
+                {!aplausos
+                  ? "..."
+                  : aplausos.estado === "escuchando"
+                  ? "● ESCUCHANDO"
+                  : aplausos.estado === "apagado"
+                  ? "APAGADO"
+                  : aplausos.estado === "sin_microfono"
+                  ? "SIN MICRÓFONO"
+                  : "NO DISPONIBLE"}
+              </span>
             </div>
 
             <button
               type="button"
-              onClick={() => (micActive ? detenerMicrofono() : iniciarMicrofono())}
+              onClick={() => cambiarAplausos({ activo: !aplausos?.config.activo })}
+              disabled={!aplausos}
               className={`w-full py-2 px-3 text-xs font-hud-display font-bold uppercase tracking-widest border transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                micActive
+                aplausos?.config.activo
                   ? "bg-[#00f5a0]/20 border-[#00f5a0] text-[#00f5a0]"
                   : "bg-[#00e5ff]/25 border-[#00e5ff] text-[#e2f8ff] hover:bg-[#00e5ff]/40"
               }`}
             >
-              {micActive ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-              <span>{micActive ? "Apagar micrófono" : "Encender micrófono"}</span>
+              {aplausos?.config.activo ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+              <span>{aplausos?.config.activo ? "Detector encendido" : "Detector apagado"}</span>
             </button>
-
-            <div
-              className={`p-2 border text-[11px] font-hud-mono leading-snug ${
-                avisoAplauso.startsWith("¡Doble")
-                  ? "bg-[#042b22]/90 border-[#00f5a0] text-[#00f5a0] font-bold"
-                  : micDenegado
-                  ? "bg-[#260710]/90 border-[#ff3355] text-[#ffb8c6]"
-                  : "bg-[#041226]/90 border-[#00e5ff]/30 text-[#b8f4ff]"
-              }`}
-            >
-              {avisoAplauso}
-            </div>
 
             <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 font-hud-mono">
               <div className="flex items-center justify-between text-[10px] text-[#68a8d8]">
-                <span>VOLUMEN</span>
-                <span className={micVolume >= umbralAplauso ? "text-[#00f5a0] font-bold" : "text-[#e2f8ff]"}>
-                  {Math.round(micVolume * 100)}%
-                </span>
+                <span>VOLUMEN DEL MICRÓFONO</span>
+                <span className="text-[#e2f8ff]">{Math.round((aplausos?.nivel ?? 0) * 100)}%</span>
               </div>
               <div className="relative mt-1.5 h-3 w-full bg-[#020813] border border-[#00e5ff]/30 overflow-hidden">
                 <div
-                  className={`h-full transition-all duration-75 ${
-                    micVolume >= umbralAplauso ? "bg-[#00f5a0]" : "bg-[#00e5ff]"
-                  }`}
-                  style={{ width: `${Math.min(100, Math.round(micVolume * 100))}%` }}
+                  className="h-full bg-[#00e5ff] transition-all duration-100"
+                  style={{ width: `${Math.min(100, Math.round((aplausos?.nivel ?? 0) * 100))}%` }}
                 />
-                <div
-                  className="absolute top-0 bottom-0 w-0.5 bg-[#ff9933]"
-                  style={{ left: `${Math.min(100, Math.round(umbralAplauso * 100))}%` }}
-                />
+                {aplausos && (
+                  <div
+                    className="absolute top-0 bottom-0 w-0.5 bg-[#ff9933]"
+                    style={{ left: `${Math.round(umbralPorSensibilidad(aplausos.config.sensibilidad) * 100)}%` }}
+                    title="Un aplauso debe pasar esta línea"
+                  />
+                )}
               </div>
               <div className="flex items-center justify-between text-[10px] mt-2">
-                <span className="text-[#68a8d8]">SENSIBILIDAD (más a la derecha = menos sensible)</span>
-                <span className="text-[#00e5ff] font-bold">{umbralAplauso.toFixed(2)}</span>
+                <span className="text-[#68a8d8]">SENSIBILIDAD (1 = poca, 10 = mucha)</span>
+                <span className="text-[#00e5ff] font-bold">{aplausos?.config.sensibilidad ?? "-"}</span>
               </div>
               <input
                 type="range"
-                min="0.05"
-                max="0.95"
-                step="0.01"
-                value={umbralAplauso}
-                onChange={(e) => cambiarUmbral(parseFloat(e.target.value))}
+                min="1"
+                max="10"
+                step="1"
+                value={aplausos?.config.sensibilidad ?? 5}
+                disabled={!aplausos}
+                onChange={(e) => cambiarAplausos({ sensibilidad: Number(e.target.value) })}
                 className="w-full mt-1.5 accent-[#00e5ff] cursor-pointer"
               />
             </div>
+
+            <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#b8f4ff] cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!aplausos?.arranqueConWindows}
+                disabled={!aplausos}
+                onChange={(e) => cambiarArranque(e.target.checked)}
+                className="accent-[#00e5ff] cursor-pointer"
+              />
+              Encender Jarvis solo al prender la laptop
+            </label>
+
+            {aplausos && aplausos.eventos.length > 0 && (
+              <div className="bg-[#041226]/80 border border-[#00e5ff]/20 p-2 max-h-28 overflow-y-auto flex flex-col gap-0.5">
+                {aplausos.eventos.map((e, i) => (
+                  <div
+                    key={`${e.hora}-${i}`}
+                    className={`text-[10px] font-hud-mono leading-snug ${
+                      e.texto.startsWith("¡Doble") ? "text-[#00f5a0] font-bold" : e.texto.startsWith("Ignorado") ? "text-[#68a8d8]" : "text-[#e2f8ff]"
+                    }`}
+                  >
+                    {e.hora} · {e.texto}
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-              Versión de prueba: solo funciona con esta página abierta. En la Fase 3 funcionará en segundo plano.
+              Aplaude dos veces seguidas. Si no te detecta, sube la sensibilidad; si se activa solo, bájala.
+              El sonido se analiza en tu laptop y no se graba.
             </p>
           </div>
 
@@ -1098,8 +1069,8 @@ export default function App() {
           <ReactorCore
             estado={estado}
             dictando={dictando}
-            micVolume={micVolume}
-            frequencyData={frequencyData}
+            micVolume={aplausos?.nivel ?? 0}
+            frequencyData={null}
             onToggleDictado={toggleDictado}
             onSimulateVoice={() => {
               const frase = "Todos los sistemas operan con normalidad, señor.";

@@ -1,29 +1,32 @@
 ' Abre J.A.R.V.I.S. como aplicacion, sin la ventana negra.
 ' Si Jarvis ya esta encendido (y es la version actual), solo abre su ventana.
+' Con el argumento "fondo" (lo usa el arranque de Windows): enciende Jarvis escondido,
+' sin abrir ventana, para que escuche los aplausos.
 Option Explicit
 
-Dim sh, fso, carpeta, estado
+Dim sh, fso, carpeta, estado, fondo
 Set sh = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 carpeta = fso.GetParentFolderName(WScript.ScriptFullName)
 sh.CurrentDirectory = carpeta
+fondo = False
+If WScript.Arguments.Count > 0 Then fondo = (LCase(WScript.Arguments(0)) = "fondo")
 
-' Primera vez (falta instalar o falta la clave): usar el encendido con ventana visible
-' (tambien si una actualizacion trae piezas nuevas que hay que instalar)
+' Falta instalar, falta la clave o una actualizacion trae piezas nuevas: usar el encendido con ventana visible
 If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Or Not fso.FileExists(carpeta & "\.env") Then
-  sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
   WScript.Quit
 End If
 If sh.Run("node revisar-piezas.cjs", 0, True) <> 0 Then
-  sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
   WScript.Quit
 End If
 
 estado = Pedir("GET", "http://127.0.0.1:3000/api/estado")
 
 If estado <> "" And InStr(estado, """version"":""" & VersionInstalada() & """") > 0 Then
-  ' Ya esta encendido y actualizado: solo abrir la ventana
-  sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900", 0, False
+  ' Ya esta encendido y actualizado: solo abrir la ventana (en modo fondo no hace falta nada)
+  If Not fondo Then sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900", 0, False
 Else
   If estado <> "" Then
     ' Esta encendida una version vieja: apagarla primero
@@ -31,7 +34,7 @@ Else
     WScript.Sleep 2000
   End If
   If Not fso.FolderExists(carpeta & "\registro") Then fso.CreateFolder(carpeta & "\registro")
-  sh.Environment("PROCESS")("ABRIR_NAVEGADOR") = "1"
+  If Not fondo Then sh.Environment("PROCESS")("ABRIR_NAVEGADOR") = "1"
   ' El servidor corre escondido; sus mensajes quedan en registro\servidor.log
   sh.Run "cmd /c node_modules\.bin\tsx.cmd server.ts > registro\servidor.log 2>&1", 0, False
 End If

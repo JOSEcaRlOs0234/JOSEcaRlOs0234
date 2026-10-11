@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "1.6.0",
+  "version": "1.7.0",
   "type": "module",
   "scripts": {
     "start": "tsx server.ts",
@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
     "@google/genai": "^2.28.0",
+    "@picovoice/pvrecorder-node": "^1.2.9",
     "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
     "dotenv": "^17.2.3",

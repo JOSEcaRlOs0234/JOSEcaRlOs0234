@@ -9,6 +9,7 @@
 1. Platicar con Jarvis desde la interfaz (Gemini). ✅ el usuario confirmó que funciona.
 2. Spotify (poner canción/playlist, pausar, siguiente, qué suena).
 3. Activación con doble aplauso (programa en segundo plano, ignora ruidos sueltos, arranca al prender, sensibilidad ajustable).
+   ← código listo en v1.7 (pedido por el usuario), esperando prueba en su laptop.
 4. Control de la laptop (abrir programas/webs, volumen, crear/leer archivos en UNA carpeta).
    ← ACTUAL (adelantada a pedido del usuario, junto con "Jarvis como app"): código listo, esperando prueba del usuario.
    Después: volver a la Fase 2 (Spotify).
@@ -33,7 +34,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.6.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 1.7.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -85,6 +86,22 @@
     `consultar_noticias` (RSS de Google Noticias MX, opcional tema, 8 titulares). Libres. La nube de Claude NO puede
     llegar a esos sitios (proxy), se probó el parseo con datos simulados; en la laptop del usuario Open-Meteo sí funciona.
   - `revisar-piezas.cjs`: los lanzadores corren `npm install` si falta alguna dependencia (las actualizaciones pueden traer nuevas).
+- Fase 3 (aplausos):
+  - `detector-aplausos.ts`: `DetectorAplausos.procesar(Int16Array 16 kHz, ms)`. Aplauso = subida de golpe (rms > 3× los 3
+    pedacitos previos), pico ≥ `umbralPorSensibilidad(1..10)` (0.35·0.78^(s-1)) y ≥ 12× ruido de fondo, dura ≤160 ms, y
+    "agudos" (rms de la diferencia / rms) ≥ 0.55. Exactamente 2 aplausos con 120–800 ms entre sí y picos parecidos (<4×),
+    luego 500 ms de calma → "activado" y pausa 4 s. 3+ golpes = ignorado. Probado con 13 casos sintéticos (todos bien).
+  - `aplausos.ts`: `OidoDeJarvis` usa `@picovoice/pvrecorder-node` (binarios listos para Windows, sin compilar, gratis;
+    frames de 256, micrófono predeterminado). Reintenta cada 15 s si no hay micrófono (al prender la laptop). Config en
+    `datos/aplausos.json` (activo, sensibilidad, arranqueConfigurado). Arranque con Windows = acceso directo
+    `%APPDATA%\...\Startup\Jarvis (aplausos).lnk` → `wscript Jarvis.vbs fondo` (se crea solo la primera vez).
+    `decirEnVoz` = PowerShell System.Speech (voz en español de Windows), `saludo()` según la hora.
+  - server.ts: al activarse → pausa 8 s, si no hay ventana visible (latido `GET /api/aplausos?visible=1` en los últimos
+    4 s) abre la ventana; saluda en voz. La interfaz (si está abierta) ve `activacion` subir y empieza a dictar.
+    `POST /api/aplausos/config {activo,sensibilidad}`, `POST /api/aplausos/arranque {activo}`.
+  - Se quitó el detector de prueba del navegador; el panel "Activar con aplausos" muestra estado, nivel, sensibilidad,
+    casilla de arranque con Windows y los últimos eventos (para ajustar la sensibilidad).
+  - No probado con micrófono real (la nube no tiene); sí que sin micrófono no se rompe.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

@@ -56,3 +56,11 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 ## Clima y noticias
 Pregúntale "¿cómo va a estar el clima mañana?" o "¿qué noticias hay de deportes?". Es gratis y no necesita claves.
 Para verlo en tu navegador: "búscame en Google ..." o "abre youtube.com" (te pide permiso).
+
+## Activar con aplausos
+Jarvis escucha en segundo plano: aplaude **dos veces seguidas** y te saluda en voz alta y abre su ventana.
+Ignora ruidos sueltos, portazos, golpes en la mesa, voces y tres golpes seguidos (alguien tocando la puerta).
+- Panel **Activar con aplausos**: encender/apagar, sensibilidad (1 a 10) y la lista de lo que escuchó.
+  Si no te detecta, sube la sensibilidad; si se activa solo, bájala.
+- Casilla **Encender Jarvis solo al prender la laptop** (activada desde el inicio).
+- El sonido se analiza en tu laptop: no se graba ni se envía a internet.

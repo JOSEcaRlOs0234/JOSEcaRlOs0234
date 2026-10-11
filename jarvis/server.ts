@@ -20,6 +20,7 @@ import { conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herrami
 import { buscarEnInternet, claudeConfigurado } from "./consultas.ts";
 import { guardarEnHistorial } from "./historial.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
+import { decirEnVoz, OidoDeJarvis, saludo } from "./aplausos.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -318,10 +319,50 @@ app.delete("/api/pizarra", (_req, res) => {
   res.json(borrarPizarra());
 });
 
+// ---------------------------------------------------------------- aplausos
+
+// La interfaz avisa cada vez que pregunta si está visible; así se sabe si hay que abrir una ventana nueva
+let ultimaVezVisible = 0;
+let contadorActivaciones = 0;
+
+const oido = new OidoDeJarvis(async () => {
+  oido.pausar(8000);
+  contadorActivaciones++;
+  const hayVentanaVisible = Date.now() - ultimaVezVisible < 4000;
+  if (!hayVentanaVisible) abrirVentana(`http://localhost:${PORT}`);
+  await decirEnVoz(saludo());
+}, registrar);
+
+app.get("/api/aplausos", (req, res) => {
+  if (req.query.visible === "1") ultimaVezVisible = Date.now();
+  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+});
+
+app.post("/api/aplausos/config", async (req, res) => {
+  const { activo, sensibilidad } = req.body ?? {};
+  await oido.cambiarConfig({
+    activo: typeof activo === "boolean" ? activo : undefined,
+    sensibilidad: typeof sensibilidad === "number" ? sensibilidad : undefined,
+  });
+  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+});
+
+app.post("/api/aplausos/arranque", async (req, res) => {
+  if (typeof req.body?.activo !== "boolean") return res.status(400).json({ error: "Falta 'activo'." });
+  try {
+    await oido.cambiarArranque(req.body.activo);
+    res.json({ arranqueConWindows: oido.arranqueConWindows() });
+  } catch (err: any) {
+    registrar("ERROR", `No pude cambiar el arranque con Windows: ${String(err?.message ?? err).slice(0, 200)}`);
+    res.status(500).json({ error: "No pude cambiar el arranque con Windows." });
+  }
+});
+
 // Botón "Apagar Jarvis"
 app.post("/api/apagar", (_req, res) => {
   registrar("SISTEMA", "Jarvis apagado desde la interfaz.");
   res.json({ ok: true });
+  oido.detener();
   setTimeout(() => process.exit(0), 300);
 });
 
@@ -365,6 +406,10 @@ const servidor = app.listen(PORT, HOST, () => {
   if (process.env.ABRIR_NAVEGADOR === "1" && process.platform === "win32") {
     abrirVentana(url);
   }
+
+  // Empezar a escuchar aplausos y (la primera vez) dejar a Jarvis arrancando con Windows
+  void oido.iniciar();
+  void oido.configurarArranqueInicial();
 });
 
 servidor.on("error", (err: any) => {

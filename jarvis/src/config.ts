@@ -17,13 +17,6 @@ export const CONFIG = {
   // Duración de las notificaciones flotantes (ms)
   NOTIFICATION_DURATION_MS: 4500,
 
-  // Detector de doble aplauso (versión de navegador; la Fase 3 lo hará en segundo plano)
-  UMBRAL_APLAUSO: 0.3,
-  INTERVALO_APLAUSOS: {
-    MIN_MS: 150,
-    MAX_MS: 800,
-  },
-  PAUSA_TRAS_ACTIVAR_MS: 2000,
 } as const;
 
 export type ReactorState = "reposo" | "escuchando" | "pensando" | "hablando";
