@@ -10,7 +10,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
-import { borrarPizarra, escribirPizarra, MAX_PIZARRA } from "./pizarra.ts";
+import { borrarPizarra, dibujarEnPizarra, escribirPizarra, MAX_PIZARRA } from "./pizarra.ts";
+import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
+import type { Informe } from "./consultas.ts";
 import { buscarEnHistorial } from "./historial.ts";
 import { consultarClima, consultarNoticias } from "./informacion.ts";
 import { agregarRecordatorio, cancelarRecordatorio, cuandoLegible, leerRecordatorios } from "./recordatorios.ts";
@@ -20,6 +22,13 @@ import { claudeConfigurado, consultarAClaude, explicarErrorClaude } from "./cons
 let investigador: ((pregunta: string) => Promise<string>) | null = null;
 export function conectarInvestigador(f: (pregunta: string) => Promise<string>): void {
   investigador = f;
+}
+
+// El servidor conecta aquí la investigación a fondo y el dibujante (usan Gemini con el modelo actual)
+let ia: { investigarAFondo: (tema: string) => Promise<Informe>; dibujar: (descripcion: string) => Promise<string> } | null =
+  null;
+export function conectarIA(funciones: NonNullable<typeof ia>): void {
+  ia = funciones;
 }
 
 const CARPETA_JARVIS_APP = path.dirname(fileURLToPath(import.meta.url));
@@ -157,6 +166,56 @@ export const DECLARACIONES = [
       type: "object",
       properties: { id: { type: "string" } },
       required: ["id"],
+    },
+  },
+  {
+    name: "anotar",
+    description:
+      "Guarda una nota (anotar, apuntar, tomar nota): tareas, ideas, recetas, datos que el usuario quiere conservar. " +
+      "Las notas se ven en el panel de Notas. Para datos cortos sobre la persona (su nombre, gustos) usa mejor guardar_recuerdo.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        texto: { type: "string", description: "El contenido de la nota, bien redactado" },
+        titulo: { type: "string", description: "Título corto (opcional)" },
+      },
+      required: ["texto"],
+    },
+  },
+  {
+    name: "ver_notas",
+    description: "Lee las notas guardadas (todas, o las que contengan ciertas palabras).",
+    parametersJsonSchema: { type: "object", properties: { buscar: { type: "string" } } },
+  },
+  {
+    name: "borrar_nota",
+    description: "Borra una nota por su id (usa ver_notas para saber el id).",
+    parametersJsonSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  },
+  {
+    name: "dibujar",
+    description:
+      "Hace un dibujo en la pizarra: diagramas, esquemas, mapas mentales, gráficas sencillas, figuras, moléculas, " +
+      "ilustraciones simples. Describe con detalle qué dibujar y qué etiquetas poner.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        descripcion: { type: "string", description: "Qué dibujar, con detalles y etiquetas" },
+        titulo: { type: "string" },
+      },
+      required: ["descripcion"],
+    },
+  },
+  {
+    name: "investigar_a_fondo",
+    description:
+      "Busca en internet y arma un informe completo sobre un tema, con fuentes, y lo escribe en la pizarra. Úsalo cuando el " +
+      "usuario pida información detallada, que le expliques a fondo, que investigues o que le des todo sobre algo. " +
+      "Devuelve un resumen para decirlo en voz alta.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { tema: { type: "string", description: "Qué investigar, con todo el detalle que dio el usuario" } },
+      required: ["tema"],
     },
   },
   {
@@ -630,6 +689,95 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           const extra =
             a === "apagar" || a === "reiniciar" ? " Dile al usuario que puede pedir cancelarlo en el próximo minuto." : "";
           return { resultado: `Hecho: ${descripciones[a]}.${extra}` };
+        },
+      };
+    }
+
+    case "anotar": {
+      const contenido = texto(args.texto, "texto", MAX_LARGO_NOTA);
+      const titulo = typeof args.titulo === "string" ? args.titulo.trim().slice(0, 100) : undefined;
+      return {
+        nivel: "libre",
+        tipo: "notas",
+        descripcion: `Anotar: "${(titulo || contenido).slice(0, 80)}"`,
+        ejecutar: async () => {
+          const n = agregarNota(contenido, titulo);
+          return { resultado: `Anotado con el título "${n.titulo}".`, id: n.id };
+        },
+      };
+    }
+
+    case "ver_notas": {
+      const buscar = typeof args.buscar === "string" ? args.buscar.slice(0, 100) : undefined;
+      return {
+        nivel: "libre",
+        tipo: "notas",
+        descripcion: buscar ? `Buscar notas de "${buscar}"` : "Ver las notas",
+        ejecutar: async () => {
+          const lista = buscarNotas(buscar).slice(0, 30);
+          return lista.length ? { notas: lista } : { resultado: "No hay notas que coincidan." };
+        },
+      };
+    }
+
+    case "borrar_nota": {
+      const id = texto(args.id, "id", 40);
+      return {
+        nivel: "libre",
+        tipo: "notas",
+        descripcion: `Borrar la nota ${id}`,
+        ejecutar: async () => {
+          const n = borrarNota(id);
+          if (!n) throw new ErrorHerramienta("No encontré esa nota.");
+          return { resultado: `Borré la nota "${n.titulo}".` };
+        },
+      };
+    }
+
+    case "dibujar": {
+      const descripcion = texto(args.descripcion, "descripcion", 2000);
+      const titulo = typeof args.titulo === "string" && args.titulo.trim() ? args.titulo.trim() : descripcion.slice(0, 60);
+      return {
+        nivel: "libre",
+        tipo: "pizarra",
+        descripcion: `Dibujar: ${titulo}`,
+        ejecutar: async () => {
+          if (!ia) throw new ErrorHerramienta("El dibujo no está disponible.");
+          let svg = "";
+          try {
+            svg = await ia.dibujar(descripcion);
+          } catch {
+            throw new ErrorHerramienta("No pude hacer el dibujo en este momento.");
+          }
+          if (!svg) throw new ErrorHerramienta("El dibujo salió mal; intenta describirlo de otra forma.");
+          dibujarEnPizarra(titulo, svg);
+          return { resultado: "Listo, el dibujo ya está en la pizarra. No lo describas completo, solo coméntalo brevemente." };
+        },
+      };
+    }
+
+    case "investigar_a_fondo": {
+      const tema = texto(args.tema, "tema", 1000);
+      return {
+        nivel: "libre",
+        tipo: "investigar",
+        descripcion: `Investigar a fondo: "${tema}"`,
+        ejecutar: async () => {
+          if (!ia) throw new ErrorHerramienta("La investigación no está disponible.");
+          let r: Informe;
+          try {
+            r = await ia.investigarAFondo(tema);
+          } catch {
+            throw new ErrorHerramienta("No pude buscar en internet en este momento.");
+          }
+          const fuentes = r.fuentes.length
+            ? "\n\n## Fuentes\n" + r.fuentes.map((f) => `- [${f.titulo.replace(/[\[\]]/g, "")}](${f.url})`).join("\n")
+            : "";
+          escribirPizarra(tema.slice(0, 80), `**${r.resumen}**\n\n${r.informe}${fuentes}`, false);
+          return {
+            resumen_para_decir: r.resumen,
+            resultado: "El informe completo con fuentes ya está en la pizarra. Di el resumen y comenta que lo puede leer ahí.",
+          };
         },
       };
     }

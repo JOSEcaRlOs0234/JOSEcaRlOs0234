@@ -26,6 +26,7 @@ import {
   Plus,
   RotateCcw,
   PenLine,
+  StickyNote,
 } from "lucide-react";
 import {
   CONFIG,
@@ -46,6 +47,7 @@ import { NotificationStack } from "./components/NotificationStack";
 import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
+import { NotasPanel, Nota } from "./components/NotasPanel";
 import { umbralPorSensibilidad } from "../detector-aplausos.ts";
 
 interface EstadoAplausos {
@@ -215,6 +217,11 @@ export default function App() {
   const [pizarraAbierta, setPizarraAbierta] = useState(false);
   const pizarraVistaRef = useRef(0);
 
+  // Notas
+  const [notas, setNotas] = useState<Nota[]>([]);
+  const [notasAbiertas, setNotasAbiertas] = useState(false);
+  const notasVistaRef = useRef(0);
+
   // Modelos de Gemini disponibles
   const [modelos, setModelos] = useState<{ id: string; nombre: string }[]>([]);
 
@@ -344,7 +351,10 @@ export default function App() {
       if (!r.ok) return;
       const datos: PizarraDatos = await r.json();
       setPizarra(datos);
-      if (abrirSiCambio && datos.actualizada > pizarraVistaRef.current && datos.contenido) setPizarraAbierta(true);
+      if (abrirSiCambio && datos.actualizada > pizarraVistaRef.current && (datos.contenido || datos.dibujo)) {
+        setPizarraAbierta(true);
+        setNotasAbiertas(false);
+      }
       pizarraVistaRef.current = datos.actualizada;
     } catch {
       // Se reintenta en la próxima conversación
@@ -362,6 +372,78 @@ export default function App() {
       }
     } catch {
       showNotification("No pude borrar la pizarra.", "error");
+    }
+  };
+
+  /** Lee las notas; si Jarvis anotó algo nuevo, abre el panel de notas. */
+  const cargarNotas = useCallback(async (abrirSiCambio: boolean) => {
+    try {
+      const r = await fetch("/api/notas");
+      if (!r.ok) return;
+      const datos: { notas: Nota[]; actualizada: number } = await r.json();
+      setNotas(datos.notas ?? []);
+      if (abrirSiCambio && datos.actualizada > notasVistaRef.current && datos.notas?.length) {
+        setNotasAbiertas(true);
+        setPizarraAbierta(false);
+      }
+      notasVistaRef.current = datos.actualizada;
+    } catch {
+      // Se reintenta en la próxima conversación
+    }
+  }, []);
+
+  const agregarNotaManual = async (texto: string, titulo: string) => {
+    try {
+      const r = await fetch("/api/notas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto, titulo }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setNotas(datos.notas ?? []);
+      notasVistaRef.current = datos.actualizada;
+    } catch (err: any) {
+      showNotification(err?.message || "No pude guardar la nota.", "error");
+    }
+  };
+
+  const borrarNotaManual = async (nota: Nota) => {
+    if (!window.confirm(`¿Borrar la nota "${nota.titulo}"?`)) return;
+    try {
+      const r = await fetch(`/api/notas/${encodeURIComponent(nota.id)}`, { method: "DELETE" });
+      if (r.ok) {
+        const datos = await r.json();
+        setNotas(datos.notas ?? []);
+        notasVistaRef.current = datos.actualizada;
+      }
+    } catch {
+      showNotification("No pude borrar la nota.", "error");
+    }
+  };
+
+  const copiarNota = async (nota: Nota) => {
+    try {
+      await navigator.clipboard.writeText(nota.texto);
+      showNotification("Nota copiada.", "info");
+    } catch {
+      showNotification("No pude copiar la nota.", "error");
+    }
+  };
+
+  /** Guarda en Documentos\Jarvis\Dibujos lo que dibujaste a mano en la pizarra. */
+  const guardarDibujo = async (png: string) => {
+    try {
+      const r = await fetch("/api/dibujos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ png }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      showNotification(`Dibujo guardado en ${datos.ruta}`, "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude guardar el dibujo.", "error");
     }
   };
 
@@ -538,9 +620,10 @@ export default function App() {
         cargarPermisos();
         cargarRecuerdos();
         cargarPizarra(true);
+        cargarNotas(true);
       }
     },
-    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos, cargarPizarra]
+    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos, cargarPizarra, cargarNotas]
   );
 
   const enviarMensaje = useCallback(
@@ -866,9 +949,10 @@ export default function App() {
     cargarModelos();
     cargarRecuerdos();
     cargarPizarra(false);
+    cargarNotas(false);
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas]);
 
   // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
   useEffect(() => {
@@ -1440,17 +1524,37 @@ export default function App() {
               onCerrar={() => setPizarraAbierta(false)}
               onBorrar={borrarPizarraManual}
               onCopiar={copiarPizarra}
+              onGuardarDibujo={guardarDibujo}
             />
           )}
-          {!pizarraAbierta && (
-            <button
-              type="button"
-              onClick={() => setPizarraAbierta(true)}
-              className="absolute top-2 right-2 z-20 px-2.5 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#00e5ff]/15 cursor-pointer flex items-center gap-1"
-              title="Ver la pizarra"
-            >
-              <PenLine className="w-3.5 h-3.5" /> Pizarra
-            </button>
+          {notasAbiertas && !pizarraAbierta && (
+            <NotasPanel
+              notas={notas}
+              onCerrar={() => setNotasAbiertas(false)}
+              onAgregar={agregarNotaManual}
+              onBorrar={borrarNotaManual}
+              onCopiar={copiarNota}
+            />
+          )}
+          {!pizarraAbierta && !notasAbiertas && (
+            <div className="absolute top-2 right-2 z-20 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setNotasAbiertas(true)}
+                className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#00f5a0]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#00f5a0]/15 cursor-pointer flex items-center gap-1"
+                title="Ver las notas"
+              >
+                <StickyNote className="w-3.5 h-3.5" /> Notas{notas.length ? ` (${notas.length})` : ""}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPizarraAbierta(true)}
+                className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#00e5ff]/15 cursor-pointer flex items-center gap-1"
+                title="Ver la pizarra (y dibujar)"
+              >
+                <PenLine className="w-3.5 h-3.5" /> Pizarra
+              </button>
+            </div>
           )}
           <ReactorCore
             estado={estado}

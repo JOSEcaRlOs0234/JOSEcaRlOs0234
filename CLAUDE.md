@@ -12,6 +12,7 @@
    Los aplausos no funcionaron bien con su micrófono (muy bajito/filtrado). El usuario pidió: "mejor que prenda
    cuando le diga Jarvis" → v2.2 palabra "Jarvis" con Porcupine (ver abajo). ← esperando que saque la clave de Picovoice.
 4. Control de la laptop (abrir programas/webs, volumen, crear/leer archivos en UNA carpeta).
+   v2.4 (agregado): notas, dibujos (Jarvis y a mano) e investigar a fondo con fuentes. ← esperando prueba del usuario.
    ← ACTUAL (adelantada a pedido del usuario, junto con "Jarvis como app"): código listo, esperando prueba del usuario.
    Después: volver a la Fase 2 (Spotify).
 5. WhatsApp (antes: explicar opciones, riesgos de bloqueo, recomendar).
@@ -43,7 +44,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.3.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.4.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -165,6 +166,23 @@
   {windowsHide:true})` → Windows pasa SW_HIDE al programa abierto y el navegador salía invisible. v2.3.1: explorer sin
   windowsHide; `abrirUrl`/`abrirRuta` = PowerShell `Start-Process -WindowStyle Normal` (destino por variable de entorno).
   NUNCA volver a poner windowsHide al lanzar programas/páginas para el usuario.
+- v2.4 (pedido: "que no cambie nada, solo agrégale anotar, dibujar y buscar en la web para que me dé información"):
+  - `notas.ts`: `datos/notas.json` (máx. 500, 5000 car., más nuevas primero). Herramientas `anotar`, `ver_notas`,
+    `borrar_nota` (libres). `GET/POST /api/notas`, `DELETE /api/notas/:id` (traen `actualizada`). `components/NotasPanel.tsx`
+    sobre el reactor (se abre sola si cambian tras un chat; botón "Notas" junto a "Pizarra").
+  - `dibujos.ts`: herramienta `dibujar` (libre) → Gemini genera SVG (`pedidoDeDibujo`, 800×600 fondo oscuro) →
+    `limpiarSvg` (quita script, foreignObject, image/iframe..., on*, href no internos; agrega xmlns/xmlns:xlink; ≤300 KB)
+    → `dibujarEnPizarra` (campo `dibujo` en pizarra.json; `agregar` lo conserva). Se muestra con `<img src=data:svg>`.
+    Pizarra → "Dibujar yo": lienzo 1600×1000 (colores, grosor, borrador, deshacer, limpiar, usar dibujo de Jarvis de
+    fondo) → `POST /api/dibujos {png}` (ruta con su propio límite 12 MB; el resto 1 MB) → `guardarDibujoPng` valida
+    la firma PNG y guarda en Documentos\Jarvis\Dibujos.
+  - `investigar_a_fondo` (libre): `consultas.investigarAFondo` = Gemini + googleSearch, "RESUMEN: ..." + informe con ##,
+    fuentes de groundingChunks (≤8) → pizarra con `## Fuentes` como `[título](url)` (PizarraPanel dibuja enlaces
+    http/https que abren en otra ventana). Devuelve `resumen_para_decir`.
+  - server.ts: `conRespaldo()` prueba modelos con `ordenDePrueba`/`enfriarModelo`; `conectarIA({investigarAFondo, dibujar})`.
+    PERSONALIDAD: anota/apunta → anotar; dibuja/diagrama → dibujar; info detallada → investigar_a_fondo.
+  - Probado: limpiarSvg, notas, las 5 herramientas con IA simulada, endpoints, y en Playwright: panel de notas, dibujo
+    de Jarvis con fuentes, dibujar a mano + guardar PNG. NO probado con Gemini real (dibujo/búsqueda).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

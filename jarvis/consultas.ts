@@ -29,6 +29,48 @@ export async function buscarEnInternet(ai: GoogleGenAI, modelo: string, pregunta
   return respuesta.text?.trim() || "No encontré información sobre eso.";
 }
 
+export interface Informe {
+  resumen: string; // 1 o 2 frases para decir en voz alta
+  informe: string; // texto completo para la pizarra (con títulos y viñetas)
+  fuentes: { titulo: string; url: string }[];
+}
+
+/**
+ * Investigación a fondo: busca en Google y arma un informe completo y ordenado, con las páginas de donde salió.
+ * El modelo y la búsqueda son los mismos que "investigar" (gratis con la clave de Gemini), pero pide más detalle.
+ */
+export async function investigarAFondo(ai: GoogleGenAI, modelo: string, tema: string): Promise<Informe> {
+  const respuesta = await ai.models.generateContent({
+    model: modelo,
+    contents: `Investiga a fondo y explícame: ${tema}`,
+    config: {
+      tools: [{ googleSearch: {} }],
+      systemInstruction:
+        "Eres un investigador que explica en español claro, para alguien sin conocimientos previos. Busca en internet " +
+        "información actual y confiable. Responde EXACTAMENTE así:\n" +
+        "RESUMEN: (1 o 2 frases con lo más importante)\n" +
+        "Después, un informe ordenado con títulos que empiecen con '## ', viñetas con '- ', pasos con '1. ' y " +
+        "**negritas** para lo clave. Incluye datos concretos (fechas, cifras, nombres). Máximo unas 400 palabras. " +
+        "No inventes: si algo no está claro, dilo.",
+    },
+  });
+  const texto = respuesta.text?.trim() || "";
+  const coincidencia = texto.match(/^\s*RESUMEN:\s*(.+)$/im);
+  const resumen = coincidencia?.[1]?.trim() || texto.split("\n").find((l) => l.trim())?.trim() || "No encontré información.";
+  const informe = texto.replace(/^\s*RESUMEN:.*$/im, "").trim();
+
+  // Páginas consultadas por la búsqueda de Google (sin repetir)
+  const fuentes: Informe["fuentes"] = [];
+  for (const trozo of (respuesta.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? []) {
+    const url = trozo?.web?.uri;
+    if (typeof url === "string" && /^https?:\/\//.test(url) && !fuentes.some((f) => f.url === url)) {
+      fuentes.push({ titulo: String(trozo.web.title || new URL(url).hostname).slice(0, 80), url });
+    }
+    if (fuentes.length >= 8) break;
+  }
+  return { resumen, informe: informe || resumen, fuentes };
+}
+
 let cliente: Anthropic | null = null;
 
 /** Le hace una pregunta a Claude. Claude puede buscar en internet si lo necesita. */

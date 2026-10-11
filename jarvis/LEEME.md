@@ -46,6 +46,15 @@ y Jarvis lo busca. No necesitas instalar ninguna base de datos.
 Pídele "escribe en la pizarra..." o "hazme una lista de...": aparece una pizarra sobre el reactor.
 Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba del reactor) la vuelve a abrir.
 
+## Notas, dibujos e investigación (versión 2.4)
+- **Notas**: "anota que mañana tengo examen", "apunta la receta...", "¿qué notas tengo?". Se ven en el botón
+  "Notas" (arriba del reactor), donde también puedes escribir, copiar o borrar notas a mano.
+- **Dibujos de Jarvis**: "dibújame un diagrama del ciclo del agua", "hazme un mapa mental de...". Aparece en la pizarra.
+- **Dibujar tú**: en la pizarra, botón "Dibujar yo". Colores, grosor, borrador, deshacer y "Guardar imagen"
+  (se guarda en Documentos\Jarvis\Dibujos). "Usar dibujo de Jarvis" te deja pintar encima de su dibujo.
+- **Investigar a fondo**: "investiga a fondo sobre...", "dame información detallada de...". Jarvis busca en internet,
+  te dice un resumen en voz y deja el informe completo en la pizarra con las páginas de donde lo sacó (puedes darles clic).
+
 ## Cuando Jarvis no sabe algo
 - **Investigar** (gratis): busca en Google con Gemini; lo hace solo cuando necesita datos actuales.
 - **Consultar a Claude** (opcional, de pago, unos centavos por pregunta): doble clic en `Configurar Claude.bat`

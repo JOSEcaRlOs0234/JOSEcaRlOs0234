@@ -27,8 +27,10 @@ import { fileURLToPath } from "url";
 import { registrar, leerRegistro } from "./registro.ts";
 import { ARCHIVO_ENV, CARPETA_DATOS, prepararDatos } from "./ubicacion.mjs";
 import { Agente, Llamada, olvidarPermiso, permisosRecordados } from "./agente.ts";
-import { conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
-import { buscarEnInternet, claudeConfigurado } from "./consultas.ts";
+import { conectarIA, conectarInvestigador, DECLARACIONES, ErrorHerramienta } from "./herramientas.ts";
+import { buscarEnInternet, claudeConfigurado, investigarAFondo } from "./consultas.ts";
+import { agregarNota, borrarNota, leerNotas, MAX_LARGO_NOTA, notasActualizadas } from "./notas.ts";
+import { guardarDibujoPng, limpiarSvg, pedidoDeDibujo } from "./dibujos.ts";
 import { guardarEnHistorial } from "./historial.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
@@ -79,8 +81,13 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Recordatorios y alarmas: usa programar_recordatorio ("en 20 minutos" → minutos; "mañana a las 7" → fecha_hora con
   la fecha correcta según la fecha de hoy). Confirma en una frase cuándo será.
 - Si el usuario se despide ("gracias", "eso es todo", "adiós"), contesta con una despedida muy corta.
-- Cuando el usuario pida una pizarra, apuntar algo, una lista, pasos o una explicación larga, usa escribir_en_pizarra
-  y en tu respuesta hablada solo di brevemente qué escribiste (no lo leas completo).`;
+- Cuando el usuario pida una pizarra, una lista, pasos o una explicación larga, usa escribir_en_pizarra
+  y en tu respuesta hablada solo di brevemente qué escribiste (no lo leas completo).
+- "Anota", "apunta", "toma nota", "guarda esta nota" → anotar (con un título corto). "¿Qué notas tengo?" → ver_notas.
+- "Dibuja", "hazme un diagrama / esquema / mapa mental / gráfica" → dibujar, con una descripción detallada de qué dibujar
+  y qué etiquetas poner. Después solo comenta el dibujo en una frase.
+- Si el usuario quiere información detallada sobre algo ("investiga", "explícame a fondo", "dame información de", "todo
+  sobre"), usa investigar_a_fondo y di en voz solo el resumen; el informe completo con fuentes queda en la pizarra.`;
 
 /** Instrucciones para Gemini: personalidad + fecha de hoy + recordatorios + todo lo que Jarvis recuerda. */
 function instrucciones(): string {
@@ -96,7 +103,9 @@ const ai = new GoogleGenAI({ apiKey: CLAVE || "sin-clave" });
 
 const app = express();
 app.disable("x-powered-by");
-app.use(express.json({ limit: "1mb" }));
+// Los dibujos hechos a mano (imágenes) pueden pesar más; esa ruta tiene su propio límite
+const leerJson = express.json({ limit: "1mb" });
+app.use((req, res, next) => (req.path === "/api/dibujos" ? next() : leerJson(req, res, next)));
 
 // Seguridad: solo aceptar peticiones que vengan de la propia interfaz de Jarvis.
 // Así, una página web cualquiera que abras en el navegador no puede darle órdenes a Jarvis.
@@ -199,6 +208,32 @@ conectarInvestigador(async (pregunta) => {
     if (!convieneOtroModelo(err) || modeloActual === "gemini-3.8-flash") throw err;
     return await buscarEnInternet(ai, "gemini-3.8-flash", pregunta);
   }
+});
+
+/** Hace un pedido a Gemini probando los modelos de respaldo si el elegido está saturado o no existe. */
+async function conRespaldo<T>(pedir: (modelo: string) => Promise<T>): Promise<T> {
+  let ultimoError: any;
+  for (const modelo of ordenDePrueba(modeloActual)) {
+    try {
+      return await pedir(modelo);
+    } catch (err) {
+      ultimoError = err;
+      if (!convieneOtroModelo(err)) throw err;
+      const estado = Number((err as any)?.status ?? 0);
+      enfriarModelo(modelo, estado === 404 ? 60 * 60 * 1000 : 60 * 1000);
+    }
+  }
+  throw ultimoError;
+}
+
+// Investigación a fondo y dibujos (herramientas investigar_a_fondo y dibujar)
+conectarIA({
+  investigarAFondo: (tema) => conRespaldo((modelo) => investigarAFondo(ai, modelo, tema)),
+  dibujar: (descripcion) =>
+    conRespaldo(async (modelo) => {
+      const r = await ai.models.generateContent({ model: modelo, contents: pedidoDeDibujo(descripcion) });
+      return limpiarSvg(r.text ?? "");
+    }),
 });
 
 /** Envía al navegador el resultado del agente y lo anota en el registro. */
@@ -342,6 +377,38 @@ app.get("/api/pizarra", (_req, res) => {
 app.delete("/api/pizarra", (_req, res) => {
   registrar("PIZARRA", "Pizarra borrada desde la interfaz.");
   res.json(borrarPizarra());
+});
+
+// Notas (panel "Notas")
+app.get("/api/notas", (_req, res) => {
+  res.json({ notas: leerNotas(), actualizada: notasActualizadas() });
+});
+
+app.post("/api/notas", (req, res) => {
+  const texto = req.body?.texto;
+  const titulo = req.body?.titulo;
+  if (typeof texto !== "string" || !texto.trim()) return res.status(400).json({ error: "Escribe algo para anotar." });
+  if (texto.length > MAX_LARGO_NOTA) return res.status(400).json({ error: "La nota es demasiado larga." });
+  const n = agregarNota(texto, typeof titulo === "string" ? titulo : undefined);
+  registrar("NOTAS", `Nota agregada a mano: ${n.titulo}`);
+  res.json({ notas: leerNotas(), actualizada: notasActualizadas() });
+});
+
+app.delete("/api/notas/:id", (req, res) => {
+  const n = borrarNota(req.params.id);
+  if (n) registrar("NOTAS", `Nota borrada: ${n.titulo}`);
+  res.json({ notas: leerNotas(), actualizada: notasActualizadas() });
+});
+
+// Dibujos hechos a mano en la pizarra → Documentos\Jarvis\Dibujos
+app.post("/api/dibujos", express.json({ limit: "12mb" }), async (req, res) => {
+  try {
+    const ruta = await guardarDibujoPng(req.body?.png);
+    registrar("ACCION", `Dibujo guardado en ${ruta}`);
+    res.json({ ruta });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "No pude guardar el dibujo." });
+  }
 });
 
 // ---------------------------------------------------------------- aplausos
