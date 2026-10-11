@@ -42,7 +42,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.0.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.1.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -126,6 +126,12 @@
     AFLOJA las reglas para aceptarlas (nunca las endurece; tope 450 ms, agudos mín 0.08). Guardado en
     `config.calibracion`; "Reiniciar" vuelve a fábrica. Los "Ignorado" ahora muestran "· N ms, agudos X" para diagnosticar.
     Siguen pasando los 13 casos sintéticos + aplausos "de laptop" (ruido filtrado a 2.5 kHz con eco 60–150 ms).
+  - PRUEBA REAL v2.0: "Aplauso (fuerza 0.05)" e "Ignorado: golpe grave · 84 ms, agudos 0.22", volumen en reposo 0%,
+    sensibilidad 10; además apretó "Reiniciar" en vez de "Enseñarle". → su micrófono capta MUY bajito y muy filtrado.
+    v2.1: `umbralPorSensibilidad` = 0.25·0.7^(s-1) (s=10 → 0.01), `CALIBRACION_INICIAL.minAgudos` = 0.15; al enseñar
+    escucha con sensibilidad 10 y al terminar fija la sensibilidad más baja cuyo umbral ≤ 0.6 × el aplauso más suave
+    (evento "calibrado" trae `sensibilidad`). Probado: aplausos de 0.035–0.05 → aprende, pone sens 7 y activa.
+    Recomendado al usuario: subir "Volumen de entrada" del micrófono en Windows al 100%.
   - En su registro se vio 429 en gemini-3.8-flash y 3.5-flash (límite gratuito) y respondió el respaldo: funciona.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.

@@ -111,8 +111,9 @@ export class OidoDeJarvis {
     else if (e.tipo === "aprendido") this.anotar(`Aprendiendo: aplauso ${e.numero} de 3`);
     else if (e.tipo === "calibrado") {
       this.config.calibracion = { maxLargo: e.maxLargo, minAgudos: e.minAgudos };
+      this.config.sensibilidad = e.sensibilidad;
       this.guardarConfig();
-      this.anotar("¡Listo! Ya aprendí cómo suenan tus aplausos");
+      this.anotar(`¡Listo! Ya aprendí cómo suenan tus aplausos (sensibilidad ${e.sensibilidad})`);
       this.registrar("APLAUSOS", `Aprendí los aplausos del usuario (hasta ${e.maxLargo} ms, agudos ≥ ${e.minAgudos}).`);
     } else {
       this.activaciones++;

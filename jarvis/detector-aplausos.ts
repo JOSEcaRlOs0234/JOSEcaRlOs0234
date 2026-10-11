@@ -17,7 +17,7 @@ export type EventoAplauso =
   | { tipo: "ignorado"; motivo: string }
   | { tipo: "activado" }
   | { tipo: "aprendido"; numero: number }
-  | { tipo: "calibrado"; maxLargo: number; minAgudos: number };
+  | { tipo: "calibrado"; maxLargo: number; minAgudos: number; sensibilidad: number };
 
 /** Lo que el detector aprendió de los aplausos del usuario. */
 export interface Calibracion {
@@ -25,7 +25,8 @@ export interface Calibracion {
   minAgudos: number; // qué tan "agudo" debe sonar como mínimo
 }
 
-export const CALIBRACION_INICIAL: Calibracion = { maxLargo: 250, minAgudos: 0.3 };
+// En una laptop real los aplausos midieron ~84 ms y agudos 0.22; portazos y golpes graves miden ~0.05–0.10
+export const CALIBRACION_INICIAL: Calibracion = { maxLargo: 250, minAgudos: 0.15 };
 const APLAUSOS_PARA_APRENDER = 3;
 
 const MS_POR_MUESTRA = 1000 / 16000;
@@ -33,13 +34,14 @@ const MS_POR_MUESTRA = 1000 / 16000;
 /** Sensibilidad 1 (poco sensible) a 10 (muy sensible) → volumen mínimo de un aplauso (0 a 1). */
 export function umbralPorSensibilidad(sensibilidad: number): number {
   const s = Math.min(10, Math.max(1, Math.round(sensibilidad)));
-  return 0.35 * Math.pow(0.78, s - 1); // s=1: 0.35 · s=5: 0.13 · s=10: 0.04
+  // Los micrófonos de laptop pueden captar muy bajito (aplausos de 0.05), por eso el 10 llega a 0.01
+  return 0.25 * Math.pow(0.7, s - 1); // s=1: 0.25 · s=5: 0.06 · s=10: 0.01
 }
 
 export class DetectorAplausos {
   sensibilidad = 5;
   calibracion: Calibracion = { ...CALIBRACION_INICIAL };
-  private aprendidos: { largo: number; agudos: number }[] | null = null;
+  private aprendidos: { largo: number; agudos: number; pico: number }[] | null = null;
 
   private fondo = 0.003; // ruido de fondo del cuarto (se ajusta solo)
   private previos: number[] = []; // volumen de los últimos pedacitos (para ver si subió de golpe)
@@ -71,7 +73,17 @@ export class DetectorAplausos {
     const minAgudos =
       Math.round(Math.max(0.08, Math.min(CALIBRACION_INICIAL.minAgudos, agudosAprendidos)) * 100) / 100;
     this.calibracion = { maxLargo, minAgudos };
-    this.avisar({ tipo: "calibrado", maxLargo, minAgudos });
+    // Sensibilidad: la más baja con la que el aplauso más suave todavía pasa con margen (pico × 0.6)
+    const picoMin = Math.min(...lista.map((x) => x.pico));
+    let sensibilidad = 10;
+    for (let s = 1; s <= 10; s++) {
+      if (umbralPorSensibilidad(s) <= picoMin * 0.6) {
+        sensibilidad = s;
+        break;
+      }
+    }
+    this.sensibilidad = sensibilidad;
+    this.avisar({ tipo: "calibrado", maxLargo, minAgudos, sensibilidad });
   }
 
   /** Pausa la detección (por ejemplo mientras Jarvis habla). */
@@ -104,7 +116,8 @@ export class DetectorAplausos {
 
     const duracion = n * MS_POR_MUESTRA;
     const pausado = ahora < this.pausaHasta;
-    const umbral = Math.max(umbralPorSensibilidad(this.sensibilidad), this.fondo * 12);
+    // Mientras aprende, escuchar con la máxima sensibilidad para no perder ningún aplauso
+    const umbral = Math.max(umbralPorSensibilidad(this.aprendidos ? 10 : this.sensibilidad), this.fondo * 12);
 
     if (this.evento) {
       // Hay un sonido fuerte en curso: ver cuánto dura
@@ -144,7 +157,7 @@ export class DetectorAplausos {
     // Modo "enseñarle mis aplausos": guardar cómo suena cada golpe, sin decidir nada
     if (this.aprendidos) {
       if (largo <= 600) {
-        this.aprendidos.push({ largo, agudos: agudosPromedio });
+        this.aprendidos.push({ largo, agudos: agudosPromedio, pico: e.pico });
         this.avisar({ tipo: "aprendido", numero: this.aprendidos.length });
       }
       if (this.aprendidos.length >= APLAUSOS_PARA_APRENDER) this.terminarAprendizaje();
