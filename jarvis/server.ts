@@ -540,7 +540,19 @@ app.get("/canva/callback", async (req, res) => {
   }
   const codigo = typeof req.query.code === "string" ? req.query.code : "";
   const estado = typeof req.query.state === "string" ? req.query.state : "";
-  if (!codigo) return pagina("No se conectó", "Canva no dio permiso. Puedes cerrar esta ventana e intentarlo otra vez.");
+  if (!codigo) {
+    // Canva explica por qué en ?error=...&error_description=...
+    const motivo = [req.query.error, req.query.error_description]
+      .filter((v): v is string => typeof v === "string" && !!v)
+      .join(": ")
+      .replace(/[<>&]/g, "")
+      .slice(0, 300);
+    registrar("CANVA", `Canva no dio permiso${motivo ? ` (${motivo})` : ""}.`);
+    return pagina(
+      "No se conectó",
+      `Canva no dio permiso. Puedes cerrar esta ventana e intentarlo otra vez.${motivo ? `<br><br><small>Motivo que dio Canva: ${motivo}</small>` : ""}`
+    );
+  }
   try {
     const nombre = await terminarConexion(codigo, estado);
     registrar("CANVA", `Canva conectado${nombre ? ` (${nombre})` : ""}.`);
