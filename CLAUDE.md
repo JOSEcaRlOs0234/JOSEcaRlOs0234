@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.9.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.10.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -273,6 +273,19 @@
   inlineData) la analiza con `pedidoDeVista` (leer texto, resolver ejercicios, no identificar personas por la cara).
   `guardar` → Documentos\Jarvis\Fotos. La ventana muestra "📷 Lo que vio Jarvis" 6 s. Probado con cámara falsa de
   Chromium (Playwright) y pruebas de camara.ts; NO con cámara real ni Gemini real.
+- v2.10 MODO CLASE (pedido: "que escuche la clase, se silencie hasta que yo le diga y genere un Word con el resumen";
+  "solo agrega eso"): `clase.ts` + App.tsx. Herramienta `modo_clase` {accion iniciar|terminar, materia} (iniciar = normal,
+  tipo recordable "clase"; terminar = libre) y botón "Modo clase" junto a Notas/Pizarra (pide la materia). Estado en el
+  latido (`clase` en GET /api/aplausos). La VENTANA graba (`GrabadoraClase`: getUserMedia con AGC → AudioContext 16 kHz →
+  ScriptProcessor → WAV) y cada 180 s manda `POST /api/clase/audio?id&n&inicio` (raw audio/wav, límite 30 MB); el servidor
+  guarda el WAV temporal en datos/clases, lo transcribe en cola con Gemini (inlineData audio/wav, `PEDIDO_TRANSCRIPCION`)
+  y BORRA el audio; al terminar reintenta los fallidos (4 vueltas, 30 s), pide el resumen JSON (`ESQUEMA_RESUMEN`,
+  responseJsonSchema, prefiere Pro) y arma el .docx con `docx` (Resumen, Temas, Conceptos, Fórmulas en Unicode, Tareas,
+  Preguntas de repaso, Transcripción completa con [mm:ss]) en Documentos\Jarvis\Clases, lo abre (`abrirRuta`) y avisa.
+  Silencio: `hablar()` no habla mientras `claseEscuchandoRef`; se ignoran despertar y voz de avisos; un SpeechRecognition
+  continuo solo busca `ORDEN_TERMINAR` ("Jarvis, termina la clase / ya puedes hablar..."). Wake Lock de pantalla. Se
+  termina sola a las 4 h. Probado: Word con IA simulada (convertido a PDF y revisado), y en Playwright con micrófono falso
+  (banner, WAV de 5 s enviado, terminar). NO probado con Gemini real ni micrófono real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

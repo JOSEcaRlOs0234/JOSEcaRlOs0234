@@ -12,6 +12,7 @@ import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
 import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
+import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
 import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
 import {
   buscarDisenos,
@@ -166,6 +167,20 @@ export const DECLARACIONES = [
     name: "ver_estado_laptop",
     description: "Dice la batería (y si está cargando), a qué red Wi-Fi está conectada, el brillo y si está en modo oscuro.",
     parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "modo_clase",
+    description:
+      "Modo clase: 'iniciar' = Jarvis escucha y transcribe la clase en silencio (sin contestar) hasta que el usuario diga " +
+      "que terminó; 'terminar' = deja de escuchar y hace un documento de Word con el resumen y la transcripción.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        accion: { type: "string", enum: ["iniciar", "terminar"] },
+        materia: { type: "string", description: "Materia o tema de la clase, si lo dijo (opcional)" },
+      },
+      required: ["accion"],
+    },
   },
   {
     name: "mirar_con_camara",
@@ -812,6 +827,33 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           return await win.estadoLaptop();
         },
       };
+
+    case "modo_clase": {
+      if (args.accion === "terminar") {
+        return {
+          nivel: "libre",
+          tipo: "clase",
+          descripcion: "Terminar el modo clase y hacer el resumen",
+          ejecutar: async () => {
+            if (!claseActiva()) return { resultado: "No hay ninguna clase escuchándose ahora." };
+            void terminarClase();
+            return { resultado: "Dejé de escuchar. El resumen en Word estará listo en uno o dos minutos y se abrirá solo." };
+          },
+        };
+      }
+      const materia = typeof args.materia === "string" ? args.materia.slice(0, 80) : "";
+      return {
+        // Graba el micrófono durante la clase: pide permiso (se puede marcar "no volver a preguntar")
+        nivel: "normal",
+        tipo: "clase",
+        descripcion: `Escuchar la clase${materia ? ` de ${materia}` : ""} con el micrófono (modo clase)`,
+        ejecutar: async () => {
+          if (claseActiva()) return { resultado: "Ya estoy escuchando la clase." };
+          iniciarClase(materia);
+          return { resultado: "Modo clase activado. Di una frase muy corta y quédate callado." };
+        },
+      };
+    }
 
     case "mirar_con_camara": {
       const pregunta = texto(args.pregunta, "pregunta", 500);
@@ -1521,4 +1563,5 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   canva: "Usar tu cuenta de Canva",
   configuracion: "Cambiar la configuración (brillo, modo oscuro, Bluetooth...)",
   camara: "Usar la cámara para ver",
+  clase: "Escuchar clases (modo clase)",
 };

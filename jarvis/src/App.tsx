@@ -27,6 +27,7 @@ import {
   RotateCcw,
   PenLine,
   StickyNote,
+  GraduationCap,
   Settings,
   Palette,
 } from "lucide-react";
@@ -75,6 +76,16 @@ interface EstadoAplausos {
   activacion: number;
   avisos?: { id: number; texto: string }[];
   pedirFoto?: number;
+  clase?: {
+    id: string;
+    materia: string;
+    inicio: number;
+    estado: "escuchando" | "procesando" | "listo" | "error";
+    trozos: number;
+    pendientes: number;
+    archivo?: string;
+    error?: string;
+  } | null;
 }
 
 const horaActual = () =>
@@ -187,6 +198,114 @@ async function tomarFotoConCamara(): Promise<string> {
     flujo.getTracks().forEach((t) => t.stop());
   }
 }
+
+// ---------------------------------------------------------------- modo clase
+
+const SEGUNDOS_POR_TROZO = 180; // cada 3 minutos se manda un pedazo de audio
+const MUESTRAS = 16000;
+
+/** Convierte audio (16 kHz, mono) en un archivo WAV. */
+function aWav(partes: Int16Array[]): Blob {
+  const total = partes.reduce((n, p) => n + p.length, 0);
+  const buf = new ArrayBuffer(44 + total * 2);
+  const v = new DataView(buf);
+  const txt = (o: number, t: string) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  txt(0, "RIFF");
+  v.setUint32(4, 36 + total * 2, true);
+  txt(8, "WAVE");
+  txt(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, MUESTRAS, true);
+  v.setUint32(28, MUESTRAS * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  txt(36, "data");
+  v.setUint32(40, total * 2, true);
+  let o = 44;
+  for (const p of partes) for (let i = 0; i < p.length; i++, o += 2) v.setInt16(o, p[i], true);
+  return new Blob([buf], { type: "audio/wav" });
+}
+
+/** Graba el micrófono durante la clase y manda pedazos de 3 minutos al servidor. */
+class GrabadoraClase {
+  private flujo: MediaStream | null = null;
+  private ctx: AudioContext | null = null;
+  private nodo: ScriptProcessorNode | null = null;
+  private partes: Int16Array[] = [];
+  private enTrozo = 0;
+  private n = 0;
+  private inicioTrozoSeg = 0;
+  private bloqueo: any = null;
+  constructor(readonly id: string, private inicioClase: number) {}
+
+  async empezar(): Promise<void> {
+    this.flujo = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+    });
+    this.ctx = new AudioContext({ sampleRate: MUESTRAS });
+    const fuente = this.ctx.createMediaStreamSource(this.flujo);
+    this.nodo = this.ctx.createScriptProcessor(4096, 1, 1);
+    this.nodo.onaudioprocess = (e) => {
+      const f = e.inputBuffer.getChannelData(0);
+      const p = new Int16Array(f.length);
+      for (let i = 0; i < f.length; i++) p[i] = Math.max(-32768, Math.min(32767, Math.round(f[i] * 32767)));
+      this.partes.push(p);
+      this.enTrozo += p.length;
+      if (this.enTrozo >= MUESTRAS * SEGUNDOS_POR_TROZO) this.enviar();
+    };
+    fuente.connect(this.nodo);
+    this.nodo.connect(this.ctx.destination);
+    this.inicioTrozoSeg = Math.round((Date.now() - this.inicioClase) / 1000);
+    // Que la pantalla no se apague mientras escucha (si el navegador lo permite)
+    try {
+      this.bloqueo = await (navigator as any).wakeLock?.request("screen");
+    } catch {
+      // No pasa nada
+    }
+  }
+
+  private enviar(): void {
+    if (this.enTrozo < MUESTRAS) return; // menos de 1 segundo: no vale la pena
+    const wav = aWav(this.partes);
+    const n = ++this.n;
+    const inicio = this.inicioTrozoSeg;
+    this.partes = [];
+    this.inicioTrozoSeg += Math.round(this.enTrozo / MUESTRAS);
+    this.enTrozo = 0;
+    const mandar = async (intento: number): Promise<void> => {
+      try {
+        const r = await fetch(`/api/clase/audio?id=${encodeURIComponent(this.id)}&n=${n}&inicio=${inicio}`, {
+          method: "POST",
+          headers: { "Content-Type": "audio/wav" },
+          body: wav,
+        });
+        if (!r.ok && r.status >= 500 && intento < 3) throw new Error();
+      } catch {
+        if (intento < 3) {
+          await new Promise((res) => setTimeout(res, 3000 * intento));
+          return mandar(intento + 1);
+        }
+      }
+    };
+    void mandar(1);
+  }
+
+  detener(): void {
+    this.enviar();
+    this.nodo?.disconnect();
+    this.ctx?.close().catch(() => {});
+    this.flujo?.getTracks().forEach((t) => t.stop());
+    this.bloqueo?.release?.().catch?.(() => {});
+    this.nodo = null;
+    this.ctx = null;
+    this.flujo = null;
+  }
+}
+
+/** ¿Lo que se oyó es la orden de terminar la clase? ("Jarvis, termina la clase", "Jarvis, ya puedes hablar"...) */
+const ORDEN_TERMINAR = /\b(jarvis|yarvis|jarbis)\b.*\b(termina|terminar|termino|terminamos|fin de la clase|acabo|se acabo|deja de escuchar|ya puedes hablar|despierta)\b/;
 
 /** Tono corto "bip-bip" de que Jarvis te está escuchando. */
 function tono(): void {
@@ -321,6 +440,12 @@ export default function App() {
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
   const ultimaActivacionRef = useRef<number | null>(null);
   const ultimoAvisoRef = useRef<number | null>(null);
+  // Modo clase: grabadora, escucha de la orden "termina la clase" y aviso cuando el Word está listo
+  const claseEscuchandoRef = useRef(false);
+  const grabadoraRef = useRef<GrabadoraClase | null>(null);
+  const oyenteClaseRef = useRef<any>(null);
+  const claseAvisadaRef = useRef("");
+
   // Cámara: última foto pedida por Jarvis y la miniatura que se muestra un momento
   const ultimaFotoRef = useRef(0);
   const [fotoReciente, setFotoReciente] = useState<string | null>(null);
@@ -700,6 +825,11 @@ export default function App() {
 
   /** Dice un texto en voz alta. `alTerminar` se llama cuando termina de hablar (para seguir escuchando). */
   const hablar = useCallback((texto: string, alTerminar?: () => void) => {
+    // En modo clase Jarvis se queda callado
+    if (claseEscuchandoRef.current) {
+      setEstado("reposo");
+      return;
+    }
     const terminar = () => {
       setEstado((prev) => (prev === "hablando" ? "reposo" : prev));
       alTerminar?.();
@@ -1186,7 +1316,9 @@ export default function App() {
         setAplausos(datos);
         if (ultimaActivacionRef.current !== null && datos.activacion > ultimaActivacionRef.current) {
           // Dijeron "Jarvis" (o aplaudieron) con esta ventana a la vista: bip y a escuchar
-          if (document.visibilityState === "visible" && !enviandoRef.current) despertarRef.current(false);
+          if (document.visibilityState === "visible" && !enviandoRef.current && !claseEscuchandoRef.current) {
+            despertarRef.current(false);
+          }
         }
         ultimaActivacionRef.current = datos.activacion;
 
@@ -1236,7 +1368,9 @@ export default function App() {
         for (const a of avisos.filter((x) => x.id > (ultimoAvisoRef.current ?? 0))) {
           addMensaje("jarvis", `⏰ ${a.texto}`, true);
           showNotification(a.texto, "warning");
-          if (document.visibilityState === "visible" && a.id > yaDichoHasta) hablarRef.current(a.texto);
+          if (document.visibilityState === "visible" && a.id > yaDichoHasta && !claseEscuchandoRef.current) {
+            hablarRef.current(a.texto);
+          }
         }
         ultimoAvisoRef.current = Math.max(ultimoAvisoRef.current ?? 0, maxId);
       } catch {
@@ -1251,6 +1385,108 @@ export default function App() {
       clearInterval(id);
     };
   }, [addMensaje, showNotification]);
+
+  // ---------------------------------------------------------------- modo clase
+
+  const clase = aplausos?.clase ?? null;
+
+  /** Escucha (sin contestar) solo la orden "Jarvis, termina la clase". Se reinicia sola si el navegador la corta. */
+  const escucharOrdenDeTerminar = useCallback(() => {
+    const Reconocimiento = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Reconocimiento || oyenteClaseRef.current) return;
+    const rec = new Reconocimiento();
+    rec.lang = "es-MX";
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.onresult = (e: any) => {
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (ORDEN_TERMINAR.test(normalizar(e.results[i][0].transcript))) {
+          fetch("/api/clase/terminar", { method: "POST" }).catch(() => {});
+          return;
+        }
+      }
+    };
+    rec.onend = () => {
+      oyenteClaseRef.current = null;
+      if (claseEscuchandoRef.current) window.setTimeout(() => escucharOrdenDeTerminarRef.current(), 400);
+    };
+    rec.onerror = () => {};
+    oyenteClaseRef.current = rec;
+    try {
+      rec.start();
+    } catch {
+      oyenteClaseRef.current = null;
+    }
+  }, []);
+  const escucharOrdenDeTerminarRef = useRef(escucharOrdenDeTerminar);
+  escucharOrdenDeTerminarRef.current = escucharOrdenDeTerminar;
+
+  // Prender o apagar la grabación según lo que diga el servidor (la clase se puede iniciar por chat, voz o botón)
+  useEffect(() => {
+    const escuchando = clase?.estado === "escuchando";
+    if (escuchando && clase && grabadoraRef.current?.id !== clase.id) {
+      claseEscuchandoRef.current = true;
+      fijarConversacion(false);
+      detenerDictado();
+      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+      const g = new GrabadoraClase(clase.id, clase.inicio);
+      grabadoraRef.current = g;
+      g.empezar()
+        .then(() => escucharOrdenDeTerminar())
+        .catch((err) => {
+          grabadoraRef.current = null;
+          showNotification(
+            err?.name === "NotAllowedError"
+              ? "No hay permiso para usar el micrófono en la ventana de Jarvis."
+              : "No pude usar el micrófono para escuchar la clase.",
+            "error"
+          );
+          fetch("/api/clase/terminar", { method: "POST" }).catch(() => {});
+        });
+    } else if (!escuchando && grabadoraRef.current) {
+      claseEscuchandoRef.current = false;
+      grabadoraRef.current.detener();
+      grabadoraRef.current = null;
+      try {
+        oyenteClaseRef.current?.stop();
+      } catch {
+        // Ya estaba detenido
+      }
+    }
+    if (clase && (clase.estado === "listo" || clase.estado === "error") && claseAvisadaRef.current !== clase.id) {
+      claseAvisadaRef.current = clase.id;
+      if (clase.estado === "listo") {
+        const t = "Listo, señor. Su resumen de la clase ya está en Word, en Documentos, Jarvis, Clases. Se lo abrí.";
+        addMensaje("jarvis", `🎓 ${t}`, true);
+        showNotification("Resumen de la clase listo (Documentos\\Jarvis\\Clases).", "info");
+        hablar(t);
+      } else {
+        const t = `No pude hacer el resumen de la clase: ${clase.error ?? "error desconocido"}`;
+        addMensaje("jarvis", `🎓 ${t}`, true);
+        showNotification(t, "error");
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clase?.id, clase?.estado]);
+
+  const empezarClase = async () => {
+    const materia = window.prompt("¿De qué materia es la clase? (puedes dejarlo vacío)", "") ?? null;
+    if (materia === null) return;
+    try {
+      await fetch("/api/clase/iniciar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ materia }),
+      });
+      showNotification("🎓 Modo clase: escuchando. Para terminar di \"Jarvis, termina la clase\".", "info");
+    } catch {
+      showNotification("No pude iniciar el modo clase.", "error");
+    }
+  };
+
+  const terminarClaseManual = () => {
+    fetch("/api/clase/terminar", { method: "POST" }).catch(() => {});
+  };
 
   // Sonido de entrada al abrir la ventana (no cuando se abre sola por un recordatorio: ese lo está diciendo Windows)
   useEffect(() => {
@@ -1993,8 +2229,45 @@ export default function App() {
               onCopiar={copiarNota}
             />
           )}
+          {clase && (clase.estado === "escuchando" || clase.estado === "procesando") && (
+            <div className="absolute top-2 left-2 z-30 flex items-center gap-2 px-3 py-1.5 border border-[#ff3355]/60 bg-[#1a0610]/90 font-hud-mono text-[11px] text-[#ffd0d8] shadow-[0_0_16px_rgba(255,51,85,0.3)]">
+              <GraduationCap className="w-4 h-4 text-[#ff5c7a]" />
+              {clase.estado === "escuchando" ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-[#ff3355] animate-pulse" />
+                  <span>
+                    MODO CLASE · {clase.materia} ·{" "}
+                    {(() => {
+                      const s = Math.max(0, Math.floor((Date.now() - clase.inicio) / 1000));
+                      return `${Math.floor(s / 3600) ? `${Math.floor(s / 3600)}:` : ""}${String(Math.floor(s / 60) % 60).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+                    })()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={terminarClaseManual}
+                    className="ml-1 px-2 py-0.5 border border-[#ff5c7a] text-[#ff5c7a] hover:bg-[#ff5c7a]/20 cursor-pointer"
+                    title='También puedes decir "Jarvis, termina la clase"'
+                  >
+                    Terminar clase
+                  </button>
+                </>
+              ) : (
+                <span>Haciendo el resumen de la clase en Word...{clase.pendientes ? ` (faltan ${clase.pendientes} partes)` : ""}</span>
+              )}
+            </div>
+          )}
           {!pizarraAbierta && !notasAbiertas && (
             <div className="absolute top-2 right-2 z-20 flex gap-1.5">
+              {!(clase && (clase.estado === "escuchando" || clase.estado === "procesando")) && (
+                <button
+                  type="button"
+                  onClick={empezarClase}
+                  className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#ff5c7a]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#ff5c7a]/15 cursor-pointer flex items-center gap-1"
+                  title="Escuchar la clase en silencio y al final hacer un resumen en Word"
+                >
+                  <GraduationCap className="w-3.5 h-3.5" /> Modo clase
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => setNotasAbiertas(true)}

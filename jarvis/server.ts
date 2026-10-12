@@ -40,6 +40,18 @@ import { buscarEnInternet, claudeConfigurado, investigarAFondo } from "./consult
 import { agregarNota, borrarNota, leerNotas, MAX_LARGO_NOTA, notasActualizadas } from "./notas.ts";
 import { guardarDibujoPng, limpiarSvg, pedidoDeDibujo, pedidoDeRevision, problemasDeTexto } from "./dibujos.ts";
 import { guardarEnHistorial } from "./historial.ts";
+import {
+  claseActiva,
+  conectarIAClase,
+  ESQUEMA_RESUMEN,
+  estadoClase,
+  iniciarClase,
+  normalizarResumen,
+  PEDIDO_TRANSCRIPCION,
+  pedidoDeResumen,
+  recibirAudio,
+  terminarClase,
+} from "./clase.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
 import {
@@ -55,7 +67,7 @@ import { correoConfigurado, correoValido, explicarErrorCorreo, probarCuenta, usu
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
 import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
-import { programarEncendido, tocarSonido } from "./windows.ts";
+import { abrirRuta, programarEncendido, tocarSonido } from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { enfriarModelo, guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -117,6 +129,9 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Configuración de Windows: cambiar_brillo, modo_oscuro, wifi_bluetooth, ver_estado_laptop (batería, red, brillo) y
   abrir_configuracion para todo lo demás (abre la sección para que el usuario la vea). Nunca digas que algo cambió si
   la herramienta dio error.
+- MODO CLASE: si el usuario dice "modo clase", "escucha la clase", "graba la clase", usa modo_clase con accion
+  "iniciar" (y la materia si la dice) y contesta en UNA frase corta; después te quedas callado escuchando. Cuando diga
+  que terminó la clase, usa modo_clase "terminar": se hace un Word con el resumen en Documentos\\Jarvis\\Clases.
 - Cámara: si el usuario dice "mira", "¿qué ves?", "lee esto", "¿qué tengo en la mano?" o te enseña algo, usa
   mirar_con_camara con su pregunta y contesta según lo que se ve. Si pide "tómame una foto", usa guardar=true.
 - FÓRMULAS: revisa siempre que sean correctas (signos, exponentes, unidades). En la pizarra y en las notas escríbelas
@@ -161,7 +176,9 @@ app.disable("x-powered-by");
 // Los dibujos hechos a mano (imágenes) pueden pesar más; esa ruta tiene su propio límite
 const leerJson = express.json({ limit: "1mb" });
 app.use((req, res, next) =>
-  req.path === "/api/dibujos" || req.path === "/api/camara/foto" ? next() : leerJson(req, res, next)
+  req.path === "/api/dibujos" || req.path === "/api/camara/foto" || req.path === "/api/clase/audio"
+    ? next()
+    : leerJson(req, res, next)
 );
 
 // Seguridad: solo aceptar peticiones que vengan de la propia interfaz de Jarvis.
@@ -645,6 +662,64 @@ app.get("/canva/callback", async (req, res) => {
   }
 });
 
+// Modo clase: Gemini pasa el audio a texto y al final hace los apuntes
+conectarIAClase(
+  {
+    transcribir: (wav) =>
+      conRespaldo(async (modelo) => {
+        const r = await ai.models.generateContent({
+          model: modelo,
+          contents: [
+            { role: "user", parts: [{ inlineData: { mimeType: "audio/wav", data: wav.toString("base64") } }, { text: PEDIDO_TRANSCRIPCION }] },
+          ],
+        });
+        const texto = r.text?.trim() ?? "";
+        return /^\[silencio\]$/i.test(texto) ? "" : texto;
+      }),
+    resumir: (transcripcion, materia) =>
+      conRespaldo(async (modelo) => {
+        const r = await ai.models.generateContent({
+          model: modelo,
+          contents: pedidoDeResumen(transcripcion, materia),
+          config: { responseMimeType: "application/json", responseJsonSchema: ESQUEMA_RESUMEN },
+        });
+        return normalizarResumen(JSON.parse(r.text ?? "{}"), materia);
+      }, MODELO_DIBUJO, 30 * 60 * 1000),
+  },
+  (c) => {
+    if (c.estado === "listo" && c.archivo) {
+      registrar("CLASE", `Resumen de la clase listo: ${c.archivo}`);
+      void abrirRuta(c.archivo).catch(() => {});
+    } else {
+      registrar("ERROR", `Modo clase: ${c.error ?? "no se pudo hacer el resumen"}`);
+    }
+  }
+);
+
+app.post("/api/clase/iniciar", (req, res) => {
+  const c = iniciarClase(typeof req.body?.materia === "string" ? req.body.materia : "");
+  registrar("CLASE", `Modo clase iniciado (${c.materia}).`);
+  res.json(estadoClase());
+});
+
+app.post("/api/clase/terminar", (_req, res) => {
+  if (claseActiva()) {
+    registrar("CLASE", "Modo clase terminado; haciendo el resumen.");
+    void terminarClase();
+  }
+  res.json(estadoClase());
+});
+
+// Pedazos de audio de la clase (WAV); el id, número y segundo van en la dirección
+app.post("/api/clase/audio", express.raw({ type: "audio/wav", limit: "30mb" }), (req, res) => {
+  try {
+    recibirAudio(String(req.query.id ?? ""), Number(req.query.n), Number(req.query.inicio) || 0, req.body as Buffer);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Audio no válido." });
+  }
+});
+
 // Cámara: la ventana manda la foto que Jarvis pidió (o avisa que no pudo)
 app.post("/api/camara/foto", express.json({ limit: "12mb" }), (req, res) => {
   try {
@@ -741,6 +816,8 @@ app.get("/api/aplausos", (req, res) => {
     avisos,
     // Si Jarvis necesita ver, la ventana toma una foto con la cámara
     pedirFoto: fotoPedida(),
+    // Modo clase: la ventana graba mientras esté "escuchando"
+    clase: estadoClase(),
   });
 });
 

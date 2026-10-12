@@ -51,6 +51,12 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
   Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
 
+## Modo clase (versión 2.10)
+Dile "Jarvis, modo clase de Física" (o aprieta "Modo clase"). Jarvis escucha en silencio y no contesta nada. Cuando
+termine la clase di "Jarvis, termina la clase" (o aprieta "Terminar clase"). En uno o dos minutos se abre un Word con el
+resumen, temas, conceptos, fórmulas, tareas, preguntas de repaso y la transcripción, en Documentos\Jarvis\Clases.
+Deja la laptop conectada y con la ventana de Jarvis abierta (puede estar minimizada). El audio no se guarda.
+
 ## Cámara (versión 2.9)
 Dile "¿qué ves?", "¿qué tengo en la mano?", "lee esta hoja" o "tómame una foto". Jarvis pide permiso, toma UNA foto
 (la cámara se prende solo un segundo), te muestra lo que vio y te contesta. "Tómame una foto" la guarda en
