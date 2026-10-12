@@ -46,6 +46,11 @@ y Jarvis lo busca. No necesitas instalar ninguna base de datos.
 Pídele "escribe en la pizarra..." o "hazme una lista de...": aparece una pizarra sobre el reactor.
 Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba del reactor) la vuelve a abrir.
 
+## Fórmulas y Canva (versión 2.6)
+- Las fórmulas en la pizarra, el chat y las notas se ven como en un libro (no como código). En voz, Jarvis las dice con palabras.
+- Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
+  Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
+
 ## Correo de Gmail (versión 2.5)
 Panel "Correo (Gmail)": pon tu correo y una "contraseña de aplicación" (se crea en myaccount.google.com/apppasswords;
 necesitas tener activada la verificación en 2 pasos). Luego dile "¿tengo correos nuevos?", "léeme el correo de..." o

@@ -28,6 +28,7 @@ import {
   PenLine,
   StickyNote,
   Settings,
+  Palette,
 } from "lucide-react";
 import {
   CONFIG,
@@ -49,6 +50,7 @@ import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { NotasPanel, Nota } from "./components/NotasPanel";
+import { formulasEnPalabras, TextoConFormulas } from "./components/Formulas";
 import { umbralPorSensibilidad } from "../detector-aplausos.ts";
 
 interface EstadoAplausos {
@@ -266,6 +268,15 @@ export default function App() {
 
   // Cajón de Ajustes
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
+
+  // Canva
+  const [canva, setCanva] = useState<{ configurado: boolean; conectado: boolean; nombre: string }>({
+    configurado: false,
+    conectado: false,
+    nombre: "",
+  });
+  const [canvaLlaves, setCanvaLlaves] = useState({ clientId: "", clientSecret: "" });
+  const [canvaEsperando, setCanvaEsperando] = useState(false);
 
   // Notas
   const [notas, setNotas] = useState<Nota[]>([]);
@@ -488,6 +499,74 @@ export default function App() {
     }
   };
 
+  const cargarCanva = useCallback(async () => {
+    try {
+      const r = await fetch("/api/canva");
+      if (r.ok) {
+        const datos = await r.json();
+        setCanva(datos);
+        if (datos.conectado) setCanvaEsperando(false);
+      }
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+
+  const guardarLlavesCanva = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const r = await fetch("/api/canva/credenciales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(canvaLlaves),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setCanva(datos);
+      setCanvaLlaves({ clientId: "", clientSecret: "" });
+      showNotification("Llaves de Canva guardadas. Ahora aprieta \"Conectar con Canva\".", "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude guardar las llaves de Canva.", "error");
+    }
+  };
+
+  const conectarCanva = async () => {
+    try {
+      const r = await fetch("/api/canva/conectar", { method: "POST" });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      window.open(datos.url, "_blank", "noopener");
+      setCanvaEsperando(true);
+    } catch (err: any) {
+      showNotification(err?.message || "No pude abrir Canva.", "error");
+    }
+  };
+
+  const desconectarCanva = async () => {
+    if (!window.confirm("¿Desconectar tu cuenta de Canva de Jarvis?")) return;
+    try {
+      const r = await fetch("/api/canva", { method: "DELETE" });
+      if (r.ok) setCanva(await r.json());
+    } catch {
+      showNotification("No pude desconectar Canva.", "error");
+    }
+  };
+
+  // Mientras se espera que des permiso en Canva, revisar cada 3 segundos si ya quedó
+  useEffect(() => {
+    if (!canvaEsperando) return;
+    const id = window.setInterval(cargarCanva, 3000);
+    const fin = window.setTimeout(() => setCanvaEsperando(false), 10 * 60 * 1000);
+    return () => {
+      clearInterval(id);
+      clearTimeout(fin);
+    };
+  }, [canvaEsperando, cargarCanva]);
+
+  useEffect(() => {
+    if (ajustesAbiertos) cargarCanva();
+  }, [ajustesAbiertos, cargarCanva]);
+
   /** Guarda en Documentos\Jarvis\Dibujos lo que dibujaste a mano en la pizarra. */
   const guardarDibujo = async (png: string) => {
     try {
@@ -579,6 +658,8 @@ export default function App() {
       return;
     }
     window.speechSynthesis.cancel();
+    // Las fórmulas se dicen con palabras ("a entre b", "al cuadrado"), no con símbolos
+    texto = formulasEnPalabras(texto);
     const frase = new SpeechSynthesisUtterance(texto);
     frase.lang = "es-MX";
     frase.rate = 1;
@@ -1511,6 +1592,79 @@ export default function App() {
                 </form>
               </div>
 
+              {/* CANVA */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">Canva</h2>
+                  </div>
+                  <span className={`font-hud-mono text-[10px] ${canva.conectado ? "text-[#00f5a0]" : "text-[#68a8d8]"}`}>
+                    {canva.conectado ? "CONECTADO" : canvaEsperando ? "ESPERANDO PERMISO..." : "SIN CONECTAR"}
+                  </span>
+                </div>
+                {canva.conectado ? (
+                  <>
+                    <p className="text-[11px] font-hud-mono text-[#e2f8ff]">
+                      {canva.nombre ? `Cuenta: ${canva.nombre}` : "Cuenta conectada"}
+                    </p>
+                    <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                      Dile: &ldquo;haz una presentación en Canva sobre...&rdquo;, &ldquo;pasa el dibujo a Canva&rdquo; o
+                      &ldquo;descarga mi diseño de ... en PDF&rdquo;.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={desconectarCanva}
+                      className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
+                    >
+                      Desconectar
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {canva.configurado && (
+                      <button
+                        type="button"
+                        onClick={conectarCanva}
+                        className="px-2 py-1.5 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] hover:bg-[#00e5ff]/35 cursor-pointer"
+                      >
+                        {canvaEsperando ? "Volver a abrir Canva" : "Conectar con Canva"}
+                      </button>
+                    )}
+                    <form onSubmit={guardarLlavesCanva} className="flex flex-col gap-1.5">
+                      <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                        {canva.configurado
+                          ? "Llaves guardadas. Si necesitas cambiarlas, pégalas de nuevo:"
+                          : "Pega las llaves de tu integración (se crean en canva.com/developers):"}
+                      </p>
+                      <input
+                        type="text"
+                        value={canvaLlaves.clientId}
+                        onChange={(e) => setCanvaLlaves((l) => ({ ...l, clientId: e.target.value }))}
+                        placeholder="Client ID"
+                        autoComplete="off"
+                        className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                      />
+                      <input
+                        type="password"
+                        value={canvaLlaves.clientSecret}
+                        onChange={(e) => setCanvaLlaves((l) => ({ ...l, clientSecret: e.target.value }))}
+                        placeholder="Client secret"
+                        autoComplete="off"
+                        className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!canvaLlaves.clientId.trim() || !canvaLlaves.clientSecret.trim()}
+                        className="px-2 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/50 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer disabled:opacity-40"
+                      >
+                        Guardar llaves
+                      </button>
+                    </form>
+                  </>
+                )}
+              </div>
+
               {/* REGISTRO DE ACTIVIDAD */}
               <div className="hud-panel p-3 flex flex-col gap-2 h-72 shrink-0">
                 <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
@@ -1815,7 +1969,9 @@ export default function App() {
                       </span>
                       <span className="text-[#68a8d8]">{msg.timestamp}</span>
                     </div>
-                    <p className="leading-relaxed break-words whitespace-pre-wrap">{msg.texto}</p>
+                    <p className="leading-relaxed break-words whitespace-pre-wrap">
+                      <TextoConFormulas texto={msg.texto} />
+                    </p>
                   </div>
                 );
               })}

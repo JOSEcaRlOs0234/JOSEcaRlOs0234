@@ -10,7 +10,20 @@ import path from "path";
 import { fileURLToPath } from "url";
 import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
-import { borrarPizarra, dibujarEnPizarra, escribirPizarra, MAX_PIZARRA } from "./pizarra.ts";
+import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
+import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
+import {
+  buscarDisenos,
+  canvaConfigurado,
+  crearDiseno,
+  ErrorCanva,
+  estadoCanva,
+  explicarErrorCanva,
+  exportarDiseno,
+  obtenerDiseno,
+  subirImagen,
+  TIPOS_DISENO,
+} from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
 import type { Informe } from "./consultas.ts";
 import {
@@ -261,6 +274,50 @@ export const DECLARACIONES = [
         responder_a: { type: "number", description: "Id del correo al que se contesta (opcional)" },
       },
       required: ["texto"],
+    },
+  },
+  {
+    name: "canva_crear_diseno",
+    description:
+      "Crea un diseño nuevo en la cuenta de Canva del usuario (presentación, documento o pizarra) y lo abre en el " +
+      "navegador para editarlo. Puede llevar adentro el dibujo de la pizarra de Jarvis o el último dibujo hecho a mano. " +
+      "Canva no deja que Jarvis escriba textos dentro del diseño: eso lo hace el usuario (o la IA de Canva).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        tipo: { type: "string", enum: ["presentacion", "documento", "pizarra"] },
+        titulo: { type: "string" },
+        con_dibujo: { type: "string", enum: ["ninguno", "jarvis", "mio"], description: "jarvis = dibujo de la pizarra; mio = último dibujo a mano" },
+      },
+      required: ["tipo", "titulo"],
+    },
+  },
+  {
+    name: "canva_subir_dibujo",
+    description: "Sube a 'Subidos' de Canva el dibujo de la pizarra de Jarvis o el último dibujo hecho a mano.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { cual: { type: "string", enum: ["jarvis", "mio"] }, nombre: { type: "string" } },
+      required: ["cual"],
+    },
+  },
+  {
+    name: "canva_buscar_disenos",
+    description: "Busca los diseños del usuario en Canva (los más recientes primero). Devuelve título e id.",
+    parametersJsonSchema: { type: "object", properties: { buscar: { type: "string" } } },
+  },
+  {
+    name: "canva_abrir_diseno",
+    description: "Abre un diseño de Canva en el navegador para editarlo (usa canva_buscar_disenos para saber el id).",
+    parametersJsonSchema: { type: "object", properties: { id: { type: "string" } }, required: ["id"] },
+  },
+  {
+    name: "canva_descargar_diseno",
+    description: "Descarga un diseño de Canva como PDF o PNG a Documentos\\Jarvis\\Canva.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { id: { type: "string" }, formato: { type: "string", enum: ["pdf", "png"] } },
+      required: ["id"],
     },
   },
   {
@@ -923,6 +980,13 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       };
     }
 
+    case "canva_crear_diseno":
+    case "canva_subir_dibujo":
+    case "canva_buscar_disenos":
+    case "canva_abrir_diseno":
+    case "canva_descargar_diseno":
+      return await revisarCanva(nombre, args);
+
     case "programar_recordatorio": {
       const que = texto(args.texto, "texto", 300);
       let cuando: number;
@@ -1119,6 +1183,131 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
   }
 }
 
+// ------------------------------------------------------------------ Canva
+
+/** Saca el dibujo pedido como PNG: "jarvis" = el de la pizarra; "mio" = el último hecho a mano. */
+async function dibujoComoPng(cual: unknown): Promise<{ nombre: string; png: Buffer }> {
+  if (cual === "mio") {
+    const d = await ultimoDibujoAMano();
+    if (!d) throw new ErrorHerramienta("No hay dibujos hechos a mano guardados (se guardan con 'Guardar imagen' en la pizarra).");
+    return { nombre: d.nombre.replace(/\.png$/, ""), png: d.datos };
+  }
+  const p = leerPizarra();
+  if (!p.dibujo) throw new ErrorHerramienta("La pizarra no tiene un dibujo de Jarvis. Pídele primero que dibuje algo.");
+  try {
+    return { nombre: p.titulo || "Dibujo de Jarvis", png: await svgAPng(p.dibujo) };
+  } catch {
+    throw new ErrorHerramienta("No pude convertir el dibujo en imagen.");
+  }
+}
+
+const nombreArchivoSeguro = (t: string) =>
+  t.replace(/[<>:"/\\|?*\x00-\x1f]/g, "").replace(/\s+/g, " ").trim().slice(0, 80) || "diseño";
+
+async function revisarCanva(nombre: string, args: Record<string, unknown>): Promise<Revisada> {
+  if (!canvaConfigurado() || !estadoCanva().conectado) {
+    throw new ErrorHerramienta(explicarErrorCanva(new ErrorCanva("SIN_CANVA")));
+  }
+  const conErrores = async <T>(f: () => Promise<T>): Promise<T> => {
+    try {
+      return await f();
+    } catch (err) {
+      if (err instanceof ErrorHerramienta) throw err;
+      throw new ErrorHerramienta(explicarErrorCanva(err));
+    }
+  };
+  const base = { nivel: "normal" as const, tipo: "canva" };
+
+  if (nombre === "canva_crear_diseno") {
+    const tipo = typeof args.tipo === "string" && args.tipo in TIPOS_DISENO ? args.tipo : "presentacion";
+    const titulo = texto(args.titulo, "titulo", 200);
+    const conDibujo = args.con_dibujo === "jarvis" || args.con_dibujo === "mio" ? args.con_dibujo : "ninguno";
+    return {
+      ...base,
+      descripcion: `Crear en tu Canva: ${tipo} "${titulo}"${conDibujo === "ninguno" ? "" : " con el dibujo"} y abrirlo`,
+      ejecutar: () =>
+        conErrores(async () => {
+          let imagen: string | undefined;
+          if (conDibujo !== "ninguno") {
+            const d = await dibujoComoPng(conDibujo);
+            imagen = await subirImagen(d.nombre, d.png);
+          }
+          const diseno = await crearDiseno(tipo, titulo, imagen);
+          if (diseno.editar) await win.abrirUrl(diseno.editar);
+          return { resultado: `Listo: el diseño "${diseno.titulo}" ya está en Canva y se abrió en el navegador.`, id: diseno.id };
+        }),
+    };
+  }
+
+  if (nombre === "canva_subir_dibujo") {
+    const cual = args.cual === "mio" ? "mio" : "jarvis";
+    return {
+      ...base,
+      descripcion: `Subir a tu Canva ${cual === "mio" ? "tu último dibujo" : "el dibujo de la pizarra"}`,
+      ejecutar: () =>
+        conErrores(async () => {
+          const d = await dibujoComoPng(cual);
+          const nombreFinal = typeof args.nombre === "string" && args.nombre.trim() ? args.nombre.trim() : d.nombre;
+          await subirImagen(nombreFinal, d.png);
+          return { resultado: `Subí "${nombreFinal}" a tu Canva (está en "Subidos").` };
+        }),
+    };
+  }
+
+  if (nombre === "canva_buscar_disenos") {
+    const buscar = typeof args.buscar === "string" ? args.buscar.slice(0, 100) : undefined;
+    return {
+      ...base,
+      descripcion: buscar ? `Buscar en tu Canva: "${buscar}"` : "Ver tus diseños de Canva",
+      ejecutar: () =>
+        conErrores(async () => {
+          const lista = await buscarDisenos(buscar);
+          return lista.length
+            ? { disenos: lista.map(({ editar, ...d }) => d) }
+            : { resultado: "No encontré diseños con eso." };
+        }),
+    };
+  }
+
+  const id = texto(args.id, "id", 100);
+  if (nombre === "canva_abrir_diseno") {
+    return {
+      ...base,
+      descripcion: "Abrir un diseño de Canva en el navegador",
+      ejecutar: () =>
+        conErrores(async () => {
+          const d = await obtenerDiseno(id);
+          if (!d.editar) throw new ErrorHerramienta("Canva no dio la dirección del diseño.");
+          await win.abrirUrl(d.editar);
+          return { resultado: `Abrí "${d.titulo}".` };
+        }),
+    };
+  }
+
+  // canva_descargar_diseno
+  const formato = args.formato === "png" ? "png" : "pdf";
+  return {
+    ...base,
+    descripcion: `Descargar un diseño de Canva como ${formato.toUpperCase()} a Documentos\\Jarvis\\Canva`,
+    ejecutar: () =>
+      conErrores(async () => {
+        const d = await obtenerDiseno(id);
+        const urls = await exportarDiseno(id, formato);
+        const carpeta = path.join((await win.carpetasUsuario()).jarvis, "Canva");
+        await mkdir(carpeta, { recursive: true });
+        const guardados: string[] = [];
+        for (const [i, url] of urls.slice(0, 50).entries()) {
+          const r = await fetch(url);
+          if (!r.ok) throw new ErrorHerramienta("No pude descargar el archivo de Canva.");
+          const nombreArchivo = `${nombreArchivoSeguro(d.titulo)}${urls.length > 1 ? `-${i + 1}` : ""}.${formato}`;
+          await writeFile(path.join(carpeta, nombreArchivo), Buffer.from(await r.arrayBuffer()));
+          guardados.push(nombreArchivo);
+        }
+        return { resultado: `Guardé en Documentos\\Jarvis\\Canva: ${guardados.join(", ")}` };
+      }),
+  };
+}
+
 // Nombres legibles de los permisos que se pueden recordar
 export const NOMBRES_PERMISOS: Record<string, string> = {
   abrir_programa: "Abrir programas",
@@ -1130,4 +1319,5 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   abrir_archivos: "Abrir documentos, fotos y carpetas",
   consultar_claude: "Consultar a Claude (cuesta unos centavos)",
   correo_leer: "Revisar y leer tu correo",
+  canva: "Usar tu cuenta de Canva",
 };

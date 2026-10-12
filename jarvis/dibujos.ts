@@ -4,7 +4,7 @@
  *  - Lo que tú dibujas con el ratón en la pizarra se guarda como imagen PNG en Documentos\Jarvis\Dibujos.
  */
 
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "fs/promises";
 import path from "path";
 import { carpetasUsuario } from "./windows.ts";
 
@@ -57,6 +57,8 @@ const REGLAS_DE_DISEÑO =
   `- Textos en español con font-family="Segoe UI, Arial, sans-serif". Título arriba y centrado (tamaño 32 a 36, ` +
   `máximo 40 letras). Etiquetas de 16 a 22. Calcula el ancho de cada texto (cada letra mide ~0.55 × el tamaño) y ` +
   `asegúrate de que NO se salga del dibujo ni se encime con otras cosas. Si es largo, pártelo en varias líneas con <tspan>.\n` +
+  `- Fórmulas: escríbelas correctas y con símbolos normales, NUNCA en código ni LaTeX: usa ², ³, √, π, Δ, ±, ×, ÷, ≤, ≥, ` +
+  `→, ½, y para subíndices/superíndices usa <tspan baseline-shift="sub" font-size="70%"> o "super" (por ejemplo H₂O, x²).\n` +
   `- Usa text-anchor="middle" para textos centrados. Deja espacio entre elementos; nada amontonado.\n` +
   `- Si hay varias partes (por ejemplo varios modelos, etapas o tipos), acomódalas en una cuadrícula ordenada ` +
   `(columnas o filas), cada una con su recuadro, su dibujo y su nombre debajo.\n` +
@@ -122,6 +124,29 @@ export function problemasDeTexto(svg: string): string[] {
     if (problemas.length >= 12) break;
   }
   return problemas;
+}
+
+/** Convierte un dibujo SVG de Jarvis en imagen PNG (para subirlo a Canva). */
+export async function svgAPng(svg: string, ancho = 2400): Promise<Buffer> {
+  const { Resvg } = await import("@resvg/resvg-js");
+  const imagen = new Resvg(svg, {
+    fitTo: { mode: "width", value: ancho },
+    font: { loadSystemFonts: true, defaultFontFamily: "Segoe UI" },
+  }).render();
+  return imagen.asPng();
+}
+
+/** El dibujo hecho a mano más reciente (Documentos\Jarvis\Dibujos), o null si no hay. */
+export async function ultimoDibujoAMano(): Promise<{ nombre: string; datos: Buffer } | null> {
+  const carpeta = path.join((await carpetasUsuario()).jarvis, "Dibujos");
+  let nombres: string[] = [];
+  try {
+    nombres = (await readdir(carpeta)).filter((n) => /^dibujo-\d{8}-\d{6}\.png$/.test(n)).sort();
+  } catch {
+    return null;
+  }
+  const nombre = nombres.at(-1);
+  return nombre ? { nombre, datos: await readFile(path.join(carpeta, nombre)) } : null;
 }
 
 /** Guarda en Documentos\Jarvis\Dibujos un dibujo hecho a mano (imagen PNG en formato data URL). */

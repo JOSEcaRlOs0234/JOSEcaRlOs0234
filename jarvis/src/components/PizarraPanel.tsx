@@ -1,3 +1,4 @@
+import { conFormulas } from "./Formulas";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Brush, Copy, Eraser, Image as ImageIcon, PenLine, Save, Trash2, Undo2, X } from "lucide-react";
 
@@ -20,8 +21,13 @@ interface Props {
 
 const enlaceSvg = (svg: string) => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-/** Convierte **negritas** y [enlaces](https://...) en texto resaltado (sin usar HTML, para que sea seguro). */
+/** Fórmulas ($...$) bonitas, y en el resto del texto **negritas** y enlaces. */
 function conNegritas(texto: string): React.ReactNode[] {
+  return conFormulas(texto, (t) => negritasYEnlaces(t));
+}
+
+/** Convierte **negritas** y [enlaces](https://...) en texto resaltado (sin usar HTML, para que sea seguro). */
+function negritasYEnlaces(texto: string): React.ReactNode[] {
   return texto.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((parte, i) => {
     if (parte.startsWith("**") && parte.endsWith("**") && parte.length > 4) {
       return (
@@ -53,7 +59,11 @@ function conNegritas(texto: string): React.ReactNode[] {
 function Contenido({ texto }: { texto: string }) {
   return (
     <>
-      {texto.split("\n").map((linea, i) => {
+      {texto
+        // Las fórmulas grandes ($$...$$) que ocupan varias líneas se juntan en una
+        .replace(/\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]/g, (f) => f.replace(/\n/g, " "))
+        .split("\n")
+        .map((linea, i) => {
         const l = linea.trimEnd();
         if (!l.trim()) return <div key={i} className="h-3" />;
         const titulo = l.match(/^(#{1,3})\s+(.*)$/);

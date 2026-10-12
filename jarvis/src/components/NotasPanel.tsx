@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TextoConFormulas } from "./Formulas";
 import { Copy, Plus, Search, StickyNote, X } from "lucide-react";
 
 export interface Nota {
@@ -142,7 +143,9 @@ export const NotasPanel: React.FC<Props> = ({ notas, onCerrar, onAgregar, onBorr
                 </div>
               </div>
               {n.texto.trim() !== n.titulo.trim() && (
-                <p className="mt-1 text-[13px] text-[#e2f8ff] whitespace-pre-wrap break-words select-text">{n.texto}</p>
+                <p className="mt-1 text-[13px] text-[#e2f8ff] whitespace-pre-wrap break-words select-text">
+                  <TextoConFormulas texto={n.texto} />
+                </p>
               )}
             </div>
           ))

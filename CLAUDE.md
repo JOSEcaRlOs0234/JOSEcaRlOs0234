@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.5.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.6.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -224,6 +224,21 @@
   Notas/Pizarra | chat a toda la altura. Botón "Ajustes" en la barra superior abre un cajón lateral (`ajustesAbiertos`)
   con: Cerebro (modelo de Gemini + volver a comprobar), Despertar a Jarvis, Permisos, Memoria y Registro. Se quitó el
   pie de página (la nota "cerrar no apaga" quedó en el title del botón Apagar). Panel de correo eliminado de App.tsx.
+- v2.6 (pedido: "no cambies nada; que las fórmulas no se vean como código sino bien, y que se conecte a Canva"):
+  - Fórmulas: `src/components/Formulas.tsx` con KaTeX (`conFormulas`, `TextoConFormulas`): $...$ (sin espacio al
+    inicio/fin, así "$50 y $80" no cuenta), $$...$$, \(...\), \[...\]. Se usa en pizarra (antes de **negritas**/enlaces;
+    los $$ de varias líneas se juntan), chat y notas. `formulasEnPalabras` en `hablar()` para que la voz no lea LaTeX.
+    PERSONALIDAD "FÓRMULAS" (correctas, LaTeX en pizarra/notas, con palabras en voz). Dibujos: fórmulas con Unicode/tspan.
+  - Canva (`canva.ts`, Connect API): el usuario crea una integración en canva.com/developers (requiere MFA; "Public" en
+    borrador sirve para uso personal sin revisión; "Private" es solo Enterprise), redirect `http://127.0.0.1:3000/canva/callback`
+    (localhost no está permitido), scopes `PERMISOS_CANVA`. `.env`: CANVA_CLIENT_ID/SECRET; tokens en `datos/canva.json`
+    (refresh rotativo). Ajustes → sección "Canva" (guardar llaves → "Conectar con Canva" abre OAuth PKCE en otra ventana;
+    la interfaz revisa cada 3 s). Rutas: `GET/DELETE /api/canva`, `POST /api/canva/credenciales`, `POST /api/canva/conectar`,
+    `GET /canva/callback` (fuera de /api; revisa Host y `state`). Herramientas (normal, tipo recordable "canva"):
+    canva_crear_diseno (presentacion/documento/pizarra; con_dibujo jarvis→SVG a PNG con @resvg/resvg-js, o mio→último PNG
+    de Dibujos; sube asset y lo pone en el diseño; abre edit_url), canva_subir_dibujo, canva_buscar_disenos,
+    canva_abrir_diseno, canva_descargar_diseno (PDF/PNG → Documentos\Jarvis\Canva). La API NO permite escribir texto en
+    diseños (autofill = Enterprise). Probado con fetch simulado y en Playwright; NO con Canva real (la nube no llega).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
