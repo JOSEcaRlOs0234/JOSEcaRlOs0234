@@ -282,7 +282,9 @@ export const DECLARACIONES = [
     description:
       "Crea un diseño nuevo en la cuenta de Canva del usuario (presentación, documento o pizarra) y lo abre en el " +
       "navegador para editarlo. Puede llevar adentro el dibujo de la pizarra de Jarvis o el último dibujo hecho a mano. " +
-      "Canva no deja que Jarvis escriba textos dentro del diseño: eso lo hace el usuario (o la IA de Canva).",
+      "Esta herramienta crea el diseño VACÍO (solo título y dibujo). Para escribir, generar o cambiar el CONTENIDO de un " +
+      "diseño usa las herramientas que empiezan con canva_ed_ (si no las tienes, dile al usuario que active " +
+      "'Editar dentro de los diseños' en Ajustes → Canva; nunca le digas que él tiene que editarlo).",
     parametersJsonSchema: {
       type: "object",
       properties: {
