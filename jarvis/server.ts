@@ -41,6 +41,15 @@ import { agregarNota, borrarNota, leerNotas, MAX_LARGO_NOTA, notasActualizadas }
 import { guardarDibujoPng, limpiarSvg, pedidoDeDibujo, pedidoDeRevision, problemasDeTexto } from "./dibujos.ts";
 import { guardarEnHistorial } from "./historial.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
+import {
+  conectarCanvaMcp,
+  declaracionesCanvaMcp,
+  desconectarCanvaMcp,
+  esRegresoDeMcp,
+  estadoCanvaMcp,
+  reconectarCanvaMcp,
+  terminarCanvaMcp,
+} from "./canva-mcp.ts";
 import { correoConfigurado, correoValido, explicarErrorCorreo, probarCuenta, usuarioCorreo } from "./correo.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
@@ -112,6 +121,9 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   (puede llevar el dibujo de la pizarra: con_dibujo="jarvis"). Para "pásalo a Canva" con un dibujo, usa con_dibujo.
   canva_buscar_disenos / canva_abrir_diseno / canva_descargar_diseno para sus diseños. Si no está conectado, dile que
   lo conecte en Ajustes → Canva.
+- EDITAR EN CANVA: si tienes herramientas "canva_ed_..." puedes editar dentro de los diseños del usuario (cambiar
+  textos, generar diseños). Pasos: busca el diseño, empieza una transacción de edición, haz los cambios y al final
+  GUARDA (commit). Resume en voz qué cambiaste. Si no tienes esas herramientas, dile que active "Edición" en Ajustes → Canva.
 - EXPLICAR A FONDO: si el usuario pregunta sobre un tema para aprender ("qué es", "cómo funciona", "por qué",
   "explícame", "háblame de", "en qué consiste"), no te quedes corto:
   1. En voz: una explicación clara de 4 a 7 frases, con lo esencial, una comparación o ejemplo de la vida diaria,
@@ -198,7 +210,11 @@ async function preguntarAGemini(contents: any[]) {
     ai.models.generateContent({
       model,
       contents,
-      config: { systemInstruction: instrucciones(), tools: [{ functionDeclarations: DECLARACIONES as any }] },
+      config: {
+        systemInstruction: instrucciones(),
+        // La lista permitida de siempre + la edición de Canva (si está conectada)
+        tools: [{ functionDeclarations: [...DECLARACIONES, ...declaracionesCanvaMcp()] as any }],
+      },
     });
 
   let respuesta;
@@ -492,8 +508,32 @@ app.delete("/api/correo", (_req, res) => {
 });
 
 // Canva (sección en Ajustes): las llaves se guardan en el .env; el permiso de la cuenta se pide con OAuth
+const REGRESO_CANVA = `http://127.0.0.1:${PORT}/canva/callback`;
+
 app.get("/api/canva", (_req, res) => {
-  res.json(estadoCanva());
+  res.json({ ...estadoCanva(), edicion: estadoCanvaMcp() });
+});
+
+// Edición dentro de Canva (Canva MCP): usa las mismas llaves y la misma dirección de regreso
+app.post("/api/canva/edicion/conectar", async (_req, res) => {
+  try {
+    const r = await conectarCanvaMcp(REGRESO_CANVA);
+    if ("conectado" in r) registrar("CANVA", "Edición de Canva conectada.");
+    res.json(r);
+  } catch (err) {
+    registrar("CANVA", `No se pudo conectar la edición de Canva: ${err instanceof Error ? err.message : err}`);
+    res.status(400).json({
+      error:
+        "No pude conectar la edición de Canva. Revisa que en tu app de Canva Developers esté encendido \"Canva MCP\" " +
+        "(Outside Canva → Configuration → Integration methods).",
+    });
+  }
+});
+
+app.delete("/api/canva/edicion", (_req, res) => {
+  desconectarCanvaMcp();
+  registrar("CANVA", "Edición de Canva desconectada.");
+  res.json({ ...estadoCanva(), edicion: estadoCanvaMcp() });
 });
 
 app.post("/api/canva/credenciales", (req, res) => {
@@ -540,6 +580,17 @@ app.get("/canva/callback", async (req, res) => {
   }
   const codigo = typeof req.query.code === "string" ? req.query.code : "";
   const estado = typeof req.query.state === "string" ? req.query.state : "";
+  // ¿Es el regreso del permiso de EDICIÓN (Canva MCP)?
+  if (codigo && esRegresoDeMcp(estado)) {
+    try {
+      await terminarCanvaMcp(codigo, REGRESO_CANVA);
+      registrar("CANVA", "Edición de Canva conectada.");
+      return pagina("¡Edición de Canva conectada!", "Ya puedes cerrar esta ventana. Jarvis ya puede editar tus diseños.");
+    } catch (err) {
+      registrar("CANVA", `No se pudo conectar la edición: ${err instanceof Error ? err.message : err}`);
+      return pagina("No se conectó", "No se pudo conectar la edición de Canva. Cierra esta ventana e inténtalo otra vez.");
+    }
+  }
   if (!codigo) {
     // Canva explica por qué en ?error=...&error_description=...
     const motivo = [req.query.error, req.query.error_description]
@@ -789,6 +840,9 @@ const servidor = app.listen(PORT, HOST, () => {
   if (process.env.ABRIR_NAVEGADOR === "1" && process.platform === "win32") {
     abrirVentana(url);
   }
+
+  // Si ya se había dado permiso de edición de Canva, reconectar solo
+  void reconectarCanvaMcp(REGRESO_CANVA);
 
   // Empezar a escuchar aplausos y (la primera vez) dejar a Jarvis arrancando con Windows
   void oido.iniciar();

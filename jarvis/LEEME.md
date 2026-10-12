@@ -51,6 +51,10 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
   Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
 
+## Editar dentro de Canva (versión 2.7)
+En tu app de Canva Developers enciende "Canva MCP" (Outside Canva → Configuration → Integration methods). Luego en Jarvis:
+Ajustes → Canva → "Activar edición" y da permiso. Después dile "en mi diseño de ... cambia el título por ...".
+
 ## Correo de Gmail (versión 2.5)
 Panel "Correo (Gmail)": pon tu correo y una "contraseña de aplicación" (se crea en myaccount.google.com/apppasswords;
 necesitas tener activada la verificación en 2 pasos). Luego dile "¿tengo correos nuevos?", "léeme el correo de..." o

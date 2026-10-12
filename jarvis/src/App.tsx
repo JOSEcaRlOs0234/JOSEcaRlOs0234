@@ -270,13 +270,19 @@ export default function App() {
   const [ajustesAbiertos, setAjustesAbiertos] = useState(false);
 
   // Canva
-  const [canva, setCanva] = useState<{ configurado: boolean; conectado: boolean; nombre: string }>({
+  const [canva, setCanva] = useState<{
+    configurado: boolean;
+    conectado: boolean;
+    nombre: string;
+    edicion?: { conectado: boolean; herramientas: number };
+  }>({
     configurado: false,
     conectado: false,
     nombre: "",
   });
   const [canvaLlaves, setCanvaLlaves] = useState({ clientId: "", clientSecret: "" });
   const [canvaEsperando, setCanvaEsperando] = useState(false);
+  const canvaEsperandoEdicionRef = useRef(false);
 
   // Notas
   const [notas, setNotas] = useState<Nota[]>([]);
@@ -505,7 +511,10 @@ export default function App() {
       if (r.ok) {
         const datos = await r.json();
         setCanva(datos);
-        if (datos.conectado) setCanvaEsperando(false);
+        if (datos.conectado && (!canvaEsperandoEdicionRef.current || datos.edicion?.conectado)) {
+          setCanvaEsperando(false);
+          canvaEsperandoEdicionRef.current = false;
+        }
       }
     } catch {
       // Se reintenta al abrir Ajustes
@@ -539,6 +548,25 @@ export default function App() {
       setCanvaEsperando(true);
     } catch (err: any) {
       showNotification(err?.message || "No pude abrir Canva.", "error");
+    }
+  };
+
+  /** Activa la edición dentro de Canva (Canva MCP): abre Canva para dar permiso, si hace falta. */
+  const conectarEdicionCanva = async () => {
+    try {
+      const r = await fetch("/api/canva/edicion/conectar", { method: "POST" });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      if (datos.url) {
+        window.open(datos.url, "_blank", "noopener");
+        canvaEsperandoEdicionRef.current = true;
+        setCanvaEsperando(true);
+      } else {
+        showNotification("Edición de Canva activada.", "info");
+        cargarCanva();
+      }
+    } catch (err: any) {
+      showNotification(err?.message || "No pude activar la edición de Canva.", "error");
     }
   };
 
@@ -1612,6 +1640,25 @@ export default function App() {
                       Dile: &ldquo;haz una presentación en Canva sobre...&rdquo;, &ldquo;pasa el dibujo a Canva&rdquo; o
                       &ldquo;descarga mi diseño de ... en PDF&rdquo;.
                     </p>
+                    <div className="flex items-center justify-between gap-2 border-t border-[#00e5ff]/15 pt-2">
+                      <span className="text-[11px] font-hud-mono text-[#b8f4ff]">Editar dentro de los diseños</span>
+                      {canva.edicion?.conectado ? (
+                        <span className="text-[10px] font-hud-mono text-[#00f5a0]">ACTIVADA</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={conectarEdicionCanva}
+                          className="px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] hover:bg-[#00e5ff]/35 cursor-pointer"
+                        >
+                          {canvaEsperando ? "Volver a abrir" : "Activar edición"}
+                        </button>
+                      )}
+                    </div>
+                    {canva.edicion?.conectado && (
+                      <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                        Dile: &ldquo;en mi diseño de ... cambia el título por ...&rdquo; o &ldquo;crea un póster sobre ...&rdquo;.
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={desconectarCanva}

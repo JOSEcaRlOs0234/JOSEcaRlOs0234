@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.6.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.7.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -239,6 +239,19 @@
     de Dibujos; sube asset y lo pone en el diseño; abre edit_url), canva_subir_dibujo, canva_buscar_disenos,
     canva_abrir_diseno, canva_descargar_diseno (PDF/PNG → Documentos\Jarvis\Canva). La API NO permite escribir texto en
     diseños (autofill = Enterprise). Probado con fetch simulado y en Playwright; NO con Canva real (la nube no llega).
+- Canva real: la cuenta del Tec (a00843662@tec.mx) la administra la escuela (sin contraseña → sin MFA → no sirve);
+  se usa la cuenta PERSONAL de Canva (Gmail) en una ventana InPrivate. Canva ahora crea "apps" (no "integrations"):
+  app "Jarvis" Public/Borrador, Outside Canva → Configuration (Client ID/secret, Canva REST APIs + scopes) y
+  Outside Canva → Redirect URLs. Truco: la pestaña de permiso se abre en el navegador normal (sesión del Tec) → copiar
+  la dirección y pegarla en la ventana privada. El usuario confirmó "listo" (conectado).
+- v2.7 (pedido: "que edite dentro del Canva", "mantén todo igual"): `canva-mcp.ts` = cliente MCP
+  (@modelcontextprotocol/sdk, StreamableHTTP) a `https://mcp.canva.com/mcp` (`CANVA_MCP_URL` para pruebas) con OAuth del
+  SDK usando las MISMAS llaves de la app (requiere encender "Canva MCP" en Integration methods) y el MISMO redirect
+  (`/canva/callback` distingue por `state` con `esRegresoDeMcp`). Tokens en `datos/canva-mcp.json`; se reconecta solo al
+  iniciar. Las herramientas del servidor se agregan dinámicamente a Gemini como `canva_ed_<nombre>` (`declaracionesCanvaMcp`
+  en preguntarAGemini); en `revisar()` (default): readOnly o start/perform/cancel-editing = libre, destructiva/delete =
+  delicada, el resto (commit, generar...) = normal tipo "canva". MAX_VUELTAS del agente 6 → 12. Ajustes → Canva: botón
+  "Activar edición". Probado con servidor MCP falso (herramientas + flujo OAuth completo con metadatos estándar); NO con Canva real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

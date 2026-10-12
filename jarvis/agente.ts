@@ -39,7 +39,8 @@ interface Pendiente {
   vueltas: number;
 }
 
-const MAX_VUELTAS = 6;
+// Editar en Canva necesita varios pasos seguidos (buscar → empezar → cambiar → guardar)
+const MAX_VUELTAS = 12;
 const CADUCA_MS = 5 * 60 * 1000;
 
 // ------------------------------------------------------------------ permisos recordados
