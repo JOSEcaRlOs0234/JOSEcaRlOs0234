@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.10.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.11.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -286,6 +286,15 @@
   continuo solo busca `ORDEN_TERMINAR` ("Jarvis, termina la clase / ya puedes hablar..."). Wake Lock de pantalla. Se
   termina sola a las 4 h. Probado: Word con IA simulada (convertido a PDF y revisado), y en Playwright con micrófono falso
   (banner, WAV de 5 s enviado, terminar). NO probado con Gemini real ni micrófono real.
+- v2.11 CANVAS DEL TEC (pedido: "que avise si alguien agregó tareas en Canvas del Tec"; "todo está bien, solo agrega"):
+  `canvas-lms.ts`. Usa la "Fuente del calendario" (.ics privado, experiencia21.tec.mx/feeds/calendars/...ics) — no
+  necesita token (el Tec podría bloquear tokens) y es solo lectura. `.env`: CANVAS_ICS_URL. `leerIcs` (líneas
+  plegadas, escapes, DTSTART fecha/UTC, materia entre [corchetes]); `esTarea` (uid con assignment/quiz/discussion; excluye
+  calendar-event). `vigilarCanvas` cada 20 min (+1 min al iniciar): la 1.ª vez solo memoriza (datos/canvas-tareas.json,
+  `vistas`); después las nuevas con entrega futura → `avisarTareasCanvas` (server.ts) = aviso en el latido + registro
+  CANVAS + historial; sin ventana visible y fuera de clase lo dice Windows. Herramienta `tareas_canvas` {dias, materia}
+  (libre). Ajustes → sección "Canvas (Tec)" (`GET/POST/DELETE /api/canvas`; POST valida la URL descargándola).
+  Probado con .ics simulado (baseline, tarea nueva, línea plegada, junta excluida); NO con Canvas real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

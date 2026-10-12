@@ -51,6 +51,11 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
   Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
 
+## Tareas de Canvas del Tec (versión 2.11)
+En Canvas (Experiencia 21) entra a Calendario → abajo a la derecha "Fuente del calendario" → copia la dirección. En Jarvis:
+Ajustes → Canvas (Tec) → pégala → "Conectar Canvas". Jarvis revisa cada 20 minutos y te avisa cuando aparece una tarea
+nueva. También puedes preguntarle "¿qué tareas tengo esta semana?". Solo puede leer, no entrega nada.
+
 ## Modo clase (versión 2.10)
 Dile "Jarvis, modo clase de Física" (o aprieta "Modo clase"). Jarvis escucha en silencio y no contesta nada. Cuando
 termine la clase di "Jarvis, termina la clase" (o aprieta "Terminar clase"). En uno o dos minutos se abre un Word con el

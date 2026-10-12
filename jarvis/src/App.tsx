@@ -28,6 +28,7 @@ import {
   PenLine,
   StickyNote,
   GraduationCap,
+  BookOpenCheck,
   Settings,
   Palette,
 } from "lucide-react";
@@ -423,6 +424,15 @@ export default function App() {
   });
   const [canvaLlaves, setCanvaLlaves] = useState({ clientId: "", clientSecret: "" });
   const [canvaEsperando, setCanvaEsperando] = useState(false);
+
+  // Canvas del Tec (tareas)
+  const [canvasLms, setCanvasLms] = useState<{ configurado: boolean; ultimaRevision: number | null; error: string | null }>({
+    configurado: false,
+    ultimaRevision: null,
+    error: null,
+  });
+  const [canvasUrl, setCanvasUrl] = useState("");
+  const [canvasProbando, setCanvasProbando] = useState(false);
   const canvaEsperandoEdicionRef = useRef(false);
 
   // Notas
@@ -744,6 +754,50 @@ export default function App() {
   useEffect(() => {
     if (ajustesAbiertos) cargarCanva();
   }, [ajustesAbiertos, cargarCanva]);
+
+  const cargarCanvasLms = useCallback(async () => {
+    try {
+      const r = await fetch("/api/canvas");
+      if (r.ok) setCanvasLms(await r.json());
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ajustesAbiertos) cargarCanvasLms();
+  }, [ajustesAbiertos, cargarCanvasLms]);
+
+  const conectarCanvasLms = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCanvasProbando(true);
+    try {
+      const r = await fetch("/api/canvas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: canvasUrl }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setCanvasLms(datos);
+      setCanvasUrl("");
+      showNotification("Canvas conectado: te avisaré cuando aparezca una tarea nueva.", "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude conectar Canvas.", "error");
+    } finally {
+      setCanvasProbando(false);
+    }
+  };
+
+  const desconectarCanvasLms = async () => {
+    if (!window.confirm("¿Dejar de revisar tus tareas de Canvas?")) return;
+    try {
+      const r = await fetch("/api/canvas", { method: "DELETE" });
+      if (r.ok) setCanvasLms(await r.json());
+    } catch {
+      showNotification("No pude desconectar Canvas.", "error");
+    }
+  };
 
   /** Guarda en Documentos\Jarvis\Dibujos lo que dibujaste a mano en la pizarra. */
   const guardarDibujo = async (png: string) => {
@@ -1912,6 +1966,59 @@ export default function App() {
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </form>
+              </div>
+
+              {/* CANVAS DEL TEC (tareas) */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <BookOpenCheck className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">Canvas (Tec)</h2>
+                  </div>
+                  <span className={`font-hud-mono text-[10px] ${canvasLms.configurado ? "text-[#00f5a0]" : "text-[#68a8d8]"}`}>
+                    {canvasLms.configurado ? "CONECTADO" : "SIN CONECTAR"}
+                  </span>
+                </div>
+                {canvasLms.configurado ? (
+                  <>
+                    <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                      Reviso tus tareas cada 20 minutos y te aviso cuando aparezca una nueva.
+                      {canvasLms.ultimaRevision
+                        ? ` Última revisión: ${new Date(canvasLms.ultimaRevision).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}.`
+                        : ""}{" "}
+                      Pregúntame: &ldquo;¿qué tareas tengo esta semana?&rdquo;
+                    </p>
+                    {canvasLms.error && <p className="text-[10px] font-hud-mono text-[#ff9933] leading-snug">{canvasLms.error}</p>}
+                    <button
+                      type="button"
+                      onClick={desconectarCanvasLms}
+                      className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
+                    >
+                      Desconectar
+                    </button>
+                  </>
+                ) : (
+                  <form onSubmit={conectarCanvasLms} className="flex flex-col gap-1.5">
+                    <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                      En Canvas: Calendario → abajo a la derecha &ldquo;Fuente del calendario&rdquo; → copia la dirección y pégala aquí.
+                    </p>
+                    <input
+                      type="text"
+                      value={canvasUrl}
+                      onChange={(e) => setCanvasUrl(e.target.value)}
+                      placeholder="https://experiencia21.tec.mx/feeds/calendars/....ics"
+                      autoComplete="off"
+                      className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={canvasProbando || !canvasUrl.trim()}
+                      className="px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                    >
+                      {canvasProbando ? "Probando..." : "Conectar Canvas"}
+                    </button>
+                  </form>
+                )}
               </div>
 
               {/* CANVA */}

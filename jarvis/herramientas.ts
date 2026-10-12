@@ -13,6 +13,7 @@ import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.t
 import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
+import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
 import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
 import {
   buscarDisenos,
@@ -167,6 +168,18 @@ export const DECLARACIONES = [
     name: "ver_estado_laptop",
     description: "Dice la batería (y si está cargando), a qué red Wi-Fi está conectada, el brillo y si está en modo oscuro.",
     parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "tareas_canvas",
+    description:
+      "Lista las tareas del Canvas del Tec (Experiencia 21) con su fecha de entrega: las próximas N días (por defecto 14).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        dias: { type: "integer", description: "Cuántos días hacia adelante (1 a 60)" },
+        materia: { type: "string", description: "Solo de esta materia (opcional)" },
+      },
+    },
   },
   {
     name: "modo_clase",
@@ -827,6 +840,36 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           return await win.estadoLaptop();
         },
       };
+
+    case "tareas_canvas": {
+      if (!canvasConfigurado()) {
+        throw new ErrorHerramienta("Canvas no está conectado. El usuario puede pegar la dirección de su calendario en Ajustes → Canvas.");
+      }
+      const dias = Math.max(1, Math.min(60, Math.round(Number(args.dias) || 14)));
+      const materia = typeof args.materia === "string" ? args.materia.trim().toLowerCase() : "";
+      return {
+        nivel: "libre",
+        tipo: "canvas",
+        descripcion: "Ver las tareas de Canvas",
+        ejecutar: async () => {
+          let tareas;
+          try {
+            tareas = await descargarTareas();
+          } catch (err) {
+            throw new ErrorHerramienta(err instanceof Error ? err.message : "No pude leer Canvas.");
+          }
+          const ahora = Date.now();
+          const lista = tareas
+            .filter(esTarea)
+            .filter((t) => t.entrega !== null && t.entrega >= ahora - 3600_000 && t.entrega <= ahora + dias * 86400_000)
+            .filter((t) => !materia || t.materia.toLowerCase().includes(materia) || t.titulo.toLowerCase().includes(materia))
+            .sort((a, b) => (a.entrega ?? 0) - (b.entrega ?? 0))
+            .slice(0, 40)
+            .map((t) => ({ tarea: t.titulo, materia: t.materia, entrega: entregaLegible(t) }));
+          return lista.length ? { tareas: lista } : { resultado: `No hay tareas con entrega en los próximos ${dias} días.` };
+        },
+      };
+    }
 
     case "modo_clase": {
       if (args.accion === "terminar") {

@@ -52,6 +52,17 @@ import {
   recibirAudio,
   terminarClase,
 } from "./clase.ts";
+import {
+  canvasConfigurado,
+  descargarTareas,
+  entregaLegible,
+  estadoCanvas,
+  reiniciarCanvas,
+  revisarTareasNuevas,
+  urlCanvasValida,
+  vigilarCanvas,
+  type TareaCanvas,
+} from "./canvas-lms.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
 import {
@@ -129,6 +140,8 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Configuración de Windows: cambiar_brillo, modo_oscuro, wifi_bluetooth, ver_estado_laptop (batería, red, brillo) y
   abrir_configuracion para todo lo demás (abre la sección para que el usuario la vea). Nunca digas que algo cambió si
   la herramienta dio error.
+- Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
+  aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
 - MODO CLASE: si el usuario dice "modo clase", "escucha la clase", "graba la clase", usa modo_clase con accion
   "iniciar" (y la materia si la dice) y contesta en UNA frase corta; después te quedas callado escuchando. Cuando diga
   que terminó la clase, usa modo_clase "terminar": se hace un Word con el resumen en Documentos\\Jarvis\\Clases.
@@ -782,6 +795,55 @@ vigilarRecordatorios((r, atrasado) => {
       abrirVentana(`http://localhost:${PORT}/?aviso=${siguienteAviso - 1}`);
     }
   }
+});
+
+// Canvas del Tec: avisar cuando aparece una tarea nueva (se revisa cada 20 minutos)
+function avisarTareasCanvas(nuevas: TareaCanvas[]) {
+  const partes = nuevas
+    .slice(0, 5)
+    .map((t) => `"${t.titulo}"${t.materia ? ` de ${t.materia}` : ""}, para el ${entregaLegible(t)}`);
+  const texto =
+    nuevas.length === 1
+      ? `Señor, hay una tarea nueva en Canvas: ${partes[0]}.`
+      : `Señor, hay ${nuevas.length} tareas nuevas en Canvas: ${partes.join("; ")}${nuevas.length > 5 ? "; y más" : ""}.`;
+  avisos = [...avisos, { id: siguienteAviso++, texto }].slice(-20);
+  registrar("CANVAS", texto);
+  guardarEnHistorial("jarvis", texto);
+  // Sin ventana a la vista lo dice Windows (pero no en medio de una clase)
+  if (!hayVentanaVisible() && !claseActiva()) {
+    oido.pausar(10000);
+    void decirEnVoz(texto);
+  }
+}
+vigilarCanvas(avisarTareasCanvas, (err) => registrar("ERROR", `Canvas: ${err instanceof Error ? err.message : err}`));
+
+app.get("/api/canvas", (_req, res) => {
+  res.json(estadoCanvas());
+});
+
+app.post("/api/canvas", async (req, res) => {
+  const url = typeof req.body?.url === "string" ? req.body.url.trim().replace(/^webcal:/i, "https:") : "";
+  if (!urlCanvasValida(url)) {
+    return res.status(400).json({ error: "Esa no parece la dirección del calendario de Canvas (termina en .ics)." });
+  }
+  try {
+    const tareas = await descargarTareas(url);
+    guardarEnEnv("CANVAS_ICS_URL", url);
+    process.env.CANVAS_ICS_URL = url;
+    reiniciarCanvas();
+    await revisarTareasNuevas(() => {}); // memoriza las que ya hay
+    registrar("CANVAS", `Calendario de Canvas conectado (${tareas.length} elementos).`);
+    res.json({ ...estadoCanvas(), tareas: tareas.length });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "No pude leer el calendario de Canvas." });
+  }
+});
+
+app.delete("/api/canvas", (_req, res) => {
+  quitarDeEnv("CANVAS_ICS_URL");
+  reiniciarCanvas();
+  registrar("CANVAS", "Canvas desconectado.");
+  res.json(estadoCanvas());
 });
 
 // Encendido automático: Windows enciende Jarvis 1 minuto antes del siguiente recordatorio, aunque esté apagado
