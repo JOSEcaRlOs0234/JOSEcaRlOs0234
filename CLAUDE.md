@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.7.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.7.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -252,6 +252,9 @@
   en preguntarAGemini); en `revisar()` (default): readOnly o start/perform/cancel-editing = libre, destructiva/delete =
   delicada, el resto (commit, generar...) = normal tipo "canva". MAX_VUELTAS del agente 6 → 12. Ajustes → Canva: botón
   "Activar edición". Probado con servidor MCP falso (herramientas + flujo OAuth completo con metadatos estándar); NO con Canva real.
+- PRUEBA REAL v2.7: "Internal Server Error" en mcp.canva.com/authorize. El SDK pedía TODOS los scopes del PRM
+  (incluye brandkit:read y help:answers:read/write, que la app del usuario no tiene). v2.7.1: `redirectToAuthorization`
+  filtra el scope a `PERMISOS_APP` (los activables en la app; `CANVA_MCP_SCOPES` lo cambia). Pendiente confirmar.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

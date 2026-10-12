@@ -20,6 +20,13 @@ const URL_MCP = new URL(process.env.CANVA_MCP_URL || "https://mcp.canva.com/mcp"
 const ARCHIVO = path.join(CARPETA_DATOS, "canva-mcp.json");
 export const PREFIJO = "canva_ed_";
 
+// Permisos que se pueden activar en una app de Canva Developers (CANVA_MCP_SCOPES los cambia si hiciera falta)
+const PERMISOS_APP = (
+  process.env.CANVA_MCP_SCOPES ||
+  "profile:read design:meta:read design:content:read design:content:write asset:read asset:write folder:read " +
+    "folder:write comment:read comment:write brandtemplate:meta:read brandtemplate:content:read"
+).split(/\s+/);
+
 interface Guardado {
   tokens?: OAuthTokens;
 }
@@ -78,8 +85,13 @@ class Proveedor implements OAuthClientProvider {
     guardar({ ...leer(), tokens });
   }
 
-  // No abre nada por su cuenta: la dirección se le da a la interfaz para que la abra el usuario
+  // No abre nada por su cuenta: la dirección se le da a la interfaz para que la abra el usuario.
+  // Canva MCP pide TODOS sus permisos (incluye brandkit y help:answers, que una app normal no tiene y hacen que
+  // Canva marque "Internal Server Error"); se piden solo los que la app de Jarvis tiene activados.
   redirectToAuthorization(url: URL) {
+    const pedidos = (url.searchParams.get("scope") ?? "").split(/\s+/).filter(Boolean);
+    const permitidos = pedidos.length ? pedidos.filter((p) => PERMISOS_APP.includes(p)) : PERMISOS_APP;
+    url.searchParams.set("scope", (permitidos.length ? permitidos : PERMISOS_APP).join(" "));
     this.urlParaAutorizar = url;
   }
 
