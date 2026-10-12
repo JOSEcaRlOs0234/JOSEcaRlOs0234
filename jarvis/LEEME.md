@@ -51,6 +51,10 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
   Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
 
+## Configuración de Windows (versión 2.8)
+Dile "sube el brillo", "pon el modo oscuro", "prende el Bluetooth", "¿cuánta batería tengo?" o "abre la configuración
+del sonido". Siempre te pide permiso (puedes marcar "no volver a preguntar"). Apagar el Wi-Fi siempre se confirma.
+
 ## Editar dentro de Canva (versión 2.7)
 En tu app de Canva Developers enciende "Canva MCP" (Outside Canva → Configuration → Integration methods). Luego en Jarvis:
 Ajustes → Canva → "Activar edición" y da permiso. Después dile "en mi diseño de ... cambia el título por ...".

@@ -214,6 +214,99 @@ export async function programarEncendido(cuando: number | null, lanzador: string
   );
 }
 
+// ------------------------------------------------------------------ configuración de Windows
+
+/** Secciones de Configuración que Jarvis puede abrir (direcciones fijas "ms-settings:"). */
+export const SECCIONES_CONFIGURACION: Record<string, string> = {
+  inicio: "ms-settings:",
+  wifi: "ms-settings:network-wifi",
+  red: "ms-settings:network-status",
+  modo_avion: "ms-settings:network-airplanemode",
+  vpn: "ms-settings:network-vpn",
+  bluetooth: "ms-settings:bluetooth",
+  pantalla: "ms-settings:display",
+  luz_nocturna: "ms-settings:nightlight",
+  sonido: "ms-settings:sound",
+  notificaciones: "ms-settings:notifications",
+  concentracion: "ms-settings:quiethours",
+  bateria: "ms-settings:batterysaver",
+  energia: "ms-settings:powersleep",
+  almacenamiento: "ms-settings:storagesense",
+  aplicaciones: "ms-settings:appsfeatures",
+  apps_al_iniciar: "ms-settings:startupapps",
+  fondo_de_pantalla: "ms-settings:personalization-background",
+  colores: "ms-settings:colors",
+  temas: "ms-settings:themes",
+  privacidad_microfono: "ms-settings:privacy-microphone",
+  privacidad_camara: "ms-settings:privacy-webcam",
+  actualizaciones: "ms-settings:windowsupdate",
+  fecha_y_hora: "ms-settings:dateandtime",
+  idioma: "ms-settings:regionlanguage",
+  raton_y_touchpad: "ms-settings:mousetouchpad",
+  teclado: "ms-settings:typing",
+  impresoras: "ms-settings:printers",
+  cuenta: "ms-settings:yourinfo",
+  accesibilidad: "ms-settings:easeofaccess",
+  acerca_de: "ms-settings:about",
+};
+
+/** Sube, baja o fija el brillo de la pantalla de la laptop. Devuelve el nuevo brillo (0-100). */
+export async function brillo(accion: "subir" | "bajar" | "establecer", cantidad: number): Promise<number> {
+  const salida = await powershell(
+    "$m=Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1;" +
+      "$actual=[int]$m.CurrentBrightness; $n=[int]$env:JARVIS_N;" +
+      "if($env:JARVIS_ACCION -eq 'subir'){$v=$actual+$n}elseif($env:JARVIS_ACCION -eq 'bajar'){$v=$actual-$n}else{$v=$n};" +
+      "$v=[Math]::Max(0,[Math]::Min(100,$v));" +
+      "Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightnessMethods -ErrorAction Stop | Select-Object -First 1 |" +
+      " Invoke-CimMethod -MethodName WmiSetBrightness -Arguments @{Timeout=[uint32]1;Brightness=[byte]$v} | Out-Null; $v",
+    { JARVIS_ACCION: accion, JARVIS_N: String(cantidad) }
+  );
+  return Number(salida.trim()) || 0;
+}
+
+/** Activa o quita el modo oscuro de Windows (apps y sistema). */
+export async function modoOscuro(activar: boolean): Promise<void> {
+  await powershell(
+    "$p='HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize'; $v=[int]$env:JARVIS_VALOR;" +
+      "Set-ItemProperty -Path $p -Name AppsUseLightTheme -Value $v -Type DWord;" +
+      "Set-ItemProperty -Path $p -Name SystemUsesLightTheme -Value $v -Type DWord",
+    { JARVIS_VALOR: activar ? "0" : "1" }
+  );
+}
+
+/** Enciende o apaga el Wi-Fi o el Bluetooth (como los botones de la barra de tareas; no pide administrador). */
+export async function radio(tipo: "WiFi" | "Bluetooth", encender: boolean): Promise<void> {
+  const salida = await powershell(
+    "Add-Type -AssemblyName System.Runtime.WindowsRuntime;" +
+      "$g=([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0];" +
+      "function Esperar($t,$r){ $x=$g.MakeGenericMethod($r).Invoke($null,@($t)); $x.Wait(-1) | Out-Null; $x.Result };" +
+      "[Windows.Devices.Radios.Radio,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null;" +
+      "[Windows.Devices.Radios.RadioAccessStatus,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null;" +
+      "[Windows.Devices.Radios.RadioState,Windows.System.Devices,ContentType=WindowsRuntime] | Out-Null;" +
+      "Esperar ([Windows.Devices.Radios.Radio]::RequestAccessAsync()) ([Windows.Devices.Radios.RadioAccessStatus]) | Out-Null;" +
+      "$radios=Esperar ([Windows.Devices.Radios.Radio]::GetRadiosAsync()) ([System.Collections.Generic.IReadOnlyList[Windows.Devices.Radios.Radio]]);" +
+      "$r=$radios | Where-Object { $_.Kind.ToString() -eq $env:JARVIS_TIPO } | Select-Object -First 1;" +
+      "if(-not $r){ 'NO_HAY' } else { Esperar ($r.SetStateAsync([Windows.Devices.Radios.RadioState]$env:JARVIS_ESTADO)) ([Windows.Devices.Radios.RadioAccessStatus]) }",
+    { JARVIS_TIPO: tipo, JARVIS_ESTADO: encender ? "On" : "Off" }
+  );
+  const r = salida.trim();
+  if (r === "NO_HAY") throw new Error(`Esta laptop no tiene ${tipo === "WiFi" ? "Wi-Fi" : "Bluetooth"} o está desactivado en el sistema.`);
+  if (r && r !== "Allowed") throw new Error("Windows no dejó cambiarlo (puede que esté bloqueado o en modo avión).");
+}
+
+/** Estado de la laptop: batería, red Wi-Fi, brillo y modo oscuro. */
+export async function estadoLaptop(): Promise<Record<string, unknown>> {
+  const salida = await powershell(
+    "$b=Get-CimInstance Win32_Battery -ErrorAction SilentlyContinue | Select-Object -First 1;" +
+      "$bat=$null; if($b){ $bat=@{porcentaje=[int]$b.EstimatedChargeRemaining; conectada_a_la_corriente=([int]$b.BatteryStatus -eq 2)} };" +
+      "$ssid=$null; try { $l=(netsh wlan show interfaces) | Where-Object { $_ -match '^\\s+SSID\\s+:' } | Select-Object -First 1; if($l){ $ssid=($l -split ':',2)[1].Trim() } } catch {};" +
+      "$br=$null; try { $br=[int](Get-CimInstance -Namespace root/WMI -ClassName WmiMonitorBrightness -ErrorAction Stop | Select-Object -First 1).CurrentBrightness } catch {};" +
+      "$t=(Get-ItemProperty 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize' -ErrorAction SilentlyContinue).AppsUseLightTheme;" +
+      "@{bateria=$bat; red_wifi=$ssid; brillo=$br; modo_oscuro=($t -eq 0)} | ConvertTo-Json -Compress"
+  );
+  return JSON.parse(salida.trim() || "{}");
+}
+
 // ------------------------------------------------------------------ volumen y sistema
 
 // Teclas especiales de Windows: 173 silenciar, 174 bajar, 175 subir (cada toque = 2 %)

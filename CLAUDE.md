@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.7.2). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.8.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -258,6 +258,13 @@
 - PRUEBA REAL v2.7.1: "Ahora edítala..." → Jarvis creó OTRA presentación y dijo "la edición la realiza usted"
   (la descripción de canva_crear_diseno lo decía; y probablemente la edición MCP no estaba activada). v2.7.2: descripción
   y PERSONALIDAD → usar canva_ed_ (generar/editar), "edítala" = la existente, sin canva_ed_ → pedir activar edición.
+- v2.8 (pedido: "darle acceso a mi configuración", "no cambies nada"): Configuración de Windows. windows.ts:
+  `SECCIONES_CONFIGURACION` (lista fija de ms-settings:), `brillo` (WMI WmiMonitorBrightness/WmiSetBrightness; no sirve
+  en monitores externos), `modoOscuro` (HKCU Themes\Personalize Apps/SystemUsesLightTheme), `radio` (WinRT
+  Windows.Devices.Radios desde PowerShell 5.1, Wi-Fi/Bluetooth sin admin), `estadoLaptop` (Win32_Battery, netsh wlan SSID,
+  brillo, tema). Herramientas: abrir_configuracion, cambiar_brillo, modo_oscuro, wifi_bluetooth (normal, tipo recordable
+  "configuracion"; apagar Wi-Fi = DELICADA porque deja a Jarvis sin internet), ver_estado_laptop (libre). NO probado en
+  Windows (los scripts de PowerShell no se pudieron ejecutar en la nube).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

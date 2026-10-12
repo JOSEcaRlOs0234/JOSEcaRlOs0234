@@ -122,6 +122,49 @@ export const DECLARACIONES = [
     },
   },
   {
+    name: "abrir_configuracion",
+    description: "Abre una sección de la Configuración de Windows (para que el usuario la vea o cambie algo que Jarvis no puede).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { seccion: { type: "string", enum: Object.keys(win.SECCIONES_CONFIGURACION) } },
+      required: ["seccion"],
+    },
+  },
+  {
+    name: "cambiar_brillo",
+    description: "Sube, baja o fija el brillo de la pantalla de la laptop.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        accion: { type: "string", enum: ["subir", "bajar", "establecer"] },
+        cantidad: { type: "integer", description: "Porcentaje: cuánto subir o bajar (por defecto 20), o el nivel exacto." },
+      },
+      required: ["accion"],
+    },
+  },
+  {
+    name: "modo_oscuro",
+    description: "Activa (true) o quita (false) el modo oscuro de Windows.",
+    parametersJsonSchema: { type: "object", properties: { activar: { type: "boolean" } }, required: ["activar"] },
+  },
+  {
+    name: "wifi_bluetooth",
+    description: "Enciende o apaga el Wi-Fi o el Bluetooth de la laptop.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        dispositivo: { type: "string", enum: ["wifi", "bluetooth"] },
+        encender: { type: "boolean" },
+      },
+      required: ["dispositivo", "encender"],
+    },
+  },
+  {
+    name: "ver_estado_laptop",
+    description: "Dice la batería (y si está cargando), a qué red Wi-Fi está conectada, el brillo y si está en modo oscuro.",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
     name: "listar_archivos",
     description:
       "Muestra los archivos de una carpeta del usuario. La ruta empieza con una de estas carpetas: Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis. Ejemplo: 'Documentos/Tareas'.",
@@ -664,6 +707,93 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         },
       };
     }
+
+    case "abrir_configuracion": {
+      const seccion = typeof args.seccion === "string" ? args.seccion : "";
+      const destino = win.SECCIONES_CONFIGURACION[seccion];
+      if (!destino) throw new ErrorHerramienta("Esa sección de la Configuración no está en mi lista.");
+      return {
+        nivel: "normal",
+        tipo: "configuracion",
+        descripcion: `Abrir la Configuración de Windows: ${seccion.replace(/_/g, " ")}`,
+        ejecutar: async () => {
+          necesitaWindows();
+          await win.abrirUrl(destino);
+          return { resultado: "Listo, ya está abierta." };
+        },
+      };
+    }
+
+    case "cambiar_brillo": {
+      const accion = args.accion;
+      if (accion !== "subir" && accion !== "bajar" && accion !== "establecer") throw new ErrorHerramienta("Acción de brillo no válida.");
+      const numero = Number(args.cantidad ?? (accion === "establecer" ? 70 : 20));
+      const cantidad = Math.max(0, Math.min(100, Math.round(Number.isFinite(numero) ? numero : 20)));
+      return {
+        nivel: "normal",
+        tipo: "configuracion",
+        descripcion:
+          accion === "establecer" ? `Poner el brillo en ${cantidad}%` : `${accion === "subir" ? "Subir" : "Bajar"} el brillo ${cantidad}%`,
+        ejecutar: async () => {
+          necesitaWindows();
+          try {
+            return { resultado: `Brillo en ${await win.brillo(accion, cantidad)}%.` };
+          } catch {
+            throw new ErrorHerramienta("No pude cambiar el brillo (en pantallas externas Windows no lo permite).");
+          }
+        },
+      };
+    }
+
+    case "modo_oscuro": {
+      const activar = args.activar !== false;
+      return {
+        nivel: "normal",
+        tipo: "configuracion",
+        descripcion: activar ? "Poner Windows en modo oscuro" : "Poner Windows en modo claro",
+        ejecutar: async () => {
+          necesitaWindows();
+          await win.modoOscuro(activar);
+          return { resultado: activar ? "Modo oscuro activado." : "Modo claro activado." };
+        },
+      };
+    }
+
+    case "wifi_bluetooth": {
+      const dispositivo = args.dispositivo === "bluetooth" ? "Bluetooth" : args.dispositivo === "wifi" ? "WiFi" : null;
+      if (!dispositivo) throw new ErrorHerramienta("Solo puedo encender o apagar el Wi-Fi o el Bluetooth.");
+      const encender = args.encender === true;
+      const nombre = dispositivo === "WiFi" ? "Wi-Fi" : "Bluetooth";
+      // Apagar el Wi-Fi deja a Jarvis sin internet (ya no podría contestar): siempre se confirma
+      const apagaWifi = dispositivo === "WiFi" && !encender;
+      return {
+        nivel: apagaWifi ? "delicada" : "normal",
+        tipo: "configuracion",
+        descripcion: apagaWifi
+          ? "Apagar el Wi-Fi (Jarvis se quedará sin internet hasta que lo vuelvas a prender desde la barra de tareas)"
+          : `${encender ? "Encender" : "Apagar"} el ${nombre}`,
+        ejecutar: async () => {
+          necesitaWindows();
+          try {
+            await win.radio(dispositivo, encender);
+          } catch (err) {
+            throw new ErrorHerramienta(err instanceof Error ? err.message : `No pude cambiar el ${nombre}.`);
+          }
+          return { resultado: `${nombre} ${encender ? "encendido" : "apagado"}.` };
+        },
+      };
+    }
+
+    case "ver_estado_laptop":
+      return {
+        nivel: "libre",
+        tipo: "configuracion",
+        descripcion: "Ver el estado de la laptop",
+        ejecutar: async () => {
+          necesitaWindows();
+          return await win.estadoLaptop();
+        },
+      };
 
     case "listar_archivos": {
       const { ruta, bonita } = await resolverRuta(texto(args.carpeta, "carpeta", 500), await win.carpetasUsuario());
@@ -1346,4 +1476,5 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   consultar_claude: "Consultar a Claude (cuesta unos centavos)",
   correo_leer: "Revisar y leer tu correo",
   canva: "Usar tu cuenta de Canva",
+  configuracion: "Cambiar la configuración (brillo, modo oscuro, Bluetooth...)",
 };
