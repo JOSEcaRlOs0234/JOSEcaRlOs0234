@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.12.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.13.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -306,6 +306,18 @@
   dice Windows. Herramienta `mensajes_whatsapp` {horas} (libre, solo quién). Ajustes → "WhatsApp" (casillas avisar / voz;
   `GET/POST /api/whatsapp`). App.tsx: avisos usan `a.icono ?? "⏰"` y respetan `silencioso`. Probado con una
   wpndatabase.db falsa (ignora viejos y Teams, agrupa, no guarda contenido); NO en Windows real.
+- v2.13 DOCUMENTOS (pedido: "que genere un documento en Word, Excel o PPT y se base en fuentes confiables"; "todo está
+  bien, solo agrega"): `documentos.ts` + `crearDocumento` en conectarIA (server.ts). Herramienta `crear_documento`
+  {tipo word|excel|powerpoint, tema, indicaciones} (normal, tipo recordable "documentos"). Pasos: 1) Gemini + googleSearch
+  con `INSTRUCCION_INVESTIGACION` (preferir .gob/.gov/.edu/ONU/OMS/INEGI/revistas; notas detalladas) → fuentes de
+  groundingChunks; `direccionesReales` sigue la redirección vertexaisearch (HEAD, 5 s) y `ordenarFuentes` pone primero las
+  confiables (`CONFIABLES`, máx. 12). 2) `pedidoDeEstructura` + `ESQUEMAS[tipo]` (responseJsonSchema, prefiere Pro) con
+  citas [n]. 3) `armarDocumento`: Word (docx: intro, secciones, viñetas, conclusión, Fuentes con hipervínculos), Excel
+  (exceljs: hojas con encabezado de color, autofiltro, fila congelada, números convertidos, hoja "Fuentes"), PowerPoint
+  (pptxgenjs 16:9: portada oscura, diapositivas con barra de título, viñetas, notas del orador, diapositiva "Fuentes").
+  Se guarda en Documentos\Jarvis\Creados y se abre. npm audit avisa de image-size/uuid (deps de pptxgenjs/exceljs) que
+  no se usan con datos externos. Probado: los 3 archivos con contenido de ejemplo (convertidos a PDF con LibreOffice y
+  revisados) y la herramienta con IA simulada; NO con Gemini real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

@@ -64,6 +64,16 @@ import {
   type TareaCanvas,
 } from "./canvas-lms.ts";
 import { cambiarConfigWhatsapp, estadoWhatsapp, vigilarWhatsapp } from "./whatsapp.ts";
+import {
+  armarDocumento,
+  direccionesReales,
+  esConfiable,
+  ESQUEMAS,
+  INSTRUCCION_INVESTIGACION,
+  ordenarFuentes,
+  pedidoDeEstructura,
+  type Fuente,
+} from "./documentos.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
 import {
@@ -145,6 +155,10 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   contestarlos. Si te piden leer un mensaje, explica que por privacidad solo avisas quién escribió.
 - Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
   aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
+- DOCUMENTOS: si el usuario pide un documento/trabajo/reporte en Word, una tabla/hoja de cálculo en Excel o una
+  presentación en PowerPoint, usa crear_documento con el tipo, el tema y TODAS sus indicaciones (extensión, enfoque,
+  público, número de diapositivas...). Tarda un poco porque investiga en fuentes confiables. Al terminar di en una
+  frase qué hiciste y cuántas fuentes usaste (el archivo se abre solo).
 - MODO CLASE: si el usuario dice "modo clase", "escucha la clase", "graba la clase", usa modo_clase con accion
   "iniciar" (y la materia si la dice) y contesta en UNA frase corta; después te quedas callado escuchando. Cuando diga
   que terminó la clase, usa modo_clase "terminar": se hace un Word con el resumen en Documentos\\Jarvis\\Clases.
@@ -352,6 +366,37 @@ async function dibujarConRevision(descripcion: string): Promise<string> {
 conectarIA({
   investigarAFondo: (tema) => conRespaldo((modelo) => investigarAFondo(ai, modelo, tema)),
   dibujar: dibujarConRevision,
+  // Documentos de Word, Excel y PowerPoint: investigar (fuentes confiables) → estructurar → armar el archivo
+  crearDocumento: async (tipo, tema, indicaciones) => {
+    const investigacion = await conRespaldo((modelo) =>
+      ai.models.generateContent({
+        model: modelo,
+        contents: `Investiga a fondo para hacer un ${tipo} sobre: ${tema}${indicaciones ? `. Indicaciones: ${indicaciones}` : ""}`,
+        config: { tools: [{ googleSearch: {} }], systemInstruction: INSTRUCCION_INVESTIGACION },
+      })
+    );
+    const notas = investigacion.text?.trim() ?? "";
+    const crudas: Fuente[] = [];
+    for (const trozo of (investigacion.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? []) {
+      const url = trozo?.web?.uri;
+      if (typeof url === "string" && /^https?:\/\//.test(url)) crudas.push({ titulo: String(trozo.web.title || "Fuente").slice(0, 120), url });
+    }
+    const fuentes = ordenarFuentes(await direccionesReales(crudas.slice(0, 20)));
+    const r = await conRespaldo(
+      (modelo) =>
+        ai.models.generateContent({
+          model: modelo,
+          contents: pedidoDeEstructura(tipo, tema, indicaciones, notas, fuentes),
+          config: { responseMimeType: "application/json", responseJsonSchema: ESQUEMAS[tipo] },
+        }),
+      MODELO_DIBUJO,
+      30 * 60 * 1000
+    );
+    const hecho = await armarDocumento(tipo, JSON.parse(r.text ?? "{}"), fuentes, tema);
+    registrar("DOCUMENTO", `${tipo} creado: ${hecho.archivo} (${fuentes.length} fuentes)`);
+    void abrirRuta(hecho.archivo).catch(() => {});
+    return { ...hecho, fuentes: fuentes.length, confiables: fuentes.filter(esConfiable).length };
+  },
   // Cámara: la ventana toma la foto y Gemini la analiza
   mirar: async (pregunta, guardar) => {
     const jpeg = await pedirFoto();

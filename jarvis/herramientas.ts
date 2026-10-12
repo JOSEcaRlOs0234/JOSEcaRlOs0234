@@ -55,6 +55,11 @@ let ia: {
   investigarAFondo: (tema: string) => Promise<Informe>;
   dibujar: (descripcion: string) => Promise<string>;
   mirar?: (pregunta: string, guardar: boolean) => Promise<{ respuesta: string; archivo?: string }>;
+  crearDocumento?: (
+    tipo: "word" | "excel" | "powerpoint",
+    tema: string,
+    indicaciones: string
+  ) => Promise<{ archivo: string; titulo: string; fuentes: number; confiables: number }>;
 } | null = null;
 export function conectarIA(funciones: NonNullable<typeof ia>): void {
   ia = funciones;
@@ -169,6 +174,25 @@ export const DECLARACIONES = [
     name: "ver_estado_laptop",
     description: "Dice la batería (y si está cargando), a qué red Wi-Fi está conectada, el brillo y si está en modo oscuro.",
     parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "crear_documento",
+    description:
+      "Crea un archivo de Word (documento, trabajo, reporte, ensayo), Excel (tablas, datos, comparativas) o PowerPoint " +
+      "(presentación) sobre un tema. Primero investiga en internet en FUENTES CONFIABLES y cita las fuentes dentro del " +
+      "archivo. Se guarda en Documentos\\Jarvis\\Creados y se abre solo.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        tipo: { type: "string", enum: ["word", "excel", "powerpoint"] },
+        tema: { type: "string", description: "Tema del archivo, con todo el detalle que dio el usuario" },
+        indicaciones: {
+          type: "string",
+          description: "Indicaciones extra: extensión, secciones, público, número de diapositivas, columnas de la tabla, etc.",
+        },
+      },
+      required: ["tipo", "tema"],
+    },
   },
   {
     name: "mensajes_whatsapp",
@@ -848,6 +872,34 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           return await win.estadoLaptop();
         },
       };
+
+    case "crear_documento": {
+      const tipo = args.tipo === "excel" || args.tipo === "powerpoint" ? args.tipo : args.tipo === "word" ? "word" : null;
+      if (!tipo) throw new ErrorHerramienta("Solo puedo crear archivos de Word, Excel o PowerPoint.");
+      const tema = texto(args.tema, "tema", 500);
+      const indicaciones = typeof args.indicaciones === "string" ? args.indicaciones.slice(0, 1500) : "";
+      const nombre = tipo === "word" ? "un Word" : tipo === "excel" ? "un Excel" : "un PowerPoint";
+      return {
+        nivel: "normal",
+        tipo: "documentos",
+        descripcion: `Investigar y crear ${nombre} sobre "${tema.slice(0, 120)}" (en Documentos\\Jarvis\\Creados)`,
+        ejecutar: async () => {
+          if (!ia?.crearDocumento) throw new ErrorHerramienta("Crear documentos no está disponible.");
+          try {
+            const r = await ia.crearDocumento(tipo, tema, indicaciones);
+            return {
+              resultado: `Listo: "${r.titulo}" está en Documentos\\Jarvis\\Creados y se abrió.`,
+              fuentes_usadas: r.fuentes,
+              fuentes_confiables: r.confiables,
+            };
+          } catch (err) {
+            throw new ErrorHerramienta(
+              `No pude crear el archivo${err instanceof Error && err.message ? `: ${err.message.slice(0, 200)}` : "."}`
+            );
+          }
+        },
+      };
+    }
 
     case "mensajes_whatsapp": {
       const horas = Math.max(1, Math.min(48, Math.round(Number(args.horas) || 3)));
@@ -1641,4 +1693,5 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   configuracion: "Cambiar la configuración (brillo, modo oscuro, Bluetooth...)",
   camara: "Usar la cámara para ver",
   clase: "Escuchar clases (modo clase)",
+  documentos: "Crear documentos de Word, Excel y PowerPoint",
 };

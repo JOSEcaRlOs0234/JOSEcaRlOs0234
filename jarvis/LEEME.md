@@ -51,6 +51,12 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
   Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
 
+## Word, Excel y PowerPoint (versión 2.13)
+Dile "hazme un Word sobre...", "hazme un Excel con los datos de...", o "hazme una presentación de 10 diapositivas
+sobre...". Jarvis investiga en fuentes confiables (gobierno, universidades, organismos internacionales, revistas),
+cita las fuentes con [1], [2] y pone la lista de fuentes con enlaces al final. Se guarda en Documentos\Jarvis\Creados y
+se abre solo. Tarda uno o dos minutos. Revisa siempre el contenido antes de entregarlo.
+
 ## Avisos de WhatsApp (versión 2.12)
 Jarvis te dice DE QUIÉN te llegó un mensaje ("tiene un mensaje de WhatsApp de Mamá"), pero nunca lo lee. No se conecta a
 tu WhatsApp: solo ve el nombre en el aviso de Windows, así que necesitas la app de WhatsApp (o WhatsApp Web) con sus
