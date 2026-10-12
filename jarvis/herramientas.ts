@@ -48,8 +48,11 @@ export function conectarInvestigador(f: (pregunta: string) => Promise<string>): 
 }
 
 // El servidor conecta aquí la investigación a fondo y el dibujante (usan Gemini con el modelo actual)
-let ia: { investigarAFondo: (tema: string) => Promise<Informe>; dibujar: (descripcion: string) => Promise<string> } | null =
-  null;
+let ia: {
+  investigarAFondo: (tema: string) => Promise<Informe>;
+  dibujar: (descripcion: string) => Promise<string>;
+  mirar?: (pregunta: string, guardar: boolean) => Promise<{ respuesta: string; archivo?: string }>;
+} | null = null;
 export function conectarIA(funciones: NonNullable<typeof ia>): void {
   ia = funciones;
 }
@@ -163,6 +166,21 @@ export const DECLARACIONES = [
     name: "ver_estado_laptop",
     description: "Dice la batería (y si está cargando), a qué red Wi-Fi está conectada, el brillo y si está en modo oscuro.",
     parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "mirar_con_camara",
+    description:
+      "Toma una foto con la cámara de la laptop y la analiza: qué se ve, leer un texto o una hoja, resolver un ejercicio " +
+      "que el usuario enseña, identificar un objeto, decir cómo se ve. Úsalo cuando el usuario diga 'mira', '¿qué ves?', " +
+      "'¿qué tengo en la mano?', 'lee esto', etc. Pon guardar=true solo si pide guardar o tomar una foto.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        pregunta: { type: "string", description: "Qué quiere saber el usuario de lo que se ve" },
+        guardar: { type: "boolean", description: "Guardar la foto en Documentos\\Jarvis\\Fotos" },
+      },
+      required: ["pregunta"],
+    },
   },
   {
     name: "listar_archivos",
@@ -794,6 +812,31 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           return await win.estadoLaptop();
         },
       };
+
+    case "mirar_con_camara": {
+      const pregunta = texto(args.pregunta, "pregunta", 500);
+      const guardar = args.guardar === true;
+      return {
+        // La cámara es privada: siempre pregunta (se puede marcar "no volver a preguntar")
+        nivel: "normal",
+        tipo: "camara",
+        descripcion: `Usar la cámara${guardar ? " y guardar la foto" : ""}: "${pregunta.slice(0, 120)}"`,
+        ejecutar: async () => {
+          if (!ia?.mirar) throw new ErrorHerramienta("La cámara no está disponible.");
+          try {
+            const r = await ia.mirar(pregunta, guardar);
+            return { lo_que_se_ve: r.respuesta, ...(r.archivo ? { foto_guardada_en: r.archivo } : {}) };
+          } catch (err) {
+            const m = err instanceof Error ? err.message : "";
+            throw new ErrorHerramienta(
+              m === "SIN_VENTANA"
+                ? "Para usar la cámara la ventana de Jarvis tiene que estar abierta."
+                : m || "No pude usar la cámara."
+            );
+          }
+        },
+      };
+    }
 
     case "listar_archivos": {
       const { ruta, bonita } = await resolverRuta(texto(args.carpeta, "carpeta", 500), await win.carpetasUsuario());
@@ -1477,4 +1520,5 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   correo_leer: "Revisar y leer tu correo",
   canva: "Usar tu cuenta de Canva",
   configuracion: "Cambiar la configuración (brillo, modo oscuro, Bluetooth...)",
+  camara: "Usar la cámara para ver",
 };

@@ -74,6 +74,7 @@ interface EstadoAplausos {
   arranqueConWindows: boolean;
   activacion: number;
   avisos?: { id: number; texto: string }[];
+  pedirFoto?: number;
 }
 
 const horaActual = () =>
@@ -164,6 +165,27 @@ function callarIntro(): void {
       clearInterval(id);
     } else audio.volume -= paso;
   }, 80);
+}
+
+/** Toma una foto con la cámara de la laptop (la enciende solo un momento y la apaga). Devuelve un JPEG en data URL. */
+async function tomarFotoConCamara(): Promise<string> {
+  const flujo = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+  try {
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = flujo;
+    await video.play();
+    // Un momento para que la cámara ajuste la luz
+    await new Promise((r) => setTimeout(r, 900));
+    const lienzo = document.createElement("canvas");
+    lienzo.width = video.videoWidth || 1280;
+    lienzo.height = video.videoHeight || 720;
+    lienzo.getContext("2d")!.drawImage(video, 0, 0, lienzo.width, lienzo.height);
+    return lienzo.toDataURL("image/jpeg", 0.85);
+  } finally {
+    flujo.getTracks().forEach((t) => t.stop());
+  }
 }
 
 /** Tono corto "bip-bip" de que Jarvis te está escuchando. */
@@ -299,6 +321,9 @@ export default function App() {
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
   const ultimaActivacionRef = useRef<number | null>(null);
   const ultimoAvisoRef = useRef<number | null>(null);
+  // Cámara: última foto pedida por Jarvis y la miniatura que se muestra un momento
+  const ultimaFotoRef = useRef(0);
+  const [fotoReciente, setFotoReciente] = useState<string | null>(null);
   // Si la ventana se abrió sola por un recordatorio (?aviso=N): mostrarlo (Windows ya lo dijo en voz alta)
   const avisoInicialRef = useRef<number | null>(
     (() => {
@@ -1165,6 +1190,39 @@ export default function App() {
         }
         ultimaActivacionRef.current = datos.activacion;
 
+        // Jarvis pidió mirar con la cámara: tomar la foto y mandársela
+        if (datos.pedirFoto && datos.pedirFoto !== ultimaFotoRef.current) {
+          const id = datos.pedirFoto;
+          ultimaFotoRef.current = id;
+          showNotification("📷 Jarvis está mirando por la cámara", "info");
+          tomarFotoConCamara()
+            .then(async (jpeg) => {
+              setFotoReciente(jpeg);
+              window.setTimeout(() => setFotoReciente((f) => (f === jpeg ? null : f)), 6000);
+              await fetch("/api/camara/foto", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id, jpeg }),
+              });
+            })
+            .catch((err) => {
+              const motivo =
+                err?.name === "NotAllowedError"
+                  ? "No hay permiso para usar la cámara. Hay que permitirla en la ventana de Jarvis (icono de la cámara arriba) y en Configuración de Windows → Privacidad → Cámara."
+                  : err?.name === "NotFoundError"
+                  ? "No encontré ninguna cámara en la laptop."
+                  : err?.name === "NotReadableError"
+                  ? "La cámara la está usando otro programa (cierra Zoom, Teams, etc.)."
+                  : "No pude usar la cámara.";
+              showNotification(motivo, "error");
+              fetch("/api/camara/error", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ id, motivo }),
+              }).catch(() => {});
+            });
+        }
+
         // Recordatorios que llegaron a su hora
         const avisos = datos.avisos ?? [];
         const maxId = avisos.reduce((m, a) => Math.max(m, a.id), 0);
@@ -1919,6 +1977,12 @@ export default function App() {
               onCopiar={copiarPizarra}
               onGuardarDibujo={guardarDibujo}
             />
+          )}
+          {fotoReciente && (
+            <div className="absolute bottom-2 left-2 z-40 border-2 border-[#00e5ff] bg-[#020c18] p-1 shadow-[0_0_20px_rgba(0,229,255,0.4)]">
+              <img src={fotoReciente} alt="Lo que vio Jarvis" className="w-56 h-auto block" />
+              <div className="text-[10px] font-hud-mono text-[#00e5ff] text-center pt-0.5">📷 Lo que vio Jarvis</div>
+            </div>
           )}
           {notasAbiertas && !pizarraAbierta && (
             <NotasPanel

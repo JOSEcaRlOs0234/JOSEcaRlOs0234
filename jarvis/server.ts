@@ -40,6 +40,7 @@ import { buscarEnInternet, claudeConfigurado, investigarAFondo } from "./consult
 import { agregarNota, borrarNota, leerNotas, MAX_LARGO_NOTA, notasActualizadas } from "./notas.ts";
 import { guardarDibujoPng, limpiarSvg, pedidoDeDibujo, pedidoDeRevision, problemasDeTexto } from "./dibujos.ts";
 import { guardarEnHistorial } from "./historial.ts";
+import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
 import {
   conectarCanvaMcp,
@@ -116,6 +117,8 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Configuración de Windows: cambiar_brillo, modo_oscuro, wifi_bluetooth, ver_estado_laptop (batería, red, brillo) y
   abrir_configuracion para todo lo demás (abre la sección para que el usuario la vea). Nunca digas que algo cambió si
   la herramienta dio error.
+- Cámara: si el usuario dice "mira", "¿qué ves?", "lee esto", "¿qué tengo en la mano?" o te enseña algo, usa
+  mirar_con_camara con su pregunta y contesta según lo que se ve. Si pide "tómame una foto", usa guardar=true.
 - FÓRMULAS: revisa siempre que sean correctas (signos, exponentes, unidades). En la pizarra y en las notas escríbelas
   en LaTeX entre signos de dólar para que se vean como en un libro: en línea $E = mc^2$, y las importantes solas en su
   renglón con $$...$$ (por ejemplo $$x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}$$). Explica qué significa cada letra.
@@ -157,7 +160,9 @@ const app = express();
 app.disable("x-powered-by");
 // Los dibujos hechos a mano (imágenes) pueden pesar más; esa ruta tiene su propio límite
 const leerJson = express.json({ limit: "1mb" });
-app.use((req, res, next) => (req.path === "/api/dibujos" ? next() : leerJson(req, res, next)));
+app.use((req, res, next) =>
+  req.path === "/api/dibujos" || req.path === "/api/camara/foto" ? next() : leerJson(req, res, next)
+);
 
 // Seguridad: solo aceptar peticiones que vengan de la propia interfaz de Jarvis.
 // Así, una página web cualquiera que abras en el navegador no puede darle órdenes a Jarvis.
@@ -314,6 +319,25 @@ async function dibujarConRevision(descripcion: string): Promise<string> {
 conectarIA({
   investigarAFondo: (tema) => conRespaldo((modelo) => investigarAFondo(ai, modelo, tema)),
   dibujar: dibujarConRevision,
+  // Cámara: la ventana toma la foto y Gemini la analiza
+  mirar: async (pregunta, guardar) => {
+    const jpeg = await pedirFoto();
+    registrar("CAMARA", `Foto tomada para: ${pregunta}`);
+    const archivo = guardar ? await guardarFoto(jpeg) : undefined;
+    const respuesta = await conRespaldo(async (modelo) => {
+      const r = await ai.models.generateContent({
+        model: modelo,
+        contents: [
+          {
+            role: "user",
+            parts: [{ inlineData: { mimeType: "image/jpeg", data: jpeg.toString("base64") } }, { text: pedidoDeVista(pregunta) }],
+          },
+        ],
+      });
+      return r.text?.trim() || "No logré distinguir nada en la foto.";
+    });
+    return { respuesta, archivo };
+  },
 });
 
 /** Envía al navegador el resultado del agente y lo anota en el registro. */
@@ -621,6 +645,21 @@ app.get("/canva/callback", async (req, res) => {
   }
 });
 
+// Cámara: la ventana manda la foto que Jarvis pidió (o avisa que no pudo)
+app.post("/api/camara/foto", express.json({ limit: "12mb" }), (req, res) => {
+  try {
+    recibirFoto(Number(req.body?.id), req.body?.jpeg);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Foto no válida." });
+  }
+});
+
+app.post("/api/camara/error", (req, res) => {
+  fallaFoto(Number(req.body?.id), String(req.body?.motivo ?? ""));
+  res.json({ ok: true });
+});
+
 // Dibujos hechos a mano en la pizarra → Documentos\Jarvis\Dibujos
 app.post("/api/dibujos", express.json({ limit: "12mb" }), async (req, res) => {
   try {
@@ -695,7 +734,14 @@ sincronizarEncendido();
 
 app.get("/api/aplausos", (req, res) => {
   if (req.query.visible === "1") ultimaVezVisible = Date.now();
-  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones, avisos });
+  res.json({
+    ...oido.estadoActual(),
+    arranqueConWindows: oido.arranqueConWindows(),
+    activacion: contadorActivaciones,
+    avisos,
+    // Si Jarvis necesita ver, la ventana toma una foto con la cámara
+    pedirFoto: fotoPedida(),
+  });
 });
 
 app.post("/api/aplausos/config", async (req, res) => {

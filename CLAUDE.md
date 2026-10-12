@@ -46,7 +46,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.8.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.9.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -265,6 +265,14 @@
   brillo, tema). Herramientas: abrir_configuracion, cambiar_brillo, modo_oscuro, wifi_bluetooth (normal, tipo recordable
   "configuracion"; apagar Wi-Fi = DELICADA porque deja a Jarvis sin internet), ver_estado_laptop (libre). NO probado en
   Windows (los scripts de PowerShell no se pudieron ejecutar en la nube).
+- v2.9 (pedido: "que tenga acceso a la cámara", "no modifiques nada más"): `camara.ts`. Herramienta `mirar_con_camara`
+  {pregunta, guardar} (normal, tipo recordable "camara"). El servidor no toca la cámara: `pedirFoto()` deja un pedido que
+  va en el latido `GET /api/aplausos` (`pedirFoto: id`); la VENTANA toma 1 foto con getUserMedia (`tomarFotoConCamara`
+  en App.tsx: enciende ~1 s y apaga), la manda a `POST /api/camara/foto {id, jpeg}` (límite propio 12 MB; valida firma
+  JPEG) o avisa `POST /api/camara/error`; espera máx. 25 s ("SIN_VENTANA" si no hay ventana). Gemini (conRespaldo,
+  inlineData) la analiza con `pedidoDeVista` (leer texto, resolver ejercicios, no identificar personas por la cara).
+  `guardar` → Documentos\Jarvis\Fotos. La ventana muestra "📷 Lo que vio Jarvis" 6 s. Probado con cámara falsa de
+  Chromium (Playwright) y pruebas de camara.ts; NO con cámara real ni Gemini real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

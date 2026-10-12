@@ -51,6 +51,11 @@ Botones: Copiar, Borrar y ✕ (cerrar sin borrar). El botón "Pizarra" (arriba d
 - Canva: en Ajustes → Canva pega las llaves de tu integración (canva.com/developers) y aprieta "Conectar con Canva".
   Luego dile "haz una presentación en Canva sobre...", "pasa el dibujo a Canva" o "descarga mi diseño de... en PDF".
 
+## Cámara (versión 2.9)
+Dile "¿qué ves?", "¿qué tengo en la mano?", "lee esta hoja" o "tómame una foto". Jarvis pide permiso, toma UNA foto
+(la cámara se prende solo un segundo), te muestra lo que vio y te contesta. "Tómame una foto" la guarda en
+Documentos\Jarvis\Fotos. La ventana de Jarvis debe estar abierta.
+
 ## Configuración de Windows (versión 2.8)
 Dile "sube el brillo", "pon el modo oscuro", "prende el Bluetooth", "¿cuánta batería tengo?" o "abre la configuración
 del sonido". Siempre te pide permiso (puedes marcar "no volver a preguntar"). Apagar el Wi-Fi siempre se confirma.
