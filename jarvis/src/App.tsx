@@ -29,6 +29,7 @@ import {
   StickyNote,
   GraduationCap,
   BookOpenCheck,
+  MessageCircle,
   Settings,
   Palette,
 } from "lucide-react";
@@ -75,7 +76,7 @@ interface EstadoAplausos {
   sinSonido: boolean;
   arranqueConWindows: boolean;
   activacion: number;
-  avisos?: { id: number; texto: string }[];
+  avisos?: { id: number; texto: string; icono?: string; silencioso?: boolean }[];
   pedirFoto?: number;
   clase?: {
     id: string;
@@ -425,6 +426,14 @@ export default function App() {
   const [canvaLlaves, setCanvaLlaves] = useState({ clientId: "", clientSecret: "" });
   const [canvaEsperando, setCanvaEsperando] = useState(false);
 
+  // WhatsApp (avisos de quién escribe)
+  const [whatsapp, setWhatsapp] = useState<{ activo: boolean; voz: boolean; funcionando: boolean; error: string | null }>({
+    activo: true,
+    voz: true,
+    funcionando: false,
+    error: null,
+  });
+
   // Canvas del Tec (tareas)
   const [canvasLms, setCanvasLms] = useState<{ configurado: boolean; ultimaRevision: number | null; error: string | null }>({
     configurado: false,
@@ -767,6 +776,32 @@ export default function App() {
   useEffect(() => {
     if (ajustesAbiertos) cargarCanvasLms();
   }, [ajustesAbiertos, cargarCanvasLms]);
+
+  const cargarWhatsapp = useCallback(async () => {
+    try {
+      const r = await fetch("/api/whatsapp");
+      if (r.ok) setWhatsapp(await r.json());
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ajustesAbiertos) cargarWhatsapp();
+  }, [ajustesAbiertos, cargarWhatsapp]);
+
+  const cambiarWhatsapp = async (cambio: { activo?: boolean; voz?: boolean }) => {
+    try {
+      const r = await fetch("/api/whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cambio),
+      });
+      if (r.ok) setWhatsapp(await r.json());
+    } catch {
+      showNotification("No pude cambiar los avisos de WhatsApp.", "error");
+    }
+  };
 
   const conectarCanvasLms = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1420,9 +1455,9 @@ export default function App() {
           if (inicial !== null) window.history.replaceState(null, "", "/");
         }
         for (const a of avisos.filter((x) => x.id > (ultimoAvisoRef.current ?? 0))) {
-          addMensaje("jarvis", `⏰ ${a.texto}`, true);
+          addMensaje("jarvis", `${a.icono ?? "⏰"} ${a.texto}`, true);
           showNotification(a.texto, "warning");
-          if (document.visibilityState === "visible" && a.id > yaDichoHasta && !claseEscuchandoRef.current) {
+          if (document.visibilityState === "visible" && a.id > yaDichoHasta && !claseEscuchandoRef.current && !a.silencioso) {
             hablarRef.current(a.texto);
           }
         }
@@ -1966,6 +2001,41 @@ export default function App() {
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </form>
+              </div>
+
+              {/* WHATSAPP (solo quién escribe) */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <MessageCircle className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">WhatsApp</h2>
+                  </div>
+                  <span
+                    className={`font-hud-mono text-[10px] ${
+                      !whatsapp.activo ? "text-[#68a8d8]" : whatsapp.funcionando ? "text-[#00f5a0]" : "text-[#ff9933]"
+                    }`}
+                  >
+                    {!whatsapp.activo ? "APAGADO" : whatsapp.funcionando ? "AVISANDO" : "REVISANDO..."}
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer">
+                  <input type="checkbox" checked={whatsapp.activo} onChange={(e) => cambiarWhatsapp({ activo: e.target.checked })} />
+                  Avisarme quién me escribe
+                </label>
+                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={whatsapp.voz}
+                    disabled={!whatsapp.activo}
+                    onChange={(e) => cambiarWhatsapp({ voz: e.target.checked })}
+                  />
+                  Decirlo en voz alta
+                </label>
+                {whatsapp.error && <p className="text-[10px] font-hud-mono text-[#ff9933] leading-snug">{whatsapp.error}</p>}
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Nunca leo tus mensajes: solo veo el nombre en el aviso de Windows. Necesitas la app de WhatsApp (o WhatsApp
+                  Web) con sus notificaciones activadas.
+                </p>
               </div>
 
               {/* CANVAS DEL TEC (tareas) */}

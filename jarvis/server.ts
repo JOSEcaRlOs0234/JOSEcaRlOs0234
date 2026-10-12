@@ -63,6 +63,7 @@ import {
   vigilarCanvas,
   type TareaCanvas,
 } from "./canvas-lms.ts";
+import { cambiarConfigWhatsapp, estadoWhatsapp, vigilarWhatsapp } from "./whatsapp.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
 import {
@@ -140,6 +141,8 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Configuración de Windows: cambiar_brillo, modo_oscuro, wifi_bluetooth, ver_estado_laptop (batería, red, brillo) y
   abrir_configuracion para todo lo demás (abre la sección para que el usuario la vea). Nunca digas que algo cambió si
   la herramienta dio error.
+- WhatsApp: solo sabes DE QUIÉN llegaron mensajes (mensajes_whatsapp), NUNCA lo que dicen; no puedes leerlos ni
+  contestarlos. Si te piden leer un mensaje, explica que por privacidad solo avisas quién escribió.
 - Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
   aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
 - MODO CLASE: si el usuario dice "modo clase", "escucha la clase", "graba la clase", usa modo_clase con accion
@@ -776,7 +779,7 @@ const oido = new OidoDeJarvis(async () => {
 }, registrar);
 
 // Avisos (recordatorios que llegaron a su hora): la ventana los muestra y los dice; si no hay ventana, los dice Windows
-let avisos: { id: number; texto: string }[] = [];
+let avisos: { id: number; texto: string; icono?: string; silencioso?: boolean }[] = [];
 let siguienteAviso = 1;
 let ventanaAbiertaPorAviso = 0;
 vigilarRecordatorios((r, atrasado) => {
@@ -844,6 +847,37 @@ app.delete("/api/canvas", (_req, res) => {
   reiniciarCanvas();
   registrar("CANVAS", "Canvas desconectado.");
   res.json(estadoCanvas());
+});
+
+// WhatsApp: avisa DE QUIÉN llegó un mensaje (nunca lo lee). Mismo contacto: máximo un aviso cada 2 minutos.
+const ultimoAvisoWhatsapp = new Map<string, number>();
+vigilarWhatsapp((remitentes) => {
+  const ahora = Date.now();
+  const nuevos = remitentes.filter((r) => ahora - (ultimoAvisoWhatsapp.get(r.de) ?? 0) > 2 * 60 * 1000);
+  if (!nuevos.length) return;
+  for (const r of nuevos) ultimoAvisoWhatsapp.set(r.de, ahora);
+  const nombres = nuevos.map((r) => (r.cuantos > 1 ? `${r.de} (${r.cuantos} mensajes)` : r.de));
+  const lista = nombres.length > 1 ? `${nombres.slice(0, -1).join(", ")} y ${nombres.at(-1)}` : nombres[0];
+  const texto = `Señor, tiene ${nuevos.length > 1 || nuevos[0].cuantos > 1 ? "mensajes" : "un mensaje"} de WhatsApp de ${lista}.`;
+  avisos = [...avisos, { id: siguienteAviso++, texto, icono: "💬", silencioso: !estadoWhatsapp().voz }].slice(-20);
+  registrar("WHATSAPP", `Mensaje de ${lista}`);
+  // Sin ventana a la vista lo dice Windows (si la voz está activada y no hay clase)
+  if (!hayVentanaVisible() && !claseActiva() && estadoWhatsapp().voz) {
+    oido.pausar(8000);
+    void decirEnVoz(texto);
+  }
+}, process.platform === "win32");
+
+app.get("/api/whatsapp", (_req, res) => {
+  res.json(estadoWhatsapp());
+});
+
+app.post("/api/whatsapp", (req, res) => {
+  cambiarConfigWhatsapp({
+    activo: typeof req.body?.activo === "boolean" ? req.body.activo : undefined,
+    voz: typeof req.body?.voz === "boolean" ? req.body.voz : undefined,
+  });
+  res.json(estadoWhatsapp());
 });
 
 // Encendido automático: Windows enciende Jarvis 1 minuto antes del siguiente recordatorio, aunque esté apagado

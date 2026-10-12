@@ -16,6 +16,7 @@
    ← ACTUAL (adelantada a pedido del usuario, junto con "Jarvis como app"): código listo, esperando prueba del usuario.
    Después: volver a la Fase 2 (Spotify).
 5. WhatsApp (antes: explicar opciones, riesgos de bloqueo, recomendar).
+   v2.12: el usuario pidió SOLO avisos de quién escribe, sin leer mensajes → hecho vía notificaciones de Windows (sin riesgo).
    Extra v2.5: correo Gmail. v2.5.1: el usuario NO quiere el panel del correo → se quitó de la interfaz; el código del
    servidor (correo.ts, herramientas, /api/correo) sigue ahí sin usar. Si lo pide: será su Gmail PERSONAL.
 
@@ -46,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.11.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.12.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -295,6 +296,16 @@
   CANVAS + historial; sin ventana visible y fuera de clase lo dice Windows. Herramienta `tareas_canvas` {dias, materia}
   (libre). Ajustes → sección "Canvas (Tec)" (`GET/POST/DELETE /api/canvas`; POST valida la URL descargándola).
   Probado con .ics simulado (baseline, tarea nueva, línea plegada, junta excluida); NO con Canvas real.
+- v2.12 WHATSAPP (pedido: "que me avise si me llega un mensaje de WhatsApp y de quién, pero que no lea mis mensajes"):
+  `whatsapp.ts`. NO se conecta a WhatsApp (sin riesgo de bloqueo): cada 8 s copia `%LOCALAPPDATA%\Microsoft\Windows\
+  Notifications\wpndatabase.db` (+ -wal) a datos/tmp-notificaciones, la abre con `node:sqlite` (Node ≥22.13; si es más
+  viejo, error claro), lee toasts de handlers `%WhatsApp%` o payload con web.whatsapp.com (setReadBigInts: ArrivalTime es
+  FILETIME > 2^53), toma SOLO el primer <text> (remitente/grupo) y BORRA la copia. La 1.ª vez solo marca `ultimoId`.
+  datos/whatsapp.json: activo, voz, ultimoId, recientes (solo nombre+hora, máx. 50). server.ts: aviso con `icono` 💬 y
+  `silencioso` (si voz apagada) en `avisos`; mismo contacto máx. 1 aviso cada 2 min; sin ventana visible y fuera de clase lo
+  dice Windows. Herramienta `mensajes_whatsapp` {horas} (libre, solo quién). Ajustes → "WhatsApp" (casillas avisar / voz;
+  `GET/POST /api/whatsapp`). App.tsx: avisos usan `a.icono ?? "⏰"` y respetan `silencioso`. Probado con una
+  wpndatabase.db falsa (ignora viejos y Teams, agrupa, no guarda contenido); NO en Windows real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

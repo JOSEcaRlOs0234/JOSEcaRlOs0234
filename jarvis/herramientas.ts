@@ -13,6 +13,7 @@ import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.t
 import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
+import { mensajesRecientes } from "./whatsapp.ts";
 import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
 import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
 import {
@@ -168,6 +169,13 @@ export const DECLARACIONES = [
     name: "ver_estado_laptop",
     description: "Dice la batería (y si está cargando), a qué red Wi-Fi está conectada, el brillo y si está en modo oscuro.",
     parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "mensajes_whatsapp",
+    description:
+      "Dice quién le escribió por WhatsApp al usuario en las últimas horas (solo nombres y horas; el contenido de los " +
+      "mensajes NO se puede leer).",
+    parametersJsonSchema: { type: "object", properties: { horas: { type: "integer", description: "1 a 48, por defecto 3" } } },
   },
   {
     name: "tareas_canvas",
@@ -840,6 +848,32 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           return await win.estadoLaptop();
         },
       };
+
+    case "mensajes_whatsapp": {
+      const horas = Math.max(1, Math.min(48, Math.round(Number(args.horas) || 3)));
+      return {
+        nivel: "libre",
+        tipo: "whatsapp",
+        descripcion: "Ver quién escribió por WhatsApp",
+        ejecutar: async () => {
+          const lista = mensajesRecientes(horas);
+          if (!lista.length) return { resultado: `Nadie ha escrito por WhatsApp en las últimas ${horas} horas (o los avisos están apagados).` };
+          const conteo = new Map<string, { cuantos: number; ultimo: number }>();
+          for (const r of lista) {
+            const c = conteo.get(r.de) ?? { cuantos: 0, ultimo: 0 };
+            conteo.set(r.de, { cuantos: c.cuantos + 1, ultimo: Math.max(c.ultimo, r.hora) });
+          }
+          return {
+            quien_escribio: [...conteo].map(([de, c]) => ({
+              de,
+              mensajes: c.cuantos,
+              ultimo: new Date(c.ultimo).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", hour12: false }),
+            })),
+            nota: "Solo se sabe quién escribió; el contenido no se puede leer.",
+          };
+        },
+      };
+    }
 
     case "tareas_canvas": {
       if (!canvasConfigurado()) {
