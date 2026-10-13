@@ -59,7 +59,7 @@ let ia: {
     tipo: "word" | "excel" | "powerpoint",
     tema: string,
     indicaciones: string
-  ) => Promise<{ archivo: string; titulo: string; fuentes: number; confiables: number }>;
+  ) => Promise<{ archivo: string; titulo: string; fuentes: number; confiables: number; sinBusqueda?: boolean }>;
 } | null = null;
 export function conectarIA(funciones: NonNullable<typeof ia>): void {
   ia = funciones;
@@ -891,11 +891,19 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
               resultado: `Listo: "${r.titulo}" está en Documentos\\Jarvis\\Creados y se abrió.`,
               fuentes_usadas: r.fuentes,
               fuentes_confiables: r.confiables,
+              ...(r.sinBusqueda
+                ? { aviso: "La búsqueda en Google estaba en su límite gratuito: se hizo con lo que sabe Gemini, sin fuentes revisadas. Díselo al usuario." }
+                : {}),
             };
           } catch (err) {
-            throw new ErrorHerramienta(
-              `No pude crear el archivo${err instanceof Error && err.message ? `: ${err.message.slice(0, 200)}` : "."}`
-            );
+            const mensaje = err instanceof Error ? err.message : "";
+            if (/429|quota|RESOURCE_EXHAUSTED|rate limit|overloaded|UNAVAILABLE|503/i.test(mensaje)) {
+              throw new ErrorHerramienta(
+                "No es un problema de permisos: se acabó por ahora el uso GRATUITO de Gemini (límite por minuto o por día). " +
+                  "Dile al usuario que lo intente de nuevo en unos minutos; si sigue igual, que espere a mañana."
+              );
+            }
+            throw new ErrorHerramienta(`No pude crear el archivo${mensaje ? `: ${mensaje.slice(0, 200)}` : "."}`);
           }
         },
       };

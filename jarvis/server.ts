@@ -159,6 +159,8 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   presentación en PowerPoint, usa crear_documento con el tipo, el tema y TODAS sus indicaciones (extensión, enfoque,
   público, número de diapositivas...). Tarda un poco porque investiga en fuentes confiables. Al terminar di en una
   frase qué hiciste y cuántas fuentes usaste (el archivo se abre solo).
+  Si falla por límite de uso, NO digas que no tienes permiso: explica que se acabó por ahora el uso gratuito de
+  Gemini y que lo intente en unos minutos. Nunca digas que hiciste el archivo si la herramienta falló.
 - MODO CLASE: si el usuario dice "modo clase", "escucha la clase", "graba la clase", usa modo_clase con accion
   "iniciar" (y la materia si la dice) y contesta en UNA frase corta; después te quedas callado escuchando. Cuando diga
   que terminó la clase, usa modo_clase "terminar": se hace un Word con el resumen en Documentos\\Jarvis\\Clases.
@@ -338,6 +340,18 @@ async function conRespaldo<T>(
   throw ultimoError;
 }
 
+/** Si TODOS los modelos están en su límite por minuto, espera 25 s y lo intenta una vez más. */
+async function conPaciencia<T>(pedir: () => Promise<T>): Promise<T> {
+  try {
+    return await pedir();
+  } catch (err) {
+    if (!convieneOtroModelo(err)) throw err;
+    registrar("AVISO", "Todos los modelos están en su límite; espero 25 s y vuelvo a intentar.");
+    await new Promise((listo) => setTimeout(listo, 25_000));
+    return await pedir();
+  }
+}
+
 // Para dibujar se prefiere el modelo más listo (Pro); si llegó a su límite gratuito, se deja descansar 30 min
 const MODELO_DIBUJO = "gemini-3.1-pro-preview";
 
@@ -368,34 +382,52 @@ conectarIA({
   dibujar: dibujarConRevision,
   // Documentos de Word, Excel y PowerPoint: investigar (fuentes confiables) → estructurar → armar el archivo
   crearDocumento: async (tipo, tema, indicaciones) => {
-    const investigacion = await conRespaldo((modelo) =>
-      ai.models.generateContent({
-        model: modelo,
-        contents: `Investiga a fondo para hacer un ${tipo} sobre: ${tema}${indicaciones ? `. Indicaciones: ${indicaciones}` : ""}`,
-        config: { tools: [{ googleSearch: {} }], systemInstruction: INSTRUCCION_INVESTIGACION },
-      })
-    );
-    const notas = investigacion.text?.trim() ?? "";
+    const pedido = `Investiga a fondo para hacer un ${tipo} sobre: ${tema}${indicaciones ? `. Indicaciones: ${indicaciones}` : ""}`;
+    // 1) Investigar con Google. Si la búsqueda llegó a su límite gratuito, se investiga con lo que sabe Gemini
+    //    (el documento se hace igual, pero avisando que las fuentes no se pudieron revisar).
+    let investigacion: any = null;
+    let sinBusqueda = false;
+    try {
+      investigacion = await conPaciencia(() =>
+        conRespaldo((modelo) =>
+          ai.models.generateContent({
+            model: modelo,
+            contents: pedido,
+            config: { tools: [{ googleSearch: {} }], systemInstruction: INSTRUCCION_INVESTIGACION },
+          })
+        )
+      );
+    } catch (err) {
+      if (!convieneOtroModelo(err)) throw err;
+      sinBusqueda = true;
+      registrar("AVISO", "La búsqueda en Google llegó a su límite; el documento se hace con lo que sabe Gemini.");
+      investigacion = await conRespaldo((modelo) =>
+        ai.models.generateContent({ model: modelo, contents: pedido, config: { systemInstruction: INSTRUCCION_INVESTIGACION } })
+      ).catch(() => null);
+    }
+    const notas =
+      investigacion?.text?.trim() ||
+      "(No hubo notas de investigación: usa solo conocimiento general bien establecido del tema, sin cifras dudosas.)";
     const crudas: Fuente[] = [];
-    for (const trozo of (investigacion.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? []) {
+    for (const trozo of (investigacion?.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? []) {
       const url = trozo?.web?.uri;
       if (typeof url === "string" && /^https?:\/\//.test(url)) crudas.push({ titulo: String(trozo.web.title || "Fuente").slice(0, 120), url });
     }
     const fuentes = ordenarFuentes(await direccionesReales(crudas.slice(0, 20)));
-    const r = await conRespaldo(
-      (modelo) =>
+    // 2) Estructurar: primero el modelo de siempre (el Pro casi no tiene uso gratuito), con los demás de respaldo
+    const r = await conPaciencia(() =>
+      conRespaldo((modelo) =>
         ai.models.generateContent({
           model: modelo,
           contents: pedidoDeEstructura(tipo, tema, indicaciones, notas, fuentes),
           config: { responseMimeType: "application/json", responseJsonSchema: ESQUEMAS[tipo] },
-        }),
-      MODELO_DIBUJO,
-      30 * 60 * 1000
+        })
+      )
     );
     const hecho = await armarDocumento(tipo, JSON.parse(r.text ?? "{}"), fuentes, tema);
-    registrar("DOCUMENTO", `${tipo} creado: ${hecho.archivo} (${fuentes.length} fuentes)`);
+    registrar("DOCUMENTO", `${tipo} creado: ${hecho.archivo} (${fuentes.length} fuentes${sinBusqueda ? ", sin búsqueda" : ""})`);
     void abrirRuta(hecho.archivo).catch(() => {});
-    return { ...hecho, fuentes: fuentes.length, confiables: fuentes.filter(esConfiable).length };
+    return { ...hecho, fuentes: fuentes.length, confiables: fuentes.filter(esConfiable).length, sinBusqueda };
   },
   // Cámara: la ventana toma la foto y Gemini la analiza
   mirar: async (pregunta, guardar) => {

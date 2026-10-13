@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.13.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.13.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -318,6 +318,11 @@
   Se guarda en Documentos\Jarvis\Creados y se abre. npm audit avisa de image-size/uuid (deps de pptxgenjs/exceljs) que
   no se usan con datos externos. Probado: los 3 archivos con contenido de ejemplo (convertidos a PDF con LibreOffice y
   revisados) y la herramienta con IA simulada; NO con Gemini real.
+- PRUEBA REAL v2.13: "haz la presentación" → Jarvis dijo "límite de cuota / no tengo permiso" (429: googleSearch y/o
+  Pro sin uso gratuito). v2.13.1: `conPaciencia` (si todos los modelos dan 429/503, espera 25 s y reintenta 1 vez);
+  si la investigación con googleSearch sigue fallando, investiga SIN búsqueda (`sinBusqueda`, aviso al usuario, 0 fuentes);
+  la estructura ya NO prefiere Pro (usa `modeloActual` + respaldos). Si todo falla, la herramienta dice "no es de permisos,
+  se acabó el uso gratuito, intenta en unos minutos" y PERSONALIDAD prohíbe decir "no tengo permiso". Probado con Gemini simulado.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
