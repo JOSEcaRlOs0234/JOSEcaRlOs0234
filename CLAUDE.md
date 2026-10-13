@@ -334,6 +334,11 @@
   Las acciones de Windows NO se han podido probar en la nube.
 
 ## Ideas para fases siguientes
+- PENDIENTE (pedido: "que trabaje incluso cuando la compu esté apagada, pero que no se prenda"): se le explicó que
+  necesita vivir en la nube. Propuesta aceptada en principio: "Jarvis de bolsillo" = bot de Telegram en la nube (p. ej.
+  Cloudflare Workers gratis con cron) con Gemini: platicar, recordatorios, tareas de Canvas, notas, investigar; solo
+  obedece al ID de Telegram del dueño; claves como secretos de la nube. Sin acciones de laptop/cámara/WhatsApp.
+  El usuario dijo "después me creo Telegram" → esperar a que lo pida; no construir antes. No tocar el Jarvis actual.
 - Fase 2: Spotify Web API (OAuth PKCE, token guardado en .env/archivo local; requiere Spotify Premium para controlar reproducción).
   Usar "function calling" de Gemini con una lista cerrada de herramientas.
 - Fase 3: programa aparte en segundo plano (p. ej. Python con sounddevice o Node) + tarea de inicio de Windows.
