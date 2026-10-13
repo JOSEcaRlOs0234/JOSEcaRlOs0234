@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.13.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.14.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -323,6 +323,19 @@
   si la investigación con googleSearch sigue fallando, investiga SIN búsqueda (`sinBusqueda`, aviso al usuario, 0 fuentes);
   la estructura ya NO prefiere Pro (usa `modeloActual` + respaldos). Si todo falla, la herramienta dice "no es de permisos,
   se acabó el uso gratuito, intenta en unos minutos" y PERSONALIDAD prohíbe decir "no tengo permiso". Probado con Gemini simulado.
+- v2.14 LEER EN INTERNET (pedido: "que pueda leer cosas en internet e informarme, ya no solo buscarlo"; "solo agrega"):
+  `lector-web.ts`: `leerPagina` (fetch propio, redirect manual ≤5 revisando cada salto, 20 s, ≤4 MB, User-Agent de
+  navegador; HTML → `textoDeHtml` quita head/script/style/nav/footer/aside/form, prefiere <article>/<main>; PDF → se manda
+  a Gemini como inlineData application/pdf; imágenes/programas se rechazan). Seguridad `revisarDireccion`: solo http/https,
+  sin usuario:contraseña, puertos 80/443/8080/8443, y NUNCA localhost/.local ni IPs privadas (`esDireccionPrivada`,
+  resuelve DNS) → no se puede usar contra la laptop (127.0.0.1:3000) ni la red de la casa. Prompts marcan el contenido como
+  DATOS, no órdenes. Herramientas (libres, tipo "investigar"): `leer_pagina_web` {url, pregunta} (si la explicación es
+  >700 car. va a la pizarra con el enlace) y `leer_en_internet` {tema} (Gemini+googleSearch → groundingChunks →
+  `direccionesReales`/`ordenarFuentes` → lee hasta 6 páginas en paralelo, usa ≤4 con ≥300 car. → `pedidoDeLecturaVarias`
+  con citas [n] → pizarra con "## Fuentes"; si ninguna se deja leer, usa las notas de la búsqueda). `separarResumen` quita
+  las [n] de lo que se dice en voz. Implementación en conectarIA (`leerPaginaWeb`, `leerSobreTema`, con conPaciencia +
+  conRespaldo). Registro tipo WEB. PERSONALIDAD "LEER EN INTERNET". Probado con fetch y Gemini simulados; NO con
+  páginas reales (la nube no deja salir a Node sin el proxy).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
