@@ -4,7 +4,8 @@
  * Cada vez que el usuario pide algo que Jarvis todavía no sabe hacer (o una herramienta se rompe por un error del
  * programa), se anota aquí. Jarvis NO puede mandarle mensajes a Claude por su cuenta (Claude no tiene una dirección para
  * recibirlos), así que la lista se guarda en datos/faltantes.json y también en Documentos\Jarvis\Para Claude.txt:
- * el usuario la copia (botón "Copiar para Claude" en Ajustes) y se la pega a Claude para que lo construya.
+ * cuando Jarvis no puede hacer algo, PREGUNTA si se lo manda a Claude; si el usuario dice que sí, copia el mensaje y abre
+ * el chat de Claude (solo falta pegarlo). La lista queda en Ajustes → "Para Claude" como historial.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -23,6 +24,7 @@ export interface Falta {
   veces: number;
   primera: number;
   ultima: number;
+  enviada?: number; // cuándo se le mandó a Claude
 }
 
 let alCambiar: (() => void) | null = null;
@@ -115,4 +117,29 @@ export function reporteParaClaude(version: string): string {
 /** Guarda la lista en Documentos\Jarvis\Para Claude.txt (para poder mandarla como archivo). */
 export async function guardarReporte(carpetaJarvis: string, version: string): Promise<void> {
   await writeFile(path.join(carpetaJarvis, "Para Claude.txt"), reporteParaClaude(version) || "No falta nada por ahora.\n", "utf8");
+}
+
+/** Busca una falta ya anotada (para poder mandarla). */
+export function buscarFalta(tipo: Falta["tipo"], queFalta: string): Falta | undefined {
+  const clave = parecido(queFalta);
+  return leerFaltas().find((f) => f.tipo === tipo && parecido(f.queFalta) === clave);
+}
+
+export function marcarEnviada(id: string): void {
+  const lista = leerFaltas();
+  const f = lista.find((x) => x.id === id);
+  if (!f) return;
+  f.enviada = Date.now();
+  guardar(lista);
+}
+
+/** El mensaje que se le manda a Claude por una sola cosa que falta. */
+export function mensajeParaClaude(f: Falta, version: string): string {
+  return (
+    `Hola Claude, soy Jarvis (versión ${version}). ` +
+    (f.pedido ? `Me pidieron: "${f.pedido}" y no lo pude hacer. ` : "") +
+    `Lo que me falta: ${f.queFalta}` +
+    (f.veces > 1 ? ` (me lo han pedido ${f.veces} veces)` : "") +
+    ". Por favor agrégamelo sin cambiar nada de lo que ya funciona."
+  );
 }

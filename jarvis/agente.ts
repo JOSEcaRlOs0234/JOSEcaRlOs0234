@@ -180,6 +180,10 @@ export class Agente {
       registrar("ERROR", `Falló: ${revisada.descripcion} → ${motivo} ${err instanceof ErrorHerramienta ? "" : String(err?.message ?? err).slice(0, 200)}`);
       if (!(err instanceof ErrorHerramienta)) {
         paraClaude("error", contents, `Falló "${revisada.descripcion}": ${String(err?.message ?? err).slice(0, 300)}`);
+        return respuesta(llamada, {
+          error: motivo,
+          sugerencia: "Es un error del programa. Díselo al usuario y pregúntale si quiere que se lo mandes a Claude.",
+        });
       }
       return respuesta(llamada, { error: motivo });
     }

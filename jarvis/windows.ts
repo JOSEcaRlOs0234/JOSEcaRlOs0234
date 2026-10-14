@@ -103,6 +103,11 @@ async function abrirVisible(destino: string): Promise<void> {
   }
 }
 
+/** Copia un texto al portapapeles de Windows (el texto va por variable de entorno, nunca dentro del script). */
+export function copiarAlPortapapeles(texto: string): Promise<void> {
+  return powershell("Set-Clipboard -Value $env:JARVIS_TEXTO", { JARVIS_TEXTO: texto }).then(() => undefined);
+}
+
 export function abrirUrl(url: string): Promise<void> {
   return abrirVisible(url);
 }

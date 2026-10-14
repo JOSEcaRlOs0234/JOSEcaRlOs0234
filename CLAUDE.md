@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.15.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.15.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -346,6 +346,13 @@
   `GET/DELETE /api/faltantes`, `DELETE /api/faltantes/:id`. Ajustes → "Para Claude" (lista, quitar, "Copiar para Claude",
   "Vaciar"). Probado con Gemini simulado + captura en Playwright. → Cuando el usuario pegue esa lista aquí: construir
   lo que pide (solo agregar) y pedirle que vacíe la lista.
+- v2.15.1 (pedido: "borra lo del botón; que cuando no pueda, me pregunte si te lo manda y yo le diga que sí"): se quitó
+  "Copiar para Claude". Herramienta `anotar_para_claude` → `mandar_a_claude` {pedido, que_falta} (libre: el usuario ya
+  dijo que sí): anota, `mensajeParaClaude`, `win.copiarAlPortapapeles` (PowerShell Set-Clipboard, texto por env) y abre
+  `URL_CLAUDE` (= esta sesión de Claude Code; `CLAUDE_URL` en .env la cambia) → el usuario solo pega (Ctrl+V) y Enter.
+  Marca `enviada` (el panel muestra "enviado ✓"). PERSONALIDAD: decir que no sabe y PREGUNTAR "¿Quiere que se lo mande a
+  Claude?"; solo con "sí" usar mandar_a_claude. Errores del programa: agente.ts agrega `sugerencia` para que pregunte.
+  Ajustes → Para Claude queda como historial (quitar uno / Vaciar). Si cambia la sesión de Claude, actualizar URL_CLAUDE.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

@@ -793,7 +793,7 @@ export default function App() {
 
   // "Para Claude": lo que le falta a Jarvis
   const [paraClaude, setParaClaude] = useState<{
-    faltas: { id: string; tipo: "falta" | "error"; pedido: string; queFalta: string; veces: number; ultima: number }[];
+    faltas: { id: string; tipo: "falta" | "error"; pedido: string; queFalta: string; veces: number; ultima: number; enviada?: number }[];
     reporte: string;
   }>({ faltas: [], reporte: "" });
 
@@ -809,15 +809,6 @@ export default function App() {
   useEffect(() => {
     if (ajustesAbiertos) cargarParaClaude();
   }, [ajustesAbiertos, cargarParaClaude]);
-
-  const copiarParaClaude = async () => {
-    try {
-      await navigator.clipboard.writeText(paraClaude.reporte);
-      showNotification("Copiado. Pégaselo a Claude en su chat.", "info");
-    } catch {
-      showNotification("No pude copiar. También está en Documentos\\Jarvis\\Para Claude.txt", "error");
-    }
-  };
 
   const borrarParaClaude = async (id?: string) => {
     try {
@@ -2095,6 +2086,7 @@ export default function App() {
                         <span className="flex-1">
                           {f.queFalta}
                           {f.veces > 1 && <span className="text-[#68a8d8]"> · {f.veces} veces</span>}
+                          {f.enviada && <span className="text-[#00f5a0]"> · enviado ✓</span>}
                           {f.pedido && <span className="block text-[10px] text-[#68a8d8]">Pediste: "{f.pedido}"</span>}
                         </span>
                         <button
@@ -2109,17 +2101,11 @@ export default function App() {
                   </ul>
                 ) : (
                   <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                    Cuando me pidas algo que todavía no sé hacer, o algo me falle, lo anoto aquí para Claude.
+                    Cuando me pidas algo que todavía no sé hacer, te preguntaré si se lo mando a Claude.
                   </p>
                 )}
                 {paraClaude.faltas.length > 0 && (
                   <div className="flex gap-2">
-                    <button
-                      onClick={copiarParaClaude}
-                      className="flex-1 px-2 py-1.5 rounded border border-[#00e5ff]/50 text-[11px] font-hud-mono text-[#00e5ff] hover:bg-[#00e5ff]/10"
-                    >
-                      Copiar para Claude
-                    </button>
                     <button
                       onClick={() => borrarParaClaude()}
                       className="px-2 py-1.5 rounded border border-[#68a8d8]/40 text-[11px] font-hud-mono text-[#68a8d8] hover:text-[#ff5577]"
@@ -2129,7 +2115,7 @@ export default function App() {
                   </div>
                 )}
                 <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                  Copia la lista y pégasela a Claude en su chat (o mándale el archivo Documentos\Jarvis\Para Claude.txt).
+                  Si me dices que sí, abro el chat de Claude con el mensaje copiado: solo pégalo (Ctrl+V) y presiona Enter.
                   Cuando Claude lo agregue, vacía la lista.
                 </p>
               </div>

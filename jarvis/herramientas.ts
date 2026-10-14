@@ -4,7 +4,7 @@
  * y tiene su propio nivel de permiso. Nada fuera de esta lista se puede hacer.
  */
 
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -29,7 +29,7 @@ import {
   TIPOS_DISENO,
 } from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
-import { anotarFalta } from "./faltantes.ts";
+import { anotarFalta, buscarFalta, marcarEnviada, mensajeParaClaude } from "./faltantes.ts";
 import type { Informe } from "./consultas.ts";
 import {
   correoConfigurado,
@@ -69,6 +69,17 @@ export function conectarIA(funciones: NonNullable<typeof ia>): void {
 }
 
 const CARPETA_JARVIS_APP = path.dirname(fileURLToPath(import.meta.url));
+const VERSION_JARVIS: string = (() => {
+  try {
+    return JSON.parse(readFileSync(path.join(CARPETA_JARVIS_APP, "package.json"), "utf8")).version;
+  } catch {
+    return "?";
+  }
+})();
+// Chat de Claude (Claude Code) donde se programa a Jarvis; CLAUDE_URL en el .env lo cambia
+const URL_CLAUDE = /^https:\/\/claude\.ai\//.test(process.env.CLAUDE_URL?.trim() ?? "")
+  ? process.env.CLAUDE_URL!.trim()
+  : "https://claude.ai/code/session_01SJFk4BbA4DNCz54WYBQ6Ct";
 
 /**
  * Nivel de permiso de cada acción:
@@ -367,11 +378,11 @@ export const DECLARACIONES = [
     },
   },
   {
-    name: "anotar_para_claude",
+    name: "mandar_a_claude",
     description:
-      "Anota en la lista 'Para Claude' algo que el usuario te pidió y que NO puedes hacer con tus herramientas (o que " +
-      "falló por un error del programa, no por falta de internet o de límite de uso). Claude (quien te programa) lo " +
-      "leerá para agregártelo. Úsalo cada vez que te falte una capacidad, aunque el usuario no lo pida.",
+      "Le manda a Claude (quien te programa) algo que el usuario te pidió y que NO puedes hacer, para que te lo agregue. " +
+      "ÚSALO SOLO DESPUÉS de preguntarle al usuario '¿Quiere que se lo mande a Claude?' y que él diga que SÍ. " +
+      "Copia el mensaje y abre el chat de Claude en el navegador; el usuario solo lo pega (Ctrl+V) y presiona Enter.",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -1455,19 +1466,32 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       };
     }
 
-    case "anotar_para_claude": {
+    case "mandar_a_claude": {
       const queFalta = texto(args.que_falta, "que_falta", 800);
       const pedido = typeof args.pedido === "string" ? args.pedido.slice(0, 500) : "";
       return {
+        // El usuario ya dijo que sí en la conversación: no se vuelve a preguntar
         nivel: "libre",
         tipo: "para_claude",
-        descripcion: `Anotar para Claude: ${queFalta.slice(0, 120)}`,
+        descripcion: `Mandar a Claude: ${queFalta.slice(0, 120)}`,
         ejecutar: async () => {
-          const nuevo = anotarFalta("falta", pedido, queFalta);
+          anotarFalta("falta", pedido, queFalta);
+          const falta = buscarFalta("falta", queFalta);
+          if (!falta) throw new ErrorHerramienta("No pude preparar el mensaje para Claude.");
+          const mensaje = mensajeParaClaude(falta, VERSION_JARVIS);
+          let copiado = true;
+          try {
+            await win.copiarAlPortapapeles(mensaje);
+          } catch {
+            copiado = false;
+          }
+          await win.abrirUrl(URL_CLAUDE).catch(() => {});
+          marcarEnviada(falta.id);
           return {
-            resultado: nuevo
-              ? "Anotado en la lista 'Para Claude'. Dile al usuario en una frase que aún no sabes hacerlo, que ya lo anotaste para Claude y que lo puede mandar desde Ajustes → Para Claude."
-              : "Ya estaba en la lista 'Para Claude' (se sumó una vez más). Díselo al usuario en una frase.",
+            resultado: copiado
+              ? "Listo: abrí el chat de Claude y copié el mensaje. Dile al usuario en una frase que solo lo pegue con Ctrl+V y presione Enter."
+              : "Abrí el chat de Claude pero no pude copiar el mensaje. Dile al usuario que escriba ahí lo que necesita.",
+            mensaje,
           };
         },
       };
