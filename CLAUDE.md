@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.14.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.15.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -336,6 +336,16 @@
   las [n] de lo que se dice en voz. Implementación en conectarIA (`leerPaginaWeb`, `leerSobreTema`, con conPaciencia +
   conRespaldo). Registro tipo WEB. PERSONALIDAD "LEER EN INTERNET". Probado con fetch y Gemini simulados; NO con
   páginas reales (la nube no deja salir a Node sin el proxy).
+- v2.15 PARA CLAUDE (pedido: "que se conecte a ti y te notifique de cada cosa que le falte"; "no cambies nada"):
+  Jarvis NO puede mandarle mensajes a Claude solo (no hay a dónde; el repo es público y no se quieren pedidos privados en
+  issues) → `faltantes.ts`: lista en `datos/faltantes.json` (tipo falta|error, pedido, queFalta, veces; parecidos se suman;
+  máx. 100) y copia en `Documentos\Jarvis\Para Claude.txt` (`reporteParaClaude` = texto listo para pegar). Se anota:
+  herramienta `anotar_para_claude` {pedido, que_falta} (libre; PERSONALIDAD "PARA CLAUDE": usarla cuando no exista
+  herramienta para lo pedido, no por internet/límite) + automático en agente.ts (`paraClaude`): herramienta inexistente
+  ("No tengo permitido hacer") = falta; excepción que no es ErrorHerramienta al revisar/ejecutar = error (bug).
+  `GET/DELETE /api/faltantes`, `DELETE /api/faltantes/:id`. Ajustes → "Para Claude" (lista, quitar, "Copiar para Claude",
+  "Vaciar"). Probado con Gemini simulado + captura en Playwright. → Cuando el usuario pegue esa lista aquí: construir
+  lo que pide (solo agregar) y pedirle que vacíe la lista.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

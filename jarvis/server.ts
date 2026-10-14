@@ -90,7 +90,8 @@ import { correoConfigurado, correoValido, explicarErrorCorreo, probarCuenta, usu
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
 import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
-import { abrirRuta, programarEncendido, tocarSonido } from "./windows.ts";
+import { abrirRuta, carpetasUsuario, programarEncendido, tocarSonido } from "./windows.ts";
+import { borrarFalta, borrarFaltas, cuandoCambienFaltas, guardarReporte, leerFaltas, reporteParaClaude } from "./faltantes.ts";
 import { agregarRecuerdo, borrarRecuerdo, leerRecuerdos, recuerdosParaGemini } from "./memoria.ts";
 import { enfriarModelo, guardarModelo, idValido, listarModelos, modeloElegido, ordenDePrueba } from "./modelos.ts";
 
@@ -156,6 +157,10 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   contestarlos. Si te piden leer un mensaje, explica que por privacidad solo avisas quién escribió.
 - Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
   aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
+- PARA CLAUDE: Claude es quien te programa. Si el usuario pide algo que NO puedes hacer con tus herramientas (no existe
+  una herramienta para eso), no inventes que lo hiciste: usa anotar_para_claude (con su pedido y qué te falta) y dile en
+  una frase que todavía no sabes hacerlo y que ya se lo anotaste a Claude. No lo uses por fallas de internet ni por el
+  límite gratuito de Gemini (eso no es algo que falte). Si te preguntan qué te falta, la lista está en Ajustes → Para Claude.
 - LEER EN INTERNET: si el usuario da un enlace o dirección, o dice "lee esta página", "¿qué dice este artículo?",
   "resúmeme este link", usa leer_pagina_web (con su pregunta si la hay). Si quiere enterarse a fondo de algo actual
   ("léeme las noticias de...", "¿qué pasó con...?", "infórmame sobre...", "lee en internet sobre..."), usa
@@ -1018,6 +1023,32 @@ vigilarWhatsapp((remitentes) => {
     void decirEnVoz(texto);
   }
 }, process.platform === "win32");
+
+// "Para Claude": lo que le falta a Jarvis (también queda en Documentos\Jarvis\Para Claude.txt)
+cuandoCambienFaltas(() => {
+  registrar("AVISO", "Se actualizó la lista 'Para Claude'.");
+  void carpetasUsuario()
+    .then(async (c) => {
+      mkdirSync(c.jarvis, { recursive: true });
+      await guardarReporte(c.jarvis, VERSION);
+    })
+    .catch(() => {});
+});
+
+app.get("/api/faltantes", (_req, res) => {
+  res.json({ faltas: leerFaltas(), reporte: reporteParaClaude(VERSION) });
+});
+
+app.delete("/api/faltantes", (_req, res) => {
+  borrarFaltas();
+  registrar("AVISO", "Se vació la lista 'Para Claude'.");
+  res.json({ faltas: [], reporte: "" });
+});
+
+app.delete("/api/faltantes/:id", (req, res) => {
+  borrarFalta(String(req.params.id));
+  res.json({ faltas: leerFaltas(), reporte: reporteParaClaude(VERSION) });
+});
 
 app.get("/api/whatsapp", (_req, res) => {
   res.json(estadoWhatsapp());

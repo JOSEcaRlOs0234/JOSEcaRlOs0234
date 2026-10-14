@@ -29,6 +29,7 @@ import {
   TIPOS_DISENO,
 } from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
+import { anotarFalta } from "./faltantes.ts";
 import type { Informe } from "./consultas.ts";
 import {
   correoConfigurado,
@@ -363,6 +364,21 @@ export const DECLARACIONES = [
       type: "object",
       properties: { tema: { type: "string", description: "Qué investigar, con todo el detalle que dio el usuario" } },
       required: ["tema"],
+    },
+  },
+  {
+    name: "anotar_para_claude",
+    description:
+      "Anota en la lista 'Para Claude' algo que el usuario te pidió y que NO puedes hacer con tus herramientas (o que " +
+      "falló por un error del programa, no por falta de internet o de límite de uso). Claude (quien te programa) lo " +
+      "leerá para agregártelo. Úsalo cada vez que te falte una capacidad, aunque el usuario no lo pida.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        pedido: { type: "string", description: "Lo que pidió el usuario, con sus palabras" },
+        que_falta: { type: "string", description: "Qué capacidad te falta o qué falló, explicado claro para un programador" },
+      },
+      required: ["que_falta"],
     },
   },
   {
@@ -1435,6 +1451,24 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           } catch {
             throw new ErrorHerramienta("No pude consultar el clima en este momento (¿hay internet?).");
           }
+        },
+      };
+    }
+
+    case "anotar_para_claude": {
+      const queFalta = texto(args.que_falta, "que_falta", 800);
+      const pedido = typeof args.pedido === "string" ? args.pedido.slice(0, 500) : "";
+      return {
+        nivel: "libre",
+        tipo: "para_claude",
+        descripcion: `Anotar para Claude: ${queFalta.slice(0, 120)}`,
+        ejecutar: async () => {
+          const nuevo = anotarFalta("falta", pedido, queFalta);
+          return {
+            resultado: nuevo
+              ? "Anotado en la lista 'Para Claude'. Dile al usuario en una frase que aún no sabes hacerlo, que ya lo anotaste para Claude y que lo puede mandar desde Ajustes → Para Claude."
+              : "Ya estaba en la lista 'Para Claude' (se sumó una vez más). Díselo al usuario en una frase.",
+          };
         },
       };
     }

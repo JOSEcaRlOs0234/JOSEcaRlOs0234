@@ -32,6 +32,7 @@ import {
   MessageCircle,
   Settings,
   Palette,
+  Lightbulb,
 } from "lucide-react";
 import {
   CONFIG,
@@ -789,6 +790,43 @@ export default function App() {
   useEffect(() => {
     if (ajustesAbiertos) cargarWhatsapp();
   }, [ajustesAbiertos, cargarWhatsapp]);
+
+  // "Para Claude": lo que le falta a Jarvis
+  const [paraClaude, setParaClaude] = useState<{
+    faltas: { id: string; tipo: "falta" | "error"; pedido: string; queFalta: string; veces: number; ultima: number }[];
+    reporte: string;
+  }>({ faltas: [], reporte: "" });
+
+  const cargarParaClaude = useCallback(async () => {
+    try {
+      const r = await fetch("/api/faltantes");
+      if (r.ok) setParaClaude(await r.json());
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ajustesAbiertos) cargarParaClaude();
+  }, [ajustesAbiertos, cargarParaClaude]);
+
+  const copiarParaClaude = async () => {
+    try {
+      await navigator.clipboard.writeText(paraClaude.reporte);
+      showNotification("Copiado. Pégaselo a Claude en su chat.", "info");
+    } catch {
+      showNotification("No pude copiar. También está en Documentos\\Jarvis\\Para Claude.txt", "error");
+    }
+  };
+
+  const borrarParaClaude = async (id?: string) => {
+    try {
+      const r = await fetch(id ? `/api/faltantes/${encodeURIComponent(id)}` : "/api/faltantes", { method: "DELETE" });
+      if (r.ok) setParaClaude(await r.json());
+    } catch {
+      showNotification("No pude borrar de la lista.", "error");
+    }
+  };
 
   const cambiarWhatsapp = async (cambio: { activo?: boolean; voz?: boolean }) => {
     try {
@@ -2035,6 +2073,64 @@ export default function App() {
                 <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
                   Nunca leo tus mensajes: solo veo el nombre en el aviso de Windows. Necesitas la app de WhatsApp (o WhatsApp
                   Web) con sus notificaciones activadas.
+                </p>
+              </div>
+
+              {/* PARA CLAUDE (lo que le falta a Jarvis) */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Lightbulb className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">Para Claude</h2>
+                  </div>
+                  <span className={`font-hud-mono text-[10px] ${paraClaude.faltas.length ? "text-[#ff9933]" : "text-[#00f5a0]"}`}>
+                    {paraClaude.faltas.length ? `${paraClaude.faltas.length} PENDIENTE${paraClaude.faltas.length > 1 ? "S" : ""}` : "NADA PENDIENTE"}
+                  </span>
+                </div>
+                {paraClaude.faltas.length ? (
+                  <ul className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                    {paraClaude.faltas.map((f) => (
+                      <li key={f.id} className="flex items-start gap-2 text-[11px] font-hud-mono text-[#e2f8ff] leading-snug">
+                        <span className="shrink-0">{f.tipo === "error" ? "⚠️" : "💡"}</span>
+                        <span className="flex-1">
+                          {f.queFalta}
+                          {f.veces > 1 && <span className="text-[#68a8d8]"> · {f.veces} veces</span>}
+                          {f.pedido && <span className="block text-[10px] text-[#68a8d8]">Pediste: "{f.pedido}"</span>}
+                        </span>
+                        <button
+                          onClick={() => borrarParaClaude(f.id)}
+                          title="Quitar de la lista"
+                          className="shrink-0 text-[#68a8d8] hover:text-[#ff5577]"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                    Cuando me pidas algo que todavía no sé hacer, o algo me falle, lo anoto aquí para Claude.
+                  </p>
+                )}
+                {paraClaude.faltas.length > 0 && (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={copiarParaClaude}
+                      className="flex-1 px-2 py-1.5 rounded border border-[#00e5ff]/50 text-[11px] font-hud-mono text-[#00e5ff] hover:bg-[#00e5ff]/10"
+                    >
+                      Copiar para Claude
+                    </button>
+                    <button
+                      onClick={() => borrarParaClaude()}
+                      className="px-2 py-1.5 rounded border border-[#68a8d8]/40 text-[11px] font-hud-mono text-[#68a8d8] hover:text-[#ff5577]"
+                    >
+                      Vaciar
+                    </button>
+                  </div>
+                )}
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Copia la lista y pégasela a Claude en su chat (o mándale el archivo Documentos\Jarvis\Para Claude.txt).
+                  Cuando Claude lo agregue, vacía la lista.
                 </p>
               </div>
 

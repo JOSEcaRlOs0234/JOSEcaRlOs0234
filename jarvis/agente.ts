@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { ErrorHerramienta, NOMBRES_PERMISOS, Revisada, revisar } from "./herramientas.ts";
 import { registrar } from "./registro.ts";
+import { anotarFalta } from "./faltantes.ts";
 import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 /** Función que le pregunta a Gemini; recibe la conversación y devuelve su respuesta. */
@@ -100,7 +101,7 @@ export class Agente {
         guardarPermisos(permisos);
         registrar("PERMISO", `Ya no preguntaré para: ${NOMBRES_PERMISOS[p.revisada.tipo]}`);
       }
-      p.respuestas.push(await this.ejecutar(llamada, p.revisada));
+      p.respuestas.push(await this.ejecutar(llamada, p.revisada, p.contents));
     } else {
       registrar("PERMISO", `Rechazado: ${p.revisada.descripcion}`);
       p.respuestas.push(respuesta(llamada, { error: "El usuario NO dio permiso. No lo intentes de nuevo." }));
@@ -134,13 +135,19 @@ export class Agente {
       } catch (err) {
         const motivo = err instanceof ErrorHerramienta ? err.message : "No se pudo revisar la acción.";
         registrar("ACCION", `Rechazada por las reglas: ${llamada.name} → ${motivo}`);
+        // Para Claude: herramientas que Gemini quiso usar y no existen, o errores del programa
+        if (!(err instanceof ErrorHerramienta)) {
+          paraClaude("error", contents, `Error al revisar "${llamada.name}": ${String((err as any)?.message ?? err).slice(0, 300)}`);
+        } else if (motivo.startsWith("No tengo permitido hacer")) {
+          paraClaude("falta", contents, `Quise usar una herramienta que no tengo: "${llamada.name}"`);
+        }
         respuestas.push(respuesta(llamada, { error: motivo }));
         continue;
       }
 
       const recordado = revisada.nivel === "normal" && leerPermisos().has(revisada.tipo);
       if (revisada.nivel === "libre" || recordado) {
-        respuestas.push(await this.ejecutar(llamada, revisada));
+        respuestas.push(await this.ejecutar(llamada, revisada, contents));
         continue;
       }
 
@@ -163,7 +170,7 @@ export class Agente {
     return this.avanzar(contents, vueltas + 1);
   }
 
-  private async ejecutar(llamada: Llamada, revisada: Revisada): Promise<any> {
+  private async ejecutar(llamada: Llamada, revisada: Revisada, contents: any[] = []): Promise<any> {
     try {
       const resultado = await revisada.ejecutar();
       registrar("ACCION", `Hecho: ${revisada.descripcion}`);
@@ -171,6 +178,9 @@ export class Agente {
     } catch (err: any) {
       const motivo = err instanceof ErrorHerramienta ? err.message : "Falló al ejecutarse.";
       registrar("ERROR", `Falló: ${revisada.descripcion} → ${motivo} ${err instanceof ErrorHerramienta ? "" : String(err?.message ?? err).slice(0, 200)}`);
+      if (!(err instanceof ErrorHerramienta)) {
+        paraClaude("error", contents, `Falló "${revisada.descripcion}": ${String(err?.message ?? err).slice(0, 300)}`);
+      }
       return respuesta(llamada, { error: motivo });
     }
   }
@@ -183,4 +193,24 @@ export class Agente {
 
 function respuesta(llamada: Llamada, contenido: Record<string, unknown>) {
   return { functionResponse: { ...(llamada.id ? { id: llamada.id } : {}), name: llamada.name, response: contenido } };
+}
+
+/** Lo último que escribió el usuario (para que Claude sepa qué se pidió). */
+function ultimoPedido(contents: any[]): string {
+  for (let i = contents.length - 1; i >= 0; i--) {
+    const c = contents[i];
+    if (c?.role !== "user") continue;
+    const texto = (c.parts ?? []).map((p: any) => (typeof p?.text === "string" ? p.text : "")).join(" ").trim();
+    if (texto) return texto;
+  }
+  return "";
+}
+
+/** Anota en la lista "Para Claude" sin estorbar nunca a la conversación. */
+function paraClaude(tipo: "falta" | "error", contents: any[], queFalta: string): void {
+  try {
+    anotarFalta(tipo, ultimoPedido(contents), queFalta);
+  } catch {
+    // Si no se pudo anotar, no pasa nada
+  }
 }
