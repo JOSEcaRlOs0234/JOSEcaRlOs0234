@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.15.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.15.2). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -353,6 +353,11 @@
   Marca `enviada` (el panel muestra "enviado ✓"). PERSONALIDAD: decir que no sabe y PREGUNTAR "¿Quiere que se lo mande a
   Claude?"; solo con "sí" usar mandar_a_claude. Errores del programa: agente.ts agrega `sugerencia` para que pregunte.
   Ajustes → Para Claude queda como historial (quitar uno / Vaciar). Si cambia la sesión de Claude, actualizar URL_CLAUDE.
+- v2.15.2 (pedido: "agrega este audio de cuando se abra y quita el otro"): `sonidos/jarvis-intro.mp3` reemplazado por el
+  nuevo (8 s, mp3; sigue fuera de git). Sin cambios de código: server.ts recopia a datos\sonidos\intro.mp3 si cambia el tamaño.
+- Micrófono (oct 2026): "Varios micrófonos" (Realtek, Lenovo) estaba DESHABILITADO en Windows → se habilitó, volumen 100,
+  mejoras de audio apagadas; Mezcla estéreo deshabilitada. Windows ya oye, pero Jarvis decía "No llega sonido" →
+  revisando privacidad "aplicaciones de escritorio" / tecla F4 de silencio (Lenovo). Pendiente.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
