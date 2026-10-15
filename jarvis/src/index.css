@@ -1,0 +1,196 @@
+@import "tailwindcss";
+
+:root {
+  --hud-bg-deep: #02060d;
+  --hud-bg-obsidian: #050d1a;
+  --hud-panel-bg: rgba(6, 18, 38, 0.72);
+  --hud-panel-bg-strong: rgba(8, 24, 52, 0.88);
+  --hud-neon-cyan: #00e5ff;
+  --hud-neon-blue: #0088ff;
+  --hud-neon-ice: #b8f4ff;
+  --hud-neon-royal: #1d4ed8;
+  --hud-amber: #ff9933;
+  --hud-coral: #ff6b8b;
+  --hud-emerald: #00f5a0;
+  --hud-danger: #ff3355;
+  --hud-text-primary: #e2f8ff;
+  --hud-text-secondary: #68a8d8;
+  --hud-text-muted: #386890;
+  --hud-border-subtle: rgba(0, 229, 255, 0.22);
+  --hud-border-strong: rgba(0, 229, 255, 0.62);
+  --hud-glow-sm: 0 0 10px rgba(0, 229, 255, 0.35);
+  --hud-glow-md: 0 0 22px rgba(0, 170, 255, 0.45);
+  --hud-glow-lg: 0 0 48px rgba(0, 195, 255, 0.55);
+  --font-display: 'Chakra Petch', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--hud-bg-deep);
+  color: var(--hud-text-primary);
+  font-family: var(--font-display);
+  overflow: hidden;
+}
+
+.font-hud-display {
+  font-family: var(--font-display);
+}
+
+.font-hud-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* HUD Background Grid & Vignette */
+.hud-viewport-bg {
+  background:
+    radial-gradient(circle at 50% 50%, rgba(0, 145, 255, 0.19) 0%, rgba(0, 60, 130, 0.08) 38%, rgba(2, 6, 13, 0.96) 75%),
+    linear-gradient(180deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 229, 255, 0.03) 1px, transparent 1px),
+    var(--hud-bg-deep);
+  background-size: 100% 100%, 36px 36px, 36px 36px, 100% 100%;
+}
+
+/* HUD Panel styling with subtle technical frame */
+.hud-panel {
+  background: var(--hud-panel-bg);
+  border: 1px solid var(--hud-border-subtle);
+  box-shadow: inset 0 0 18px rgba(0, 140, 255, 0.08), 0 0 16px rgba(0, 12, 28, 0.7);
+  backdrop-filter: blur(8px);
+  position: relative;
+}
+
+.hud-panel::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 12px;
+  height: 12px;
+  border-top: 2px solid var(--hud-neon-cyan);
+  border-left: 2px solid var(--hud-neon-cyan);
+  pointer-events: none;
+}
+
+.hud-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 12px;
+  height: 12px;
+  border-bottom: 2px solid var(--hud-neon-cyan);
+  border-right: 2px solid var(--hud-neon-cyan);
+  pointer-events: none;
+}
+
+/* Custom thin neon scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(2, 10, 24, 0.6);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.35);
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 229, 255, 0.7);
+}
+
+/* Official Google Sign-In Material Button adapted for dark HUD container */
+.gsi-material-button {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -webkit-appearance: none;
+  background-color: #131314;
+  background-image: none;
+  border: 1px solid #747775;
+  -webkit-border-radius: 4px;
+  border-radius: 4px;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+  color: #e3e3e3;
+  cursor: pointer;
+  font-family: 'Roboto', arial, sans-serif;
+  font-size: 13px;
+  height: 36px;
+  letter-spacing: 0.25px;
+  outline: none;
+  overflow: hidden;
+  padding: 0 12px;
+  position: relative;
+  text-align: center;
+  -webkit-transition: background-color .218s, border-color .218s, box-shadow .218s;
+  transition: background-color .218s, border-color .218s, box-shadow .218s;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: auto;
+  max-width: 400px;
+  min-width: min-content;
+  border-color: rgba(0, 229, 255, 0.45);
+}
+
+.gsi-material-button .gsi-material-button-icon {
+  height: 18px;
+  margin-right: 10px;
+  min-width: 18px;
+  width: 18px;
+}
+
+.gsi-material-button .gsi-material-button-content-wrapper {
+  -webkit-align-items: center;
+  align-items: center;
+  display: flex;
+  -webkit-flex-direction: row;
+  flex-direction: row;
+  -webkit-flex-wrap: nowrap;
+  flex-wrap: nowrap;
+  height: 100%;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+}
+
+.gsi-material-button .gsi-material-button-contents {
+  -webkit-flex-grow: 1;
+  flex-grow: 1;
+  font-family: var(--font-display);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+
+.gsi-material-button .gsi-material-button-state {
+  -webkit-transition: opacity .218s;
+  transition: opacity .218s;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.gsi-material-button:hover {
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.35);
+  border-color: var(--hud-neon-cyan);
+}
+
+.gsi-material-button:hover .gsi-material-button-state {
+  background-color: #ffffff;
+  opacity: 8%;
+}
