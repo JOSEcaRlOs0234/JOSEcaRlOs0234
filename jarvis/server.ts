@@ -1059,6 +1059,18 @@ app.post("/api/canvas/token", async (req, res) => {
   }
 });
 
+// Plan B (el Tec no deja crear tokens): después de conectar el Gmail, memorizar los avisos de Canvas que ya había
+app.post("/api/canvas/calificaciones/memorizar", async (_req, res) => {
+  try {
+    reiniciarCalificaciones();
+    await revisarCalificacionesNuevas(() => {});
+    registrar("CANVAS", "Calificaciones de Canvas por correo conectadas.");
+    res.json(estadoCalificaciones());
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "No pude revisar el correo." });
+  }
+});
+
 app.delete("/api/canvas/token", (_req, res) => {
   quitarDeEnv("CANVAS_TOKEN");
   delete process.env.CANVAS_TOKEN;

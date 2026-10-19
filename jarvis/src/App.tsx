@@ -442,13 +442,20 @@ export default function App() {
     error: null,
   });
   // Canvas del Tec (calificaciones, con token)
-  const [calificaciones, setCalificaciones] = useState<{ configurado: boolean; ultimaRevision: number | null; error: string | null }>({
+  const [calificaciones, setCalificaciones] = useState<{
+    configurado: boolean;
+    fuente?: "token" | "correo" | null;
+    ultimaRevision: number | null;
+    error: string | null;
+  }>({
     configurado: false,
     ultimaRevision: null,
     error: null,
   });
   const [canvasToken, setCanvasToken] = useState("");
   const [tokenProbando, setTokenProbando] = useState(false);
+  const [gmailUsuario, setGmailUsuario] = useState("");
+  const [gmailClave, setGmailClave] = useState("");
   const [canvasUrl, setCanvasUrl] = useState("");
   const [canvasProbando, setCanvasProbando] = useState(false);
   const canvaEsperandoEdicionRef = useRef(false);
@@ -823,8 +830,41 @@ export default function App() {
     }
   };
 
+  // Plan B: avisos de Canvas que llegan al Gmail personal
+  const conectarGmailCalificaciones = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTokenProbando(true);
+    try {
+      const r = await fetch("/api/correo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ usuario: gmailUsuario, clave: gmailClave }),
+      });
+      const datos = await r.json();
+      if (!r.ok) {
+        showNotification(datos.error || "No pude entrar a tu Gmail.", "error");
+        return;
+      }
+      setGmailClave("");
+      const m = await fetch("/api/canvas/calificaciones/memorizar", { method: "POST" });
+      const estado = await m.json();
+      if (m.ok) setCalificaciones(estado);
+      else showNotification(estado.error || "Conecté tu Gmail, pero no pude revisar los avisos de Canvas.", "error");
+      if (m.ok) showNotification("Listo. Te avisaré cuando Canvas te mande una calificación.", "info");
+    } catch {
+      showNotification("No pude entrar a tu Gmail.", "error");
+    } finally {
+      setTokenProbando(false);
+    }
+  };
+
   const desconectarCalificaciones = async () => {
     try {
+      if (calificaciones.fuente === "correo") {
+        await fetch("/api/correo", { method: "DELETE" });
+        await cargarCalificaciones();
+        return;
+      }
       const r = await fetch("/api/canvas/token", { method: "DELETE" });
       if (r.ok) setCalificaciones(await r.json());
     } catch {
@@ -2236,7 +2276,9 @@ export default function App() {
                   {calificaciones.configurado ? (
                     <>
                       <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                        Reviso cada 30 minutos y te aviso cuando te califiquen algo.
+                        {calificaciones.fuente === "correo"
+                          ? "Reviso cada 30 minutos los avisos de Canvas en tu Gmail (solo esos) y te aviso cuando te califiquen algo."
+                          : "Reviso cada 30 minutos y te aviso cuando te califiquen algo."}
                         {calificaciones.ultimaRevision
                           ? ` Última revisión: ${new Date(calificaciones.ultimaRevision).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}.`
                           : ""}{" "}
@@ -2250,7 +2292,7 @@ export default function App() {
                         onClick={desconectarCalificaciones}
                         className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
                       >
-                        Quitar token
+                        {calificaciones.fuente === "correo" ? "Desconectar Gmail" : "Quitar token"}
                       </button>
                     </>
                   ) : (
@@ -2273,6 +2315,37 @@ export default function App() {
                         className="px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
                       >
                         {tokenProbando ? "Probando..." : "Conectar calificaciones"}
+                      </button>
+                    </form>
+                  )}
+                  {!calificaciones.configurado && (
+                    <form onSubmit={conectarGmailCalificaciones} className="flex flex-col gap-1.5 border-t border-[#00e5ff]/10 pt-2">
+                      <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                        ¿El botón de token sale gris? Usa tu Gmail: Canvas te manda ahí los avisos de calificación y yo leo SOLO
+                        esos correos. Pon tu Gmail y la contraseña de aplicación de Google (16 letras).
+                      </p>
+                      <input
+                        type="email"
+                        value={gmailUsuario}
+                        onChange={(e) => setGmailUsuario(e.target.value)}
+                        placeholder="tunombre@gmail.com"
+                        autoComplete="off"
+                        className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                      />
+                      <input
+                        type="password"
+                        value={gmailClave}
+                        onChange={(e) => setGmailClave(e.target.value)}
+                        placeholder="Contraseña de aplicación (16 letras)"
+                        autoComplete="off"
+                        className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={tokenProbando || !gmailUsuario.trim() || !gmailClave.trim()}
+                        className="px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                      >
+                        {tokenProbando ? "Probando..." : "Conectar con Gmail"}
                       </button>
                     </form>
                   )}

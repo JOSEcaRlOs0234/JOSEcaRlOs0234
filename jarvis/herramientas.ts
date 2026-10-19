@@ -1038,7 +1038,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
     case "calificaciones_canvas": {
       if (!calificacionesConfiguradas()) {
         throw new ErrorHerramienta(
-          "Las calificaciones de Canvas no están conectadas. El usuario puede pegar su token en Ajustes → Canvas → Calificaciones."
+          "Las calificaciones de Canvas no están conectadas. El usuario puede conectarlas en Ajustes → Canvas → Calificaciones (con su Gmail)."
         );
       }
       const dias = Math.max(1, Math.min(120, Math.round(Number(args.dias) || 14)));

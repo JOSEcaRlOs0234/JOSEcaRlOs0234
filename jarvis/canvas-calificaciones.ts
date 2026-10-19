@@ -6,11 +6,15 @@
  * Jarvis SOLO LEE: este archivo únicamente hace peticiones GET a tres direcciones fijas de la API (su perfil, sus
  * materias y sus entregas calificadas). Nunca entrega, cambia ni borra nada en Canvas.
  * Las calificaciones ya vistas se guardan en datos/canvas-calificaciones.json para avisar solo de las nuevas.
+ *
+ * Si el Tec no deja crear tokens (botón gris), se usa el plan B: Canvas manda sus avisos de calificación al Gmail
+ * personal del usuario y Jarvis busca SOLO esos correos (de instructure.com con "calificad..." en el asunto).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
 import { CARPETA_DATOS } from "./ubicacion.mjs";
+import { correoConfigurado, leerCorreo, revisarCorreos } from "./correo.ts";
 
 const ARCHIVO = path.join(CARPETA_DATOS, "canvas-calificaciones.json");
 const CADA_MS = 30 * 60 * 1000;
@@ -45,7 +49,10 @@ function guardar(g: Guardado): void {
   writeFileSync(ARCHIVO, JSON.stringify({ ...g, vistas: g.vistas.slice(-3000) }, null, 2), "utf8");
 }
 
-export const calificacionesConfiguradas = () => !!process.env.CANVAS_TOKEN?.trim();
+const conToken = () => !!process.env.CANVAS_TOKEN?.trim();
+export const calificacionesConfiguradas = () => conToken() || correoConfigurado();
+/** Por dónde se leen: "token" (API de Canvas), "correo" (avisos de Canvas en Gmail) o null. */
+export const fuenteCalificaciones = () => (conToken() ? "token" : correoConfigurado() ? "correo" : null);
 
 /** El sitio de Canvas: el mismo del calendario (si está), si no Experiencia 21. */
 export function sitioCanvas(): string {
@@ -100,8 +107,53 @@ function textoCalificacion(s: any): string {
   return String(s?.grade ?? s?.score ?? "");
 }
 
+// Asuntos de los avisos de Canvas: "Tarea calificada: Tarea 3, Química" / "Assignment Graded: ..." / "Calificación cambiada: ..."
+const ASUNTO_CALIFICACION = /calificad|calificaci[oó]n|graded|grade changed/i;
+
+/** Saca la calificación del texto del correo de Canvas ("calificación: 95 de 100", "score: 9 out of 10"...). */
+export function calificacionDeTexto(texto: string): string {
+  const puntos = texto.match(
+    /(?:calificaci[oó]n|puntaje|puntuaci[oó]n|puntos|score|grade)\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:de|\/|out of|sobre)\s*(\d+(?:[.,]\d+)?)/i
+  );
+  if (puntos) return `${puntos[1]}/${puntos[2]}`;
+  const otra = texto.match(/(?:calificaci[oó]n|grade)\s*:\s*([^\n]{1,20})/i);
+  return otra ? otra[1].trim() : "";
+}
+
+/** Separa "Tarea calificada: Examen 2, Química Analítica (Gpo 101)" en tarea y materia. */
+export function tareaDeAsunto(asunto: string): { tarea: string; materia: string } {
+  const resto = asunto.replace(/^[^:]*:\s*/, "").trim();
+  const coma = resto.lastIndexOf(", ");
+  return coma > 0 ? { tarea: resto.slice(0, coma), materia: resto.slice(coma + 2) } : { tarea: resto, materia: "" };
+}
+
+/** Plan B: las calificaciones que Canvas avisó por correo al Gmail del usuario (últimos 30 días). */
+async function calificacionesDeCorreo(): Promise<Calificacion[]> {
+  const correos = await revisarCorreos({ buscar: "from:instructure.com newer_than:30d", cantidad: 20 });
+  const lista: Calificacion[] = [];
+  for (const c of correos.filter((x) => ASUNTO_CALIFICACION.test(x.asunto))) {
+    let calificacion = "";
+    try {
+      // Solo se lee el texto del aviso de Canvas para sacar la calificación
+      calificacion = calificacionDeTexto((await leerCorreo(c.id))?.texto ?? "");
+    } catch {
+      // Sin el texto, se avisa solo con el asunto
+    }
+    const { tarea, materia } = tareaDeAsunto(c.asunto);
+    lista.push({
+      id: `correo-${c.id}`,
+      tarea: tarea.slice(0, 200),
+      materia: materia.slice(0, 120),
+      calificacion,
+      calificadaEl: c.fechaMs || Date.now(),
+    });
+  }
+  return lista;
+}
+
 /** Las calificaciones más recientes del usuario (ya publicadas por el profesor). */
 export async function descargarCalificaciones(token = process.env.CANVAS_TOKEN?.trim() ?? ""): Promise<Calificacion[]> {
+  if (!token && correoConfigurado()) return calificacionesDeCorreo();
   if (!token) throw new Error("Falta el token de Canvas.");
   const [materias, entregas] = await Promise.all([
     pedir("courses?enrollment_state=active&per_page=100", token, 2),
@@ -160,7 +212,12 @@ export function reiniciarCalificaciones(): void {
 
 export function estadoCalificaciones() {
   const g = leer();
-  return { configurado: calificacionesConfiguradas(), ultimaRevision: g.ultimaRevision ?? null, error: g.error ?? null };
+  return {
+    configurado: calificacionesConfiguradas(),
+    fuente: fuenteCalificaciones(),
+    ultimaRevision: g.ultimaRevision ?? null,
+    error: g.error ?? null,
+  };
 }
 
 /** Fecha corta: "martes 14 de octubre". */

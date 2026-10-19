@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.16.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.16.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -368,6 +368,15 @@
   `avisarCalificaciones` (server.ts, icono 📝, igual que tareas). Herramienta `calificaciones_canvas` {dias, materia}
   (libre). `GET /api/canvas/calificaciones`, `POST/DELETE /api/canvas/token` (POST valida con users/self).
   Ajustes → Canvas (Tec) → sub-bloque "Calificaciones" (input password). Probado con Canvas simulado; NO con Canvas real.
+- PRUEBA REAL v2.16: en Canvas del Tec el botón "+ Nuevo token de acceso" sale GRIS (el Tec bloquea tokens).
+  v2.16.1 plan B (el usuario dijo "guíame"): Canvas manda avisos de calificación al Gmail PERSONAL (Cuenta → Configuración
+  → Formas de contacto + Notificaciones "Calificaciones" inmediato) y Jarvis lee SOLO esos: `calificacionesDeCorreo`
+  (revisarCorreos "from:instructure.com newer_than:30d", asunto /calificad|calificación|graded|grade changed/,
+  `tareaDeAsunto` "Tarea calificada: X, Materia", `calificacionDeTexto` "calificación: 47.5 de 50" → "47.5/50").
+  `calificacionesConfiguradas` = token o correoConfigurado(); `fuenteCalificaciones`. correo.ts: ResumenCorreo.fechaMs.
+  UI: en Canvas → Calificaciones, formulario "Conectar con Gmail" (usa POST /api/correo existente + POST
+  /api/canvas/calificaciones/memorizar); "Desconectar Gmail" = DELETE /api/correo. Sigue sin panel de correo aparte.
+  OJO: con Gmail conectado también quedan activas revisar_correo/leer_correo/enviar_correo (con permiso; enviar = delicada).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

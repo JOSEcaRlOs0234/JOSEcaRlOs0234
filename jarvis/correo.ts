@@ -70,6 +70,7 @@ export interface ResumenCorreo {
   de: string;
   asunto: string;
   fecha: string;
+  fechaMs?: number; // la fecha exacta (para ordenar o filtrar por días)
   leido: boolean;
 }
 
@@ -98,6 +99,7 @@ export async function revisarCorreos(opciones: { buscar?: string; soloNoLeidos?:
         de: remitente ? (remitente.name ? `${remitente.name} <${remitente.address}>` : String(remitente.address)) : "(desconocido)",
         asunto: m.envelope?.subject || "(sin asunto)",
         fecha: fechaLegible(m.envelope?.date ?? (m.internalDate as Date | undefined)),
+        fechaMs: new Date((m.envelope?.date ?? m.internalDate) as any).getTime() || undefined,
         leido: m.flags?.has("\\Seen") ?? false,
         orden: m.uid,
       });
