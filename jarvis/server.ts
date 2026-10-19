@@ -63,6 +63,14 @@ import {
   vigilarCanvas,
   type TareaCanvas,
 } from "./canvas-lms.ts";
+import {
+  estadoCalificaciones,
+  probarToken,
+  reiniciarCalificaciones,
+  revisarCalificacionesNuevas,
+  vigilarCalificaciones,
+  type Calificacion,
+} from "./canvas-calificaciones.ts";
 import { cambiarConfigWhatsapp, estadoWhatsapp, vigilarWhatsapp } from "./whatsapp.ts";
 import {
   armarDocumento,
@@ -157,6 +165,8 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   contestarlos. Si te piden leer un mensaje, explica que por privacidad solo avisas quién escribió.
 - Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
   aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
+  calificaciones_canvas para "¿ya me calificaron?", "¿cuánto saqué en...?", "¿qué calificaciones tengo?". Jarvis avisa
+  solo cuando le califican algo. Si no está conectado, dile que pegue su token en Ajustes → Canvas → Calificaciones.
 - PARA CLAUDE: Claude es quien te programa. Si el usuario pide algo que NO puedes hacer con tus herramientas (no existe
   una herramienta para eso) o algo falla por un error del programa, no inventes que lo hiciste: dile en una frase que
   todavía no sabes hacerlo y PREGÚNTALE "¿Quiere que se lo mande a Claude para que me lo agregue?". Solo si dice que sí
@@ -1004,6 +1014,57 @@ app.delete("/api/canvas", (_req, res) => {
   reiniciarCanvas();
   registrar("CANVAS", "Canvas desconectado.");
   res.json(estadoCanvas());
+});
+
+// Canvas del Tec: avisar cuando califican algo (se revisa cada 30 minutos; necesita el token de Canvas)
+function avisarCalificaciones(nuevas: Calificacion[]) {
+  const partes = nuevas
+    .slice(0, 5)
+    .map((c) => `"${c.tarea}"${c.materia ? ` de ${c.materia}` : ""}${c.calificacion ? `: ${c.calificacion}` : ""}`);
+  const texto =
+    nuevas.length === 1
+      ? `Señor, ya le calificaron en Canvas ${partes[0]}.`
+      : `Señor, tiene ${nuevas.length} calificaciones nuevas en Canvas: ${partes.join("; ")}${nuevas.length > 5 ? "; y más" : ""}.`;
+  avisos = [...avisos, { id: siguienteAviso++, texto, icono: "📝" }].slice(-20);
+  registrar("CANVAS", texto);
+  guardarEnHistorial("jarvis", texto);
+  if (!hayVentanaVisible() && !claseActiva()) {
+    oido.pausar(10000);
+    void decirEnVoz(texto);
+  }
+}
+vigilarCalificaciones(avisarCalificaciones, (err) =>
+  registrar("ERROR", `Calificaciones de Canvas: ${err instanceof Error ? err.message : err}`)
+);
+
+app.get("/api/canvas/calificaciones", (_req, res) => {
+  res.json(estadoCalificaciones());
+});
+
+app.post("/api/canvas/token", async (req, res) => {
+  const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+  if (!/^[A-Za-z0-9~_.-]{20,200}$/.test(token)) {
+    return res.status(400).json({ error: "Ese no parece un token de Canvas. Cópialo completo desde Canvas." });
+  }
+  try {
+    const nombre = await probarToken(token);
+    guardarEnEnv("CANVAS_TOKEN", token);
+    process.env.CANVAS_TOKEN = token;
+    reiniciarCalificaciones();
+    await revisarCalificacionesNuevas(() => {}); // memoriza las que ya hay
+    registrar("CANVAS", "Calificaciones de Canvas conectadas.");
+    res.json({ ...estadoCalificaciones(), nombre });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "No pude entrar a Canvas con ese token." });
+  }
+});
+
+app.delete("/api/canvas/token", (_req, res) => {
+  quitarDeEnv("CANVAS_TOKEN");
+  delete process.env.CANVAS_TOKEN;
+  reiniciarCalificaciones();
+  registrar("CANVAS", "Calificaciones de Canvas desconectadas.");
+  res.json(estadoCalificaciones());
 });
 
 // WhatsApp: avisa DE QUIÉN llegó un mensaje (nunca lo lee). Mismo contacto: máximo un aviso cada 2 minutos.

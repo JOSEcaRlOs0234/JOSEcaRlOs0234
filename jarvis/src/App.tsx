@@ -441,6 +441,14 @@ export default function App() {
     ultimaRevision: null,
     error: null,
   });
+  // Canvas del Tec (calificaciones, con token)
+  const [calificaciones, setCalificaciones] = useState<{ configurado: boolean; ultimaRevision: number | null; error: string | null }>({
+    configurado: false,
+    ultimaRevision: null,
+    error: null,
+  });
+  const [canvasToken, setCanvasToken] = useState("");
+  const [tokenProbando, setTokenProbando] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState("");
   const [canvasProbando, setCanvasProbando] = useState(false);
   const canvaEsperandoEdicionRef = useRef(false);
@@ -777,6 +785,52 @@ export default function App() {
   useEffect(() => {
     if (ajustesAbiertos) cargarCanvasLms();
   }, [ajustesAbiertos, cargarCanvasLms]);
+
+  const cargarCalificaciones = useCallback(async () => {
+    try {
+      const r = await fetch("/api/canvas/calificaciones");
+      if (r.ok) setCalificaciones(await r.json());
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+
+  useEffect(() => {
+    if (ajustesAbiertos) cargarCalificaciones();
+  }, [ajustesAbiertos, cargarCalificaciones]);
+
+  const conectarCalificaciones = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTokenProbando(true);
+    try {
+      const r = await fetch("/api/canvas/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: canvasToken }),
+      });
+      const datos = await r.json();
+      if (!r.ok) {
+        showNotification(datos.error || "No pude conectar las calificaciones.", "error");
+        return;
+      }
+      setCalificaciones(datos);
+      setCanvasToken("");
+      showNotification(`Calificaciones conectadas${datos.nombre ? ` (${datos.nombre})` : ""}. Te avisaré cuando te califiquen algo.`, "info");
+    } catch {
+      showNotification("No pude conectar las calificaciones.", "error");
+    } finally {
+      setTokenProbando(false);
+    }
+  };
+
+  const desconectarCalificaciones = async () => {
+    try {
+      const r = await fetch("/api/canvas/token", { method: "DELETE" });
+      if (r.ok) setCalificaciones(await r.json());
+    } catch {
+      showNotification("No pude desconectar las calificaciones.", "error");
+    }
+  };
 
   const cargarWhatsapp = useCallback(async () => {
     try {
@@ -2171,6 +2225,58 @@ export default function App() {
                     </button>
                   </form>
                 )}
+                {/* Calificaciones (token de Canvas) */}
+                <div className="flex flex-col gap-1.5 border-t border-[#00e5ff]/15 pt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-hud-mono text-[#b8f4ff]">Calificaciones</span>
+                    <span className={`font-hud-mono text-[10px] ${calificaciones.configurado ? "text-[#00f5a0]" : "text-[#68a8d8]"}`}>
+                      {calificaciones.configurado ? "AVISANDO" : "SIN CONECTAR"}
+                    </span>
+                  </div>
+                  {calificaciones.configurado ? (
+                    <>
+                      <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                        Reviso cada 30 minutos y te aviso cuando te califiquen algo.
+                        {calificaciones.ultimaRevision
+                          ? ` Última revisión: ${new Date(calificaciones.ultimaRevision).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" })}.`
+                          : ""}{" "}
+                        Pregúntame: &ldquo;¿ya me calificaron?&rdquo;
+                      </p>
+                      {calificaciones.error && (
+                        <p className="text-[10px] font-hud-mono text-[#ff9933] leading-snug">{calificaciones.error}</p>
+                      )}
+                      <button
+                        type="button"
+                        onClick={desconectarCalificaciones}
+                        className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
+                      >
+                        Quitar token
+                      </button>
+                    </>
+                  ) : (
+                    <form onSubmit={conectarCalificaciones} className="flex flex-col gap-1.5">
+                      <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                        En Canvas: Cuenta → Configuración → &ldquo;+ Nuevo token de acceso&rdquo; → copia el token y pégalo aquí.
+                        Solo lo uso para LEER tus calificaciones.
+                      </p>
+                      <input
+                        type="password"
+                        value={canvasToken}
+                        onChange={(e) => setCanvasToken(e.target.value)}
+                        placeholder="Token de Canvas"
+                        autoComplete="off"
+                        className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={tokenProbando || !canvasToken.trim()}
+                        className="px-2 py-1 text-[11px] font-hud-mono bg-[#00e5ff]/20 border border-[#00e5ff] text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                      >
+                        {tokenProbando ? "Probando..." : "Conectar calificaciones"}
+                      </button>
+                    </form>
+                  )}
+                </div>
               </div>
 
               {/* CANVA */}

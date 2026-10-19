@@ -15,6 +15,7 @@ import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
 import { mensajesRecientes } from "./whatsapp.ts";
 import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
+import { calificacionesConfiguradas, descargarCalificaciones, fechaLegible } from "./canvas-calificaciones.ts";
 import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
 import {
   buscarDisenos,
@@ -224,6 +225,19 @@ export const DECLARACIONES = [
       properties: {
         dias: { type: "integer", description: "Cuántos días hacia adelante (1 a 60)" },
         materia: { type: "string", description: "Solo de esta materia (opcional)" },
+      },
+    },
+  },
+  {
+    name: "calificaciones_canvas",
+    description:
+      "Muestra las calificaciones que le pusieron al usuario en el Canvas del Tec en los últimos N días (por defecto 14): " +
+      "tarea, materia, calificación y cuándo se calificó. Solo lee; no cambia nada en Canvas.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        dias: { type: "integer", description: "Cuántos días hacia atrás (1 a 120)" },
+        materia: { type: "string", description: "Solo de esta materia o tarea (opcional)" },
       },
     },
   },
@@ -1017,6 +1031,38 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             .slice(0, 40)
             .map((t) => ({ tarea: t.titulo, materia: t.materia, entrega: entregaLegible(t) }));
           return lista.length ? { tareas: lista } : { resultado: `No hay tareas con entrega en los próximos ${dias} días.` };
+        },
+      };
+    }
+
+    case "calificaciones_canvas": {
+      if (!calificacionesConfiguradas()) {
+        throw new ErrorHerramienta(
+          "Las calificaciones de Canvas no están conectadas. El usuario puede pegar su token en Ajustes → Canvas → Calificaciones."
+        );
+      }
+      const dias = Math.max(1, Math.min(120, Math.round(Number(args.dias) || 14)));
+      const materia = typeof args.materia === "string" ? args.materia.trim().toLowerCase() : "";
+      return {
+        nivel: "libre",
+        tipo: "canvas",
+        descripcion: "Ver las calificaciones de Canvas",
+        ejecutar: async () => {
+          let todas;
+          try {
+            todas = await descargarCalificaciones();
+          } catch (err) {
+            throw new ErrorHerramienta(err instanceof Error ? err.message : "No pude leer Canvas.");
+          }
+          const desde = Date.now() - dias * 86400_000;
+          const lista = todas
+            .filter((c) => c.calificadaEl >= desde)
+            .filter((c) => !materia || c.materia.toLowerCase().includes(materia) || c.tarea.toLowerCase().includes(materia))
+            .slice(0, 40)
+            .map((c) => ({ tarea: c.tarea, materia: c.materia, calificacion: c.calificacion, calificada: fechaLegible(c.calificadaEl) }));
+          return lista.length
+            ? { calificaciones: lista }
+            : { resultado: `No tienes calificaciones nuevas en los últimos ${dias} días (o el profesor aún no las publica).` };
         },
       };
     }

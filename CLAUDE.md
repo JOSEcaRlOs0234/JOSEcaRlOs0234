@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.15.2). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.16.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -358,6 +358,16 @@
 - Micrófono (oct 2026): "Varios micrófonos" (Realtek, Lenovo) estaba DESHABILITADO en Windows → se habilitó, volumen 100,
   mejoras de audio apagadas; Mezcla estéreo deshabilitada. Windows ya oye, pero Jarvis decía "No llega sonido" →
   revisando privacidad "aplicaciones de escritorio" / tecla F4 de silencio (Lenovo). Pendiente.
+- v2.16 CALIFICACIONES DE CANVAS (pedido: "que vea si ya me calificaron algo en mi Canvas"; "mantén todo igual"):
+  el .ics no trae calificaciones → `canvas-calificaciones.ts` usa la API de Canvas con TOKEN personal del alumno
+  (Cuenta → Configuración → "+ Nuevo token de acceso"; el Tec podría tenerlo bloqueado). `.env`: CANVAS_TOKEN. Sitio =
+  origen de CANVAS_ICS_URL o https://experiencia21.tec.mx. SOLO GET a users/self, courses?enrollment_state=active y
+  users/self/graded_submissions?include[]=assignment (Link rel=next solo si es del mismo sitio, ≤2 páginas). Filtra
+  workflow_state graded con score/grade; "47.5/50", Completo/Incompleto. `vigilarCalificaciones` cada 30 min (+90 s):
+  1.ª vez memoriza (datos/canvas-calificaciones.json, id = entrega+graded_at → recalificar avisa otra vez); nuevas →
+  `avisarCalificaciones` (server.ts, icono 📝, igual que tareas). Herramienta `calificaciones_canvas` {dias, materia}
+  (libre). `GET /api/canvas/calificaciones`, `POST/DELETE /api/canvas/token` (POST valida con users/self).
+  Ajustes → Canvas (Tec) → sub-bloque "Calificaciones" (input password). Probado con Canvas simulado; NO con Canvas real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
