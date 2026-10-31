@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "2.17.0",
+  "version": "2.18.0",
   "type": "module",
   "scripts": {
     "start": "tsx server.ts",
@@ -12,6 +12,7 @@
     "@anthropic-ai/sdk": "^0.133.0",
     "@google/genai": "^2.28.0",
     "@modelcontextprotocol/sdk": "^1.32.1",
+    "@picovoice/eagle-node": "^3.0.1",
     "@picovoice/porcupine-node": "^4.0.2",
     "@picovoice/pvrecorder-node": "^1.2.9",
     "@resvg/resvg-js": "^2.6.2",

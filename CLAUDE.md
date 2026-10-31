@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.17.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.18.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -388,6 +388,21 @@
   recordable "musica") y `controlar_musica` {accion pausar|reanudar|siguiente|anterior} (libre). Pausar y reanudar son
   la MISMA tecla (si ya estaba en pausa, la reanuda). PERSONALIDAD "MÚSICA". Probado el lector con página simulada
   (la nube no llega a YouTube) y `revisar`; NO en Windows real.
+- v2.18 RECONOCER SU VOZ (pedido: mandó 2 notas de voz de WhatsApp, 3 s y 26 s: "que identifique esta voz y cuando la
+  escuche que se abra"): `voz.ts` con Picovoice EAGLE (`@picovoice/eagle-node` 3.0.1, misma PICOVOICE_ACCESS_KEY que
+  Porcupine — que el usuario AÚN NO saca). Notas convertidas con ffmpeg a PCM 16 kHz mono s16le en `jarvis/voz/muestra-*.pcm`
+  (gitignored, datos biométricos; se agregan a mano al zip igual que el mp3: `zip -q $Z jarvis/voz/*.pcm`);
+  `copiarMuestras()` las pasa a datos/voz al iniciar. `AprendizVoz` (EagleProfiler.enroll en pedazos de frameLength hasta
+  100 %, export → datos/voz-perfil.bin); `perfilDesdeMuestras` la 1.ª vez con clave; botón "Enséñale tu voz (20 s)" =
+  `oido.aprenderVoz()` (mic en vivo, hasta 100 % o 45 s; mejor que WhatsApp porque es el mismo micrófono).
+  `ReconocedorVoz` (Eagle.process en pedazos ≥8000 muestras, null = sin voz; abre con 2 pedazos seguidos ≥ `umbralVoz`
+  (sens 1..10 → 0.9..0.45, por defecto 5 = 0.7)). OidoDeJarvis: config `usarVoz` (true), `sensibilidadVoz`; frames de 512
+  si hay voz; estado `voz` activa|sin_clave|sin_perfil|aprendiendo|error|apagada, `porcentajeVoz`, `puntajeVoz`; al
+  reconocer: descansa 3 min y llama `cuandoReconozcaVoz` → server.ts abre `/?despertar=1` SOLO si no hay ventana visible
+  ni clase. `POST /api/voz {accion aprender|olvidar}`; /api/aplausos/config acepta usarVoz/sensibilidadVoz. UI: en
+  "Despertar a Jarvis", bloque "🎙️ Al oír mi voz". Probado con Eagle falso (pedazos, umbral, null, guardar/olvidar
+  perfil) y la pantalla; NO con Eagle real (necesita la clave) ni en Windows. RECORDAR: el micrófono en Jarvis seguía sin
+  sonido (pendiente revisar privacidad "apps de escritorio"/F4).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

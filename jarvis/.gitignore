@@ -9,3 +9,5 @@ package-lock.json
 datos/
 # Sonido de entrada del usuario: se entrega en el zip, no se sube al repositorio público
 sonidos/*.mp3
+# Notas de voz del usuario (para reconocer su voz): se entregan en el zip, nunca al repositorio público
+voz/

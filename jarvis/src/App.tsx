@@ -65,6 +65,8 @@ interface EstadoAplausos {
     usarPalabra: boolean;
     usarAplausos: boolean;
     sensibilidadPalabra: number;
+    usarVoz?: boolean;
+    sensibilidadVoz?: number;
   };
   estado: "escuchando" | "apagado" | "sin_microfono" | "no_disponible" | "buscando";
   microfono: string;
@@ -74,6 +76,10 @@ interface EstadoAplausos {
   aprendiendo: boolean;
   palabra: "activa" | "sin_clave" | "error" | "apagada";
   errorPalabra: string;
+  voz?: "activa" | "sin_clave" | "sin_perfil" | "aprendiendo" | "error" | "apagada";
+  errorVoz?: string;
+  porcentajeVoz?: number;
+  puntajeVoz?: number;
   sinSonido: boolean;
   arranqueConWindows: boolean;
   activacion: number;
@@ -1376,6 +1382,8 @@ export default function App() {
     usarPalabra?: boolean;
     usarAplausos?: boolean;
     sensibilidadPalabra?: number;
+    usarVoz?: boolean;
+    sensibilidadVoz?: number;
   }) => {
     try {
       const r = await fetch("/api/aplausos/config", {
@@ -1407,6 +1415,22 @@ export default function App() {
       showNotification(err?.message || "No pude guardar la clave.", "error");
     } finally {
       setGuardandoClave(false);
+    }
+  };
+
+  const ensenarVoz = async (accion: "aprender" | "olvidar") => {
+    try {
+      const r = await fetch("/api/voz", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ accion }),
+      });
+      const datos = await r.json();
+      if (!r.ok) throw new Error(datos.error);
+      setAplausos(datos);
+      if (accion === "aprender") showNotification("Habla normal unos 20 segundos (cuenta algo, lee en voz alta)...", "info");
+    } catch (err: any) {
+      showNotification(err?.message || "No pude usar el reconocimiento de voz.", "error");
     }
   };
 
@@ -1901,6 +1925,79 @@ export default function App() {
                         onChange={(e) => cambiarAplausos({ sensibilidadPalabra: Number(e.target.value) })}
                         className="w-full accent-[#00e5ff] cursor-pointer"
                       />
+                    </>
+                  )}
+                </div>
+
+                {/* RECONOCER MI VOZ */}
+                <div className="bg-[#041226]/80 border border-[#00e5ff]/30 p-2 flex flex-col gap-1.5 font-hud-mono">
+                  <label className="flex items-center gap-2 text-[11px] text-[#e2f8ff] font-bold cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={!!aplausos?.config.usarVoz}
+                      disabled={!aplausos}
+                      onChange={(e) => cambiarAplausos({ usarVoz: e.target.checked })}
+                      className="accent-[#00e5ff] cursor-pointer"
+                    />
+                    🎙️ Al oír mi voz
+                    {aplausos?.voz === "activa" && <span className="ml-auto text-[10px] text-[#00f5a0]">● LISTO</span>}
+                    {aplausos?.voz === "aprendiendo" && (
+                      <span className="ml-auto text-[10px] text-[#ffcc66]">APRENDIENDO {aplausos.porcentajeVoz ?? 0}%</span>
+                    )}
+                  </label>
+                  {aplausos?.config.usarVoz && (
+                    <>
+                      <p className="text-[10px] text-[#b8f4ff] leading-snug">
+                        {aplausos.voz === "sin_clave"
+                          ? "Usa la misma clave gratuita de Picovoice que la palabra “Jarvis”: pégala arriba."
+                          : aplausos.voz === "error"
+                          ? `⚠ ${aplausos.errorVoz}`
+                          : aplausos.voz === "sin_perfil"
+                          ? "Aún no conozco tu voz: presiona el botón y habla normal unos 20 segundos."
+                          : aplausos.voz === "aprendiendo"
+                          ? "Habla normal, sin música ni otras voces... (cuenta tu día o lee algo en voz alta)"
+                          : "Si la ventana está cerrada y oigo tu voz, me abro (descanso 3 minutos entre una y otra)."}
+                      </p>
+                      {aplausos.voz !== "sin_clave" && aplausos.voz !== "aprendiendo" && (
+                        <div className="flex gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => ensenarVoz("aprender")}
+                            className="flex-1 px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[11px] text-[#e2f8ff] cursor-pointer"
+                          >
+                            {aplausos.voz === "activa" ? "Volver a enseñarle mi voz" : "Enséñale tu voz (20 s)"}
+                          </button>
+                          {aplausos.voz === "activa" && (
+                            <button
+                              type="button"
+                              onClick={() => ensenarVoz("olvidar")}
+                              className="px-2 py-1 border border-[#ff9933]/50 text-[11px] text-[#ff9933] cursor-pointer"
+                            >
+                              Olvidar
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      {aplausos.voz === "activa" && (
+                        <>
+                          <div className="flex items-center justify-between text-[10px]">
+                            <span className="text-[#68a8d8]">QUÉ TAN FÁCIL ME ABRO (1 estricto a 10 fácil)</span>
+                            <span className="text-[#00e5ff] font-bold">{aplausos.config.sensibilidadVoz ?? 5}</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="1"
+                            max="10"
+                            step="1"
+                            value={aplausos.config.sensibilidadVoz ?? 5}
+                            onChange={(e) => cambiarAplausos({ sensibilidadVoz: Number(e.target.value) })}
+                            className="w-full accent-[#00e5ff] cursor-pointer"
+                          />
+                          {!!aplausos.puntajeVoz && (
+                            <p className="text-[10px] text-[#68a8d8]">Último parecido con tu voz: {Math.round(aplausos.puntajeVoz * 100)}%</p>
+                          )}
+                        </>
+                      )}
                     </>
                   )}
                 </div>

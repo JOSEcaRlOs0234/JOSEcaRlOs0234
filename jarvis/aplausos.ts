@@ -4,6 +4,7 @@
  * También maneja el "arranque con Windows" (un acceso directo en la carpeta Inicio de Windows).
  */
 
+import { AprendizVoz, hayPerfil, olvidarPerfil, perfilDesdeMuestras, ReconocedorVoz, umbralVoz } from "./voz.ts";
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import path from "path";
@@ -22,6 +23,8 @@ export interface ConfigAplausos {
   usarPalabra: boolean; // decir "Jarvis" (necesita la clave gratuita de Picovoice)
   usarAplausos: boolean; // doble aplauso
   sensibilidadPalabra: number; // 1 a 10
+  usarVoz: boolean; // abrirse al reconocer la voz del usuario (misma clave de Picovoice)
+  sensibilidadVoz: number; // 1 (estricto) a 10 (fácil)
   // Micrófono a usar: -1 = el predeterminado de Windows; 0, 1, 2... = uno de la lista
   dispositivo: number;
   // Nombre de ese micrófono (los números pueden cambiar si conectas audífonos)
@@ -45,6 +48,11 @@ export interface EstadoAplausos {
   // Estado de la palabra "Jarvis": activa, sin clave, con error (clave mala, sin internet la 1.ª vez...) o apagada
   palabra: "activa" | "sin_clave" | "error" | "apagada";
   errorPalabra: string;
+  // Reconocer la voz del usuario
+  voz: "activa" | "sin_clave" | "sin_perfil" | "aprendiendo" | "error" | "apagada";
+  errorVoz: string;
+  porcentajeVoz: number;
+  puntajeVoz: number;
   sinSonido: boolean;
   arranqueConWindows: boolean;
 }
@@ -71,6 +79,13 @@ export class OidoDeJarvis {
   private reintentando = false;
   private pausaPalabraHasta = 0;
   private porcupine: any = null;
+  private voz: ReconocedorVoz | null = null;
+  private estadoVoz: EstadoAplausos["voz"] = "apagada";
+  private errorVoz = "";
+  private aprendizVoz: AprendizVoz | null = null;
+  private finAprendizaje = 0;
+  private pausaVozHasta = 0;
+  private alReconocerVoz: (() => void) | null = null;
   private estadoPalabra: EstadoAplausos["palabra"] = "apagada";
   private errorPalabra = "";
   private inicioEscucha = 0;
@@ -96,6 +111,8 @@ export class OidoDeJarvis {
       usarPalabra: true,
       usarAplausos: true,
       sensibilidadPalabra: 6,
+      usarVoz: true,
+      sensibilidadVoz: 5,
       dispositivo: -1,
       nombreDispositivo: "",
       microfonoManual: false,
@@ -157,14 +174,15 @@ export class OidoDeJarvis {
         // Se usa el número guardado
       }
     }
-    if (!this.config.usarPalabra && !this.config.usarAplausos) {
+    if (!this.config.usarPalabra && !this.config.usarAplausos && !this.config.usarVoz) {
       this.estado = "apagado";
       return;
     }
     await this.prepararPalabra();
+    await this.prepararVoz();
     try {
       // Porcupine pide pedacitos de 512 muestras (32 ms); solo aplausos usa 256 (16 ms). -1 = micrófono predeterminado
-      const largo = this.porcupine?.frameLength ?? 256;
+      const largo = this.porcupine?.frameLength ?? (this.voz || this.config.usarVoz ? 512 : 256);
       this.grabadora = new PvRecorder(largo, this.config.dispositivo);
       this.grabadora.start();
       this.microfono = this.grabadora.getSelectedDevice?.() ?? "";
@@ -185,7 +203,11 @@ export class OidoDeJarvis {
     this.inicioEscucha = performance.now();
     this.ultimoSonido = 0;
     this.estado = "escuchando";
-    const formas = [this.porcupine ? 'la palabra "Jarvis"' : "", this.config.usarAplausos ? "aplausos" : ""].filter(Boolean);
+    const formas = [
+      this.porcupine ? 'la palabra "Jarvis"' : "",
+      this.voz ? "tu voz" : "",
+      this.config.usarAplausos ? "aplausos" : "",
+    ].filter(Boolean);
     this.registrar("APLAUSOS", `Escuchando ${formas.join(" y ")} con: ${this.microfono || "micrófono predeterminado"}`);
     void this.bucle();
   }
@@ -206,6 +228,18 @@ export class OidoDeJarvis {
           this.anotar('¡Escuché "Jarvis"! Activado');
           this.registrar("APLAUSOS", 'Palabra "Jarvis" detectada: Jarvis activado.');
           this.alActivarse();
+        }
+        // Enseñándole la voz: todo lo que se oye va al aprendiz (hasta 100 % o 45 segundos)
+        if (this.aprendizVoz) {
+          const porcentaje = this.aprendizVoz.agregar(pedazo);
+          if (porcentaje >= 100 || ahora > this.finAprendizaje) void this.terminarAprendizajeVoz();
+        } else if (this.voz && this.voz.procesar(pedazo) && ahora > this.pausaVozHasta) {
+          // ¿Habla el usuario? Se abre (y descansa 3 minutos para no abrirse cada vez que hable)
+          this.pausaVozHasta = ahora + 3 * 60 * 1000;
+          this.activaciones++;
+          this.anotar(`¡Reconocí tu voz! (parecido ${this.voz.ultimoPuntaje})`);
+          this.registrar("APLAUSOS", `Voz del usuario reconocida (parecido ${this.voz.ultimoPuntaje}): Jarvis se abre.`);
+          this.alReconocerVoz?.();
         }
         // Aplausos: el detector trabaja con pedacitos de 256 muestras
         if (this.config.usarAplausos) {
@@ -249,6 +283,10 @@ export class OidoDeJarvis {
       // Ya estaba liberado
     }
     this.porcupine = null;
+    this.voz?.liberar();
+    this.voz = null;
+    this.aprendizVoz?.liberar();
+    this.aprendizVoz = null;
     this.estado = "apagado";
   }
 
@@ -345,6 +383,82 @@ export class OidoDeJarvis {
     }
   }
 
+  /** Prepara el reconocimiento de la voz del usuario (si está activado, hay clave y hay huella de voz). */
+  private async prepararVoz(): Promise<void> {
+    this.voz = null;
+    if (!this.config.usarVoz) {
+      this.estadoVoz = "apagada";
+      return;
+    }
+    const clave = process.env.PICOVOICE_ACCESS_KEY?.trim();
+    if (!clave) {
+      this.estadoVoz = "sin_clave";
+      return;
+    }
+    try {
+      // La primera vez, la huella se hace con las notas de voz que mandó el usuario
+      if (!hayPerfil()) {
+        const porcentaje = await perfilDesdeMuestras(clave);
+        if (porcentaje > 0) {
+          this.registrar("APLAUSOS", `Huella de voz desde las notas de voz: ${Math.round(porcentaje)} %.`);
+        }
+      }
+      this.voz = await ReconocedorVoz.crear(clave, this.config.sensibilidadVoz);
+      this.estadoVoz = this.voz ? "activa" : "sin_perfil";
+      this.errorVoz = "";
+    } catch (err) {
+      this.estadoVoz = "error";
+      this.errorVoz = explicarErrorPorcupine(err);
+      this.registrar("ERROR", `No pude activar el reconocimiento de voz: ${this.errorVoz}`);
+    }
+  }
+
+  /** Qué hacer cuando reconoce la voz del usuario (lo pone el servidor: abrir la ventana). */
+  cuandoReconozcaVoz(f: () => void): void {
+    this.alReconocerVoz = f;
+  }
+
+  /** Botón "Enséñale tu voz": lo que se oiga en los próximos 45 s (hasta 100 %) forma la huella de voz. */
+  async aprenderVoz(): Promise<string | null> {
+    const clave = process.env.PICOVOICE_ACCESS_KEY?.trim();
+    if (!clave) return "Primero pon la clave de Picovoice.";
+    if (!this.corriendo) return "El micrófono no está escuchando.";
+    try {
+      this.aprendizVoz?.liberar();
+      this.aprendizVoz = await AprendizVoz.crear(clave);
+      this.finAprendizaje = performance.now() + 45_000;
+      this.estadoVoz = "aprendiendo";
+      this.anotar("Aprendiendo tu voz: habla normal unos 20 segundos...");
+      return null;
+    } catch (err) {
+      return explicarErrorPorcupine(err);
+    }
+  }
+
+  private async terminarAprendizajeVoz(): Promise<void> {
+    const aprendiz = this.aprendizVoz;
+    if (!aprendiz) return;
+    this.aprendizVoz = null;
+    const listo = aprendiz.terminar();
+    if (listo) {
+      this.anotar("¡Listo! Ya me aprendí tu voz");
+      this.registrar("APLAUSOS", "Huella de voz creada con el micrófono.");
+      this.config.usarVoz = true;
+      this.guardarConfig();
+      await this.reiniciar();
+    } else {
+      this.anotar(`No alcancé a aprender tu voz (${Math.round(aprendiz.porcentaje)} %). Inténtalo otra vez hablando más.`);
+      this.estadoVoz = this.voz ? "activa" : "sin_perfil";
+    }
+  }
+
+  /** Borra la huella de voz. */
+  async olvidarVoz(): Promise<void> {
+    olvidarPerfil();
+    this.registrar("APLAUSOS", "Huella de voz borrada.");
+    await this.reiniciar();
+  }
+
   /** Reinicia la escucha (por ejemplo, después de guardar la clave de Picovoice). */
   async reiniciar(): Promise<void> {
     this.detener();
@@ -373,8 +487,18 @@ export class OidoDeJarvis {
     usarPalabra?: boolean;
     usarAplausos?: boolean;
     sensibilidadPalabra?: number;
+    usarVoz?: boolean;
+    sensibilidadVoz?: number;
   }): Promise<void> {
     let reiniciar = false;
+    if (typeof cambios.usarVoz === "boolean" && cambios.usarVoz !== this.config.usarVoz) {
+      this.config.usarVoz = cambios.usarVoz;
+      reiniciar = true;
+    }
+    if (typeof cambios.sensibilidadVoz === "number" && Number.isFinite(cambios.sensibilidadVoz)) {
+      this.config.sensibilidadVoz = Math.min(10, Math.max(1, Math.round(cambios.sensibilidadVoz)));
+      if (this.voz) this.voz.umbral = umbralVoz(this.config.sensibilidadVoz);
+    }
     if (typeof cambios.usarPalabra === "boolean" && cambios.usarPalabra !== this.config.usarPalabra) {
       this.config.usarPalabra = cambios.usarPalabra;
       reiniciar = true;
@@ -434,6 +558,10 @@ export class OidoDeJarvis {
       aprendiendo: this.detector.aprendiendo,
       palabra: this.config.usarPalabra ? this.estadoPalabra : "apagada",
       errorPalabra: this.errorPalabra,
+      voz: this.config.usarVoz || this.aprendizVoz ? this.estadoVoz : "apagada",
+      errorVoz: this.errorVoz,
+      porcentajeVoz: Math.round(this.aprendizVoz?.porcentaje ?? (this.voz ? 100 : 0)),
+      puntajeVoz: this.voz?.ultimoPuntaje ?? 0,
       // Escuchando hace más de 4 segundos y solo llegan ceros: Windows no deja oír o es el micrófono equivocado
       sinSonido:
         this.estado === "escuchando" &&

@@ -96,6 +96,7 @@ import {
 } from "./canva-mcp.ts";
 import { correoConfigurado, correoValido, explicarErrorCorreo, probarCuenta, usuarioCorreo } from "./correo.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
+import { copiarMuestras } from "./voz.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
 import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
 import { abrirRuta, carpetasUsuario, programarEncendido, tocarSonido } from "./windows.ts";
@@ -949,6 +950,14 @@ const oido = new OidoDeJarvis(async () => {
   if (!hayVentanaVisible()) abrirVentana(`http://localhost:${PORT}/?despertar=1`);
 }, registrar);
 
+// Al reconocer la voz del usuario: si la ventana no está a la vista, se abre y saluda (no en medio de una clase)
+copiarMuestras();
+oido.cuandoReconozcaVoz(() => {
+  if (hayVentanaVisible() || claseActiva()) return;
+  oido.pausar(8000);
+  abrirVentana(`http://localhost:${PORT}/?despertar=1`);
+});
+
 // Avisos (recordatorios que llegaron a su hora): la ventana los muestra y los dice; si no hay ventana, los dice Windows
 let avisos: { id: number; texto: string; icono?: string; silencioso?: boolean }[] = [];
 let siguienteAviso = 1;
@@ -1178,7 +1187,7 @@ app.get("/api/aplausos", (req, res) => {
 });
 
 app.post("/api/aplausos/config", async (req, res) => {
-  const { activo, sensibilidad, dispositivo, usarPalabra, usarAplausos, sensibilidadPalabra } = req.body ?? {};
+  const { activo, sensibilidad, dispositivo, usarPalabra, usarAplausos, sensibilidadPalabra, usarVoz, sensibilidadVoz } = req.body ?? {};
   await oido.cambiarConfig({
     activo: typeof activo === "boolean" ? activo : undefined,
     sensibilidad: typeof sensibilidad === "number" ? sensibilidad : undefined,
@@ -1186,6 +1195,8 @@ app.post("/api/aplausos/config", async (req, res) => {
     usarPalabra: typeof usarPalabra === "boolean" ? usarPalabra : undefined,
     usarAplausos: typeof usarAplausos === "boolean" ? usarAplausos : undefined,
     sensibilidadPalabra: typeof sensibilidadPalabra === "number" ? sensibilidadPalabra : undefined,
+    usarVoz: typeof usarVoz === "boolean" ? usarVoz : undefined,
+    sensibilidadVoz: typeof sensibilidadVoz === "number" ? sensibilidadVoz : undefined,
   });
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
 });
@@ -1193,6 +1204,16 @@ app.post("/api/aplausos/config", async (req, res) => {
 app.post("/api/aplausos/aprender", (req, res) => {
   if (req.body?.accion === "restablecer") oido.restablecerCalibracion();
   else oido.aprender();
+  res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
+});
+
+// Reconocer la voz del usuario: "aprender" (habla ~20 s) u "olvidar" (borra la huella de voz)
+app.post("/api/voz", async (req, res) => {
+  if (req.body?.accion === "olvidar") await oido.olvidarVoz();
+  else {
+    const error = await oido.aprenderVoz();
+    if (error) return res.status(400).json({ error });
+  }
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
 });
 
