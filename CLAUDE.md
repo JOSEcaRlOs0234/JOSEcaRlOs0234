@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.19.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.20.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -415,6 +415,15 @@
   {nombre | todos} (normal, tipo recordable "cerrar_programas"; todos=true = DELICADA); `PROCESOS` traduce nombres
   (chrome, edge→msedge, word→winword, powerpoint→powerpnt, bloc de notas→notepad, whatsapp, teams...); si no encuentra,
   el error lista lo abierto. PERSONALIDAD "CERRAR PROGRAMAS". Probado `revisar`; el PowerShell NO se pudo ejecutar aquí.
+- v2.20 MODO ULTRON (pedido "Para Claude" desde 2.19.0: "un modo rojo para tareas más pesadas llamado Ultron, interfaz
+  más futurista"): `modo.ts` (datos/modo.json jarvis|ultron, `INSTRUCCION_ULTRON`). server.ts: en ultron `instrucciones()`
+  agrega INSTRUCCION_ULTRON (se llama U.L.T.R.O.N., tono frío, piensa por pasos, mismas reglas de permisos) y
+  `preguntarAGemini` prefiere `MODELO_DIBUJO` (Pro; si 429 descansa 30 min y siguen los flash). `modo` en el latido;
+  `POST /api/modo`. Herramienta `cambiar_modo` {modo} (libre). UI: botón "○/◉ ULTRON" en la barra; clase `modo-ultron`
+  en la raíz → index.css: fondo rojo, `hue-rotate(165deg)` SOLO en header/main/aside (permisos y avisos conservan sus
+  colores), contra-filtro en `.sin-ultron` (Apagar, botón Ultron), fotos/dibujos (`main img`, canvas[data-lienzo-dibujo]),
+  líneas de pantalla, barrido, paneles con esquinas cortadas que laten, título U.L.T.R.O.N. con interferencia
+  (respeta prefers-reduced-motion). Probado: capturas Playwright de ambos modos, `revisar`/ejecutar de cambiar_modo.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

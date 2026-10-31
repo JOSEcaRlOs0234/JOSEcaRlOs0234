@@ -30,6 +30,7 @@ import {
   TIPOS_DISENO,
 } from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
+import { cambiarModo } from "./modo.ts";
 import { buscarEnYoutube, urlDeBusqueda, urlParaReproducir } from "./musica.ts";
 import { anotarFalta, buscarFalta, marcarEnviada, mensajeParaClaude } from "./faltantes.ts";
 import type { Informe } from "./consultas.ts";
@@ -227,6 +228,17 @@ export const DECLARACIONES = [
         dias: { type: "integer", description: "Cuántos días hacia adelante (1 a 60)" },
         materia: { type: "string", description: "Solo de esta materia (opcional)" },
       },
+    },
+  },
+  {
+    name: "cambiar_modo",
+    description:
+      "Cambia el modo de Jarvis: 'ultron' = modo rojo y futurista para tareas pesadas (usa el cerebro más potente y piensa " +
+      "con más cuidado); 'jarvis' = modo normal azul.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { modo: { type: "string", enum: ["jarvis", "ultron"] } },
+      required: ["modo"],
     },
   },
   {
@@ -1078,6 +1090,24 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             .slice(0, 40)
             .map((t) => ({ tarea: t.titulo, materia: t.materia, entrega: entregaLegible(t) }));
           return lista.length ? { tareas: lista } : { resultado: `No hay tareas con entrega en los próximos ${dias} días.` };
+        },
+      };
+    }
+
+    case "cambiar_modo": {
+      const modo = args.modo === "ultron" ? "ultron" : "jarvis";
+      return {
+        nivel: "libre",
+        tipo: "modo",
+        descripcion: modo === "ultron" ? "Activar el modo ULTRON" : "Volver al modo Jarvis",
+        ejecutar: async () => {
+          cambiarModo(modo);
+          return {
+            resultado:
+              modo === "ultron"
+                ? "Modo ULTRON activado: interfaz roja y cerebro más potente desde el próximo mensaje. Anúncialo en una frase corta y fría."
+                : "De vuelta al modo Jarvis (azul). Dilo en una frase corta.",
+          };
         },
       };
     }
