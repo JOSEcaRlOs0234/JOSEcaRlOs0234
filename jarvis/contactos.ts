@@ -11,7 +11,7 @@ import path from "path";
 import { CARPETA_DATOS } from "./ubicacion.mjs";
 
 const ARCHIVO = path.join(CARPETA_DATOS, "contactos.json");
-const MAX = 300;
+const MAX = 3000;
 
 export interface Contacto {
   nombre: string;
@@ -93,4 +93,127 @@ export function buscarContacto(pedido: string): Contacto[] {
 export function telefonoLegible(t: string): string {
   if (t.startsWith("52") && t.length === 12) return `+52 ${t.slice(2, 4)} ${t.slice(4, 8)} ${t.slice(8)}`;
   return `+${t}`;
+}
+
+// ------------------------------------------------------------------ importar todos los contactos del celular
+
+/** Lee un archivo de contactos: vCard (.vcf, de Google Contactos o iPhone) o CSV (de Google Contactos u Outlook). */
+export function leerArchivoContactos(texto: string): Contacto[] {
+  const limpio = texto.replace(/^\uFEFF/, "");
+  return /BEGIN:VCARD/i.test(limpio) ? leerVcard(limpio) : leerCsv(limpio);
+}
+
+function decodificarQP(t: string): string {
+  // "Quoted-printable" (lo usan algunos celulares viejos para acentos): =C3=A1 → á
+  const bytes = t.replace(/=\r?\n/g, "").replace(/=([0-9A-F]{2})/gi, (_, h) => String.fromCharCode(parseInt(h, 16)));
+  try {
+    return Buffer.from(bytes, "latin1").toString("utf8");
+  } catch {
+    return t;
+  }
+}
+
+function leerVcard(texto: string): Contacto[] {
+  const lineas = texto.replace(/\r\n/g, "\n").replace(/\n[ \t]/g, "").split("\n");
+  const salida: Contacto[] = [];
+  let nombre = "";
+  let n = "";
+  let telefonos: { valor: string; celular: boolean }[] = [];
+  for (const linea of lineas) {
+    const i = linea.indexOf(":");
+    const clave = (i > 0 ? linea.slice(0, i) : linea).toUpperCase();
+    let valor = i > 0 ? linea.slice(i + 1) : "";
+    if (/ENCODING=QUOTED-PRINTABLE/.test(clave)) valor = decodificarQP(valor);
+    if (clave === "BEGIN" || clave.startsWith("BEGIN")) {
+      nombre = "";
+      n = "";
+      telefonos = [];
+    } else if (clave.startsWith("FN")) nombre = valor.replace(/\\,/g, ",").trim();
+    else if (clave === "N" || clave.startsWith("N;")) {
+      const [apellido = "", nom = ""] = valor.split(";");
+      n = `${nom} ${apellido}`.trim();
+    } else if (clave.startsWith("TEL") || /\.TEL/.test(clave)) {
+      telefonos.push({ valor, celular: /CELL|MOBILE|IPHONE/.test(clave) });
+    } else if (clave.startsWith("END")) {
+      const elegido = telefonos.find((t) => t.celular) ?? telefonos[0];
+      const tel = elegido ? normalizarTelefono(elegido.valor) : null;
+      const quien = (nombre || n).trim();
+      if (quien && tel) salida.push({ nombre: quien.slice(0, 80), telefono: tel });
+    }
+  }
+  return salida;
+}
+
+function filasCsv(texto: string): string[][] {
+  const filas: string[][] = [];
+  let fila: string[] = [];
+  let campo = "";
+  let comillas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (comillas) {
+      if (c === '"' && texto[i + 1] === '"') {
+        campo += '"';
+        i++;
+      } else if (c === '"') comillas = false;
+      else campo += c;
+    } else if (c === '"') comillas = true;
+    else if (c === ",") {
+      fila.push(campo);
+      campo = "";
+    } else if (c === "\n" || c === "\r") {
+      if (c === "\r" && texto[i + 1] === "\n") i++;
+      fila.push(campo);
+      filas.push(fila);
+      fila = [];
+      campo = "";
+    } else campo += c;
+  }
+  if (campo || fila.length) {
+    fila.push(campo);
+    filas.push(fila);
+  }
+  return filas.filter((f) => f.some((x) => x.trim()));
+}
+
+function leerCsv(texto: string): Contacto[] {
+  const [encabezado, ...filas] = filasCsv(texto);
+  if (!encabezado) return [];
+  const col = (re: RegExp) => encabezado.findIndex((h) => re.test(h.trim()));
+  const iNombre = col(/^(name|nombre|display name|nombre completo)$/i);
+  const iPrimer = col(/^(first name|given name|nombre de pila)$/i);
+  const iMedio = col(/^(middle name|additional name|segundo nombre)$/i);
+  const iApellido = col(/^(last name|family name|apellidos?)$/i);
+  // Columnas de teléfono: primero las de celular
+  const telefonos = encabezado
+    .map((h, i) => ({ h: h.trim(), i }))
+    .filter(({ h }) => /phone.*value|mobile phone|primary phone|home phone|business phone|tel[eé]fono|celular|^phone$/i.test(h))
+    .sort((a, b) => Number(/mobile|celular|cell/i.test(b.h)) - Number(/mobile|celular|cell/i.test(a.h)));
+  const salida: Contacto[] = [];
+  for (const f of filas) {
+    const nombre = (
+      (iNombre >= 0 && f[iNombre]?.trim()) ||
+      [iPrimer, iMedio, iApellido].map((i) => (i >= 0 ? f[i]?.trim() : "")).filter(Boolean).join(" ")
+    ).trim();
+    // Google junta varios números con " ::: "
+    const crudo = telefonos.map(({ i }) => f[i] ?? "").find((v) => v.trim()) ?? "";
+    const tel = normalizarTelefono(crudo.split(":::")[0]);
+    if (nombre && tel) salida.push({ nombre: nombre.slice(0, 80), telefono: tel });
+  }
+  return salida;
+}
+
+/** Junta los contactos importados con los que ya había (los nuevos reemplazan a los del mismo nombre). */
+export function importarContactos(nuevos: Contacto[]): { agregados: number; total: number } {
+  const porNombre = new Map(leerContactos().map((c) => [sinAcentos(c.nombre), c]));
+  let agregados = 0;
+  for (const c of nuevos) {
+    const clave = sinAcentos(c.nombre);
+    if (!clave) continue;
+    if (!porNombre.has(clave)) agregados++;
+    porNombre.set(clave, c);
+  }
+  const lista = [...porNombre.values()];
+  guardar(lista);
+  return { agregados, total: Math.min(lista.length, MAX) };
 }

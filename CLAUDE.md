@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.24.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.24.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -480,6 +480,12 @@
   `borrar_contacto` (normal). `GET/POST /api/contactos`, `DELETE /api/contactos/:nombre`; Ajustes → WhatsApp → lista
   "Contactos para 'comunícame con...'" con agregar/quitar. PERSONALIDAD "WHATSAPP (COMUNICAR)". Probado contactos y
   revisar; abrir WhatsApp NO probado en Windows.
+- v2.24.1 (usuario: "¿cómo hago para que solo vea el nombre y le llame?"; WhatsApp no deja a otros programas leer
+  contactos ni marcar): IMPORTAR TODOS LOS CONTACTOS de una vez. contactos.ts `leerArchivoContactos` = vCard (.vcf de
+  Google Contactos/iPhone: FN o N, TEL prefiere CELL, quoted-printable, item1.TEL) o CSV (Google "Name"/"Given/Family Name",
+  "Phone N - Value" con " ::: "; Outlook First/Last + Mobile/Home Phone); `importarContactos` junta por nombre (MAX 3000).
+  `POST /api/contactos/importar {texto}` (límite propio 8 MB; excluido del json global de 1 MB). Ajustes → WhatsApp →
+  botón "Importar todos mis contactos (archivo .vcf o .csv)" + contador. Probado con archivos de ejemplo.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

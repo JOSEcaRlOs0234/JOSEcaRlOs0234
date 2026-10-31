@@ -72,7 +72,7 @@ import {
   type Calificacion,
 } from "./canvas-calificaciones.ts";
 import { cambiarConfigWhatsapp, estadoWhatsapp, vigilarWhatsapp } from "./whatsapp.ts";
-import { borrarContacto, guardarContacto, leerContactos } from "./contactos.ts";
+import { borrarContacto, guardarContacto, importarContactos, leerArchivoContactos, leerContactos } from "./contactos.ts";
 import {
   armarDocumento,
   direccionesReales,
@@ -253,7 +253,10 @@ app.disable("x-powered-by");
 // Los dibujos hechos a mano (imágenes) pueden pesar más; esa ruta tiene su propio límite
 const leerJson = express.json({ limit: "1mb" });
 app.use((req, res, next) =>
-  req.path === "/api/dibujos" || req.path === "/api/camara/foto" || req.path === "/api/clase/audio"
+  req.path === "/api/dibujos" ||
+  req.path === "/api/camara/foto" ||
+  req.path === "/api/clase/audio" ||
+  req.path === "/api/contactos/importar"
     ? next()
     : leerJson(req, res, next)
 );
@@ -1309,6 +1312,18 @@ app.post("/api/contactos", (req, res) => {
     res.status(400).json({ error: err instanceof Error ? err.message : "No pude guardar el contacto." });
   }
 });
+// Importar todos los contactos del celular (archivo .vcf o .csv de Google Contactos / iPhone). Se quedan en la laptop.
+app.post("/api/contactos/importar", express.json({ limit: "8mb" }), (req, res) => {
+  const texto = typeof req.body?.texto === "string" ? req.body.texto : "";
+  const leidos = leerArchivoContactos(texto);
+  if (!leidos.length) {
+    return res.status(400).json({ error: "No encontré contactos con número en ese archivo. Debe ser .vcf o .csv de Google Contactos." });
+  }
+  const r = importarContactos(leidos);
+  registrar("SISTEMA", `Contactos importados: ${leidos.length} leídos, ${r.agregados} nuevos (total ${r.total}).`);
+  res.json({ ...r, leidos: leidos.length, contactos: leerContactos() });
+});
+
 app.delete("/api/contactos/:nombre", (req, res) => {
   borrarContacto(String(req.params.nombre));
   res.json({ contactos: leerContactos() });

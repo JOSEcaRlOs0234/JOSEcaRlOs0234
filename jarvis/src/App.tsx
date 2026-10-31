@@ -971,6 +971,27 @@ export default function App() {
       showNotification("No pude guardar el contacto.", "error");
     }
   };
+  // Importar TODOS los contactos del celular de una vez (archivo .vcf o .csv de Google Contactos / iPhone)
+  const importarArchivoContactos = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const archivo = e.target.files?.[0];
+    e.target.value = "";
+    if (!archivo) return;
+    if (archivo.size > 7 * 1024 * 1024) return showNotification("Ese archivo es demasiado grande.", "error");
+    try {
+      const r = await fetch("/api/contactos/importar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texto: await archivo.text() }),
+      });
+      const datos = await r.json();
+      if (!r.ok) return showNotification(datos.error || "No pude leer ese archivo.", "error");
+      setContactos(datos.contactos);
+      showNotification(`Listo: leí ${datos.leidos} contactos (${datos.agregados} nuevos). Ya puedes decir "comunícame con..."`, "info");
+    } catch {
+      showNotification("No pude importar los contactos.", "error");
+    }
+  };
+
   const quitarContacto = async (nombre: string) => {
     try {
       const r = await fetch(`/api/contactos/${encodeURIComponent(nombre)}`, { method: "DELETE" });
@@ -2364,6 +2385,7 @@ export default function App() {
                   <span className="text-[11px] font-hud-mono text-[#b8f4ff]">Contactos para &ldquo;comunícame con...&rdquo;</span>
                   {contactos.length ? (
                     <ul className="flex flex-col gap-1 max-h-40 overflow-y-auto pr-1">
+                      <li className="text-[10px] font-hud-mono text-[#68a8d8]">{contactos.length} contactos</li>
                       {contactos.map((c) => (
                         <li key={c.nombre} className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff]">
                           <span className="flex-1 truncate">{c.nombre}</span>
@@ -2384,6 +2406,10 @@ export default function App() {
                       Aún no hay contactos. Agrégalos aquí o dile a Jarvis: &ldquo;guarda a Anabel Gutiérrez, su número es 81 1234 5678&rdquo;.
                     </p>
                   )}
+                  <label className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer">
+                    Importar todos mis contactos (archivo .vcf o .csv)
+                    <input type="file" accept=".vcf,.csv,text/vcard,text/csv" onChange={importarArchivoContactos} className="hidden" />
+                  </label>
                   <form onSubmit={agregarContacto} className="flex gap-1.5">
                     <input
                       type="text"
