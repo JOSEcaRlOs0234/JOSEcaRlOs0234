@@ -30,6 +30,7 @@ import {
   TIPOS_DISENO,
 } from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
+import { buscarEnYoutube, urlDeBusqueda, urlParaReproducir } from "./musica.ts";
 import { anotarFalta, buscarFalta, marcarEnviada, mensajeParaClaude } from "./faltantes.ts";
 import type { Informe } from "./consultas.ts";
 import {
@@ -226,6 +227,32 @@ export const DECLARACIONES = [
         dias: { type: "integer", description: "Cuántos días hacia adelante (1 a 60)" },
         materia: { type: "string", description: "Solo de esta materia (opcional)" },
       },
+    },
+  },
+  {
+    name: "poner_musica",
+    description:
+      "Pone música en YouTube: busca la canción, artista o tipo de música y la abre en el navegador. Con mix=true usa la " +
+      "mezcla automática de YouTube (sigue poniendo canciones parecidas), ideal para 'pon música de X' o 'pon algo para " +
+      "estudiar'; para una canción concreta usa mix=false.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        busqueda: { type: "string", description: "Qué buscar, por ejemplo 'Tití me preguntó Bad Bunny' o 'lofi para estudiar'" },
+        mix: { type: "boolean", description: "true = mezcla de canciones parecidas sin parar" },
+      },
+      required: ["busqueda"],
+    },
+  },
+  {
+    name: "controlar_musica",
+    description:
+      "Controla la música que está sonando (YouTube u otra en la laptop) con las teclas multimedia: pausar, reanudar, " +
+      "siguiente o anterior. Pausar y reanudar usan la misma tecla (play/pausa). Para el volumen usa controlar_volumen.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { accion: { type: "string", enum: ["pausar", "reanudar", "siguiente", "anterior"] } },
+      required: ["accion"],
     },
   },
   {
@@ -1031,6 +1058,51 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             .slice(0, 40)
             .map((t) => ({ tarea: t.titulo, materia: t.materia, entrega: entregaLegible(t) }));
           return lista.length ? { tareas: lista } : { resultado: `No hay tareas con entrega en los próximos ${dias} días.` };
+        },
+      };
+    }
+
+    case "poner_musica": {
+      const busqueda = texto(args.busqueda, "busqueda", 200);
+      const mix = args.mix === true;
+      return {
+        nivel: "normal",
+        tipo: "musica",
+        descripcion: `Poner en YouTube: "${busqueda}"${mix ? " (mezcla sin parar)" : ""}`,
+        ejecutar: async () => {
+          let videos: Awaited<ReturnType<typeof buscarEnYoutube>> = [];
+          try {
+            videos = await buscarEnYoutube(busqueda);
+          } catch {
+            // Si no se pudo leer YouTube, se abre la búsqueda
+          }
+          if (!videos.length) {
+            await win.abrirUrl(urlDeBusqueda(busqueda));
+            return { resultado: "No pude elegir la canción yo solo; abrí la búsqueda de YouTube para que el usuario la elija." };
+          }
+          const v = videos[0];
+          await win.abrirUrl(urlParaReproducir(v.id, mix));
+          return {
+            resultado: `Sonando en YouTube: "${v.titulo}"${v.canal ? ` de ${v.canal}` : ""}. Dilo en una frase corta.`,
+            nota: "Si el usuario dice pausa/para/detén, usa controlar_musica 'pausar'; 'sigue/reanuda/ponla' = 'reanudar'.",
+          };
+        },
+      };
+    }
+
+    case "controlar_musica": {
+      const accion = args.accion;
+      if (accion !== "pausar" && accion !== "reanudar" && accion !== "siguiente" && accion !== "anterior") {
+        throw new ErrorHerramienta("Solo puedo pausar, reanudar, pasar a la siguiente o regresar a la anterior.");
+      }
+      const nombres = { pausar: "Pausar la música", reanudar: "Reanudar la música", siguiente: "Siguiente canción", anterior: "Canción anterior" };
+      return {
+        nivel: "libre",
+        tipo: "musica",
+        descripcion: nombres[accion],
+        ejecutar: async () => {
+          await win.teclaMultimedia(accion);
+          return { resultado: `${nombres[accion]}: hecho. Contesta con una o dos palabras (o nada si fue pausar).` };
         },
       };
     }
@@ -1891,6 +1963,7 @@ async function revisarCanva(nombre: string, args: Record<string, unknown>): Prom
 
 // Nombres legibles de los permisos que se pueden recordar
 export const NOMBRES_PERMISOS: Record<string, string> = {
+  musica: "Poner música en YouTube",
   abrir_programa: "Abrir programas",
   abrir_web: "Abrir páginas web y búsquedas",
   volumen: "Cambiar el volumen",

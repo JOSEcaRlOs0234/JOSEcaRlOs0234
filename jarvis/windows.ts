@@ -322,6 +322,13 @@ function teclas(codigo: number, veces: number): Promise<string> {
   });
 }
 
+// Teclas multimedia (como las del teclado): 179 reproducir/pausar, 176 siguiente, 177 anterior.
+// Controlan lo que esté sonando (YouTube en Edge o Chrome) aunque esa ventana no esté enfrente.
+export async function teclaMultimedia(accion: "pausar" | "reanudar" | "siguiente" | "anterior"): Promise<void> {
+  const codigo = accion === "siguiente" ? 176 : accion === "anterior" ? 177 : 179;
+  await teclas(codigo, accion === "anterior" ? 2 : 1); // "anterior" una vez solo regresa al inicio de la canción
+}
+
 export async function volumen(accion: "subir" | "bajar" | "silenciar" | "establecer", cantidad: number): Promise<void> {
   if (accion === "silenciar") await teclas(173, 1);
   else if (accion === "subir") await teclas(175, Math.ceil(cantidad / 2));

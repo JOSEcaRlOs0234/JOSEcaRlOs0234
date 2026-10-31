@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.16.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.17.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -377,6 +377,17 @@
   UI: en Canvas → Calificaciones, formulario "Conectar con Gmail" (usa POST /api/correo existente + POST
   /api/canvas/calificaciones/memorizar); "Desconectar Gmail" = DELETE /api/correo. Sigue sin panel de correo aparte.
   OJO: con Gmail conectado también quedan activas revisar_correo/leer_correo/enviar_correo (con permiso; enviar = delicada).
+- (El usuario pidió borrar el zip 2.16.1 y no contestó si quitar el plan B de Gmail; luego dijo "mantén todo lo que
+  tienes" → el código de 2.16.1 se queda, inactivo mientras no conecte Gmail.)
+- v2.17 MÚSICA EN YOUTUBE (pedido: "que reproduzca música en YouTube y que pause cuando yo le diga"): `musica.ts`.
+  `buscarEnYoutube` lee la página pública de resultados (sin clave; cookie SOCS/CONSENT para saltar el aviso) →
+  `videosDePagina` (ytInitialData → videoRenderer, salta shorts/anuncios; plan B regex) → abre `urlParaReproducir`
+  (watch?v=ID, o &list=RDID = mezcla sin parar) con `win.abrirUrl`; si no pudo leer, abre la búsqueda. Control con
+  teclas multimedia de Windows (`win.teclaMultimedia`: 179 play/pausa, 176 siguiente, 177×2 anterior; mismas SendKeys que
+  el volumen) → sirve aunque YouTube no esté enfrente. Herramientas: `poner_musica` {busqueda, mix} (normal, tipo
+  recordable "musica") y `controlar_musica` {accion pausar|reanudar|siguiente|anterior} (libre). Pausar y reanudar son
+  la MISMA tecla (si ya estaba en pausa, la reanuda). PERSONALIDAD "MÚSICA". Probado el lector con página simulada
+  (la nube no llega a YouTube) y `revisar`; NO en Windows real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
