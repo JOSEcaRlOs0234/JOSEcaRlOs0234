@@ -54,6 +54,13 @@ import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { NotasPanel, Nota } from "./components/NotasPanel";
+import {
+  DURACIONES,
+  guardarDuracionArranque,
+  leerDuracionArranque,
+  PantallaArranque,
+  type DuracionArranque,
+} from "./components/PantallaArranque";
 import { formulasEnPalabras, TextoConFormulas } from "./components/Formulas";
 import { umbralPorSensibilidad } from "../detector-aplausos.ts";
 
@@ -480,6 +487,23 @@ export default function App() {
 
   // Detector de aplausos en segundo plano (lo maneja el servidor)
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
+  // Modo Ultron (para la voz grave) y pantalla de arranque
+  const modoUltronRef = useRef(false);
+  useEffect(() => {
+    modoUltronRef.current = aplausos?.modo === "ultron";
+  }, [aplausos?.modo]);
+  const [duracionArranque, setDuracionArranque] = useState<DuracionArranque>(leerDuracionArranque);
+  const [mostrarArranque, setMostrarArranque] = useState(() => {
+    try {
+      // Una vez por ventana y no cuando se abre sola por un recordatorio
+      if (new URLSearchParams(window.location.search).has("aviso")) return false;
+      if (sessionStorage.getItem("jarvis_arranque_visto")) return false;
+      sessionStorage.setItem("jarvis_arranque_visto", "1");
+    } catch {
+      // Sin sessionStorage se muestra igual
+    }
+    return DURACIONES[leerDuracionArranque()].ms > 0;
+  });
   const ultimaActivacionRef = useRef<number | null>(null);
   const ultimoAvisoRef = useRef<number | null>(null);
   // Modo clase: grabadora, escucha de la orden "termina la clase" y aviso cuando el Word está listo
@@ -1064,8 +1088,9 @@ export default function App() {
     texto = formulasEnPalabras(texto);
     const frase = new SpeechSynthesisUtterance(texto);
     frase.lang = "es-MX";
-    frase.rate = 1;
-    frase.pitch = 0.85;
+    // Ultron habla más grave y un poco más lento
+    frase.rate = modoUltronRef.current ? 0.9 : 1;
+    frase.pitch = modoUltronRef.current ? 0.3 : 0.85;
     const voz = elegirVoz();
     if (voz) {
       frase.voice = voz;
@@ -1788,6 +1813,13 @@ export default function App() {
       }`}
     >
       <NotificationStack notifications={notifications} onDismiss={dismissNotification} />
+      {mostrarArranque && (
+        <PantallaArranque
+          duracion={DURACIONES[duracionArranque].ms || 2000}
+          ultron={aplausos?.modo === "ultron"}
+          alTerminar={() => setMostrarArranque(false)}
+        />
+      )}
       {confirmacion && <PermisoDialog confirmacion={confirmacion} onResponder={responderPermiso} />}
 
       {/* AJUSTES (cajón lateral): todo lo de configuración, para que la pantalla principal quede limpia */}
@@ -2277,6 +2309,47 @@ export default function App() {
                 <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
                   Nunca leo tus mensajes: solo veo el nombre en el aviso de Windows. Necesitas la app de WhatsApp (o WhatsApp
                   Web) con sus notificaciones activadas.
+                </p>
+              </div>
+
+              {/* PANTALLA DE INICIO */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <div className="flex items-center gap-2">
+                    <Power className="w-4 h-4 text-[#00e5ff]" />
+                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">Pantalla de inicio</h2>
+                  </div>
+                </div>
+                <label className="flex items-center justify-between gap-2 text-[11px] font-hud-mono text-[#e2f8ff]">
+                  Duración al abrir
+                  <select
+                    value={duracionArranque}
+                    onChange={(e) => {
+                      const d = e.target.value as DuracionArranque;
+                      setDuracionArranque(d);
+                      guardarDuracionArranque(d);
+                    }}
+                    className="bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] text-[#e2f8ff] focus:outline-none"
+                  >
+                    {(Object.keys(DURACIONES) as DuracionArranque[]).map((d) => (
+                      <option key={d} value={d}>
+                        {DURACIONES[d].nombre}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAjustesAbiertos(false);
+                    setMostrarArranque(true);
+                  }}
+                  className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer"
+                >
+                  Ver la pantalla de inicio
+                </button>
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Al abrir verás los sistemas encenderse y cuánto tardé en estar listo. Un clic la salta.
                 </p>
               </div>
 

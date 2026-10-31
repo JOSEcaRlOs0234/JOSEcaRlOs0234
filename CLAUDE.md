@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.20.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.21.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -424,6 +424,16 @@
   colores), contra-filtro en `.sin-ultron` (Apagar, botón Ultron), fotos/dibujos (`main img`, canvas[data-lienzo-dibujo]),
   líneas de pantalla, barrido, paneles con esquinas cortadas que laten, título U.L.T.R.O.N. con interferencia
   (respeta prefers-reduced-motion). Probado: capturas Playwright de ambos modos, `revisar`/ejecutar de cambiar_modo.
+- v2.21 (pedido "Para Claude" desde 2.20.0: "agregar el tiempo de inicio al abrir la aplicación y que la voz de Ultron
+  sea más grave"; se interpretó como PANTALLA DE ARRANQUE): `src/components/PantallaArranque.tsx` = anillo con %,
+  nombre (J.A.R.V.I.S. o U.L.T.R.O.N. en rojo), 8 sistemas "EN LÍNEA" (Gemini "SIN CLAVE" si falta), barra y al final
+  "tiempo de inicio X s" (performance.now() hasta que responde /api/estado) + versión; clic la salta. Duración en Ajustes →
+  "Pantalla de inicio" (apagada / rápida 2 s / normal 4 s (por defecto) / cinemática 8 s; localStorage
+  `jarvis_arranque`) + botón "Ver la pantalla de inicio". Una vez por ventana (sessionStorage), nunca con ?aviso.
+  Voz de Ultron: App.tsx `hablar()` usa pitch 0.3 y rate 0.9 si `modoUltronRef`; Windows (`decirEnVoz`, aplausos.ts):
+  JARVIS_ULTRON=1 → voz masculina en español si hay y SSML <prosody pitch='x-low' rate='-10%'> con el texto escapado
+  (SecurityElement.Escape; script sin comillas dobles). Probado en Playwright (pantalla en modo Ultron, voz 0.3/0.9);
+  el SSML de Windows NO se pudo ejecutar aquí.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
