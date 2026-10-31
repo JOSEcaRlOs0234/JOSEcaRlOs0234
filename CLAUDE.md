@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.24.3). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.25.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -494,6 +494,14 @@
   probablemente Gemini contestó de memoria por el historial del chat (sin llamar la herramienta) y/o seguía en 2.24.1.
   v2.24.3: PERSONALIDAD obliga a usar comunicar_por_whatsapp SIEMPRE en ese turno; si no encuentra, el error dice cuántos
   contactos hay y `nombresParecidos` (3 más cercanos) para preguntar. Pedirle al usuario "Nueva conversación" al probar.
+- v2.25 LLAMAR POR WHATSAPP (pedido: "¿no puede realizar llamadas?" → se le explicó que WhatsApp no tiene enlace para
+  llamar; aceptó "que apriete el botón él solo"): windows.ts `apretarLlamarWhatsapp(nombre)` = PowerShell + UI Automation
+  (UIAutomationClient): ventana del proceso ^WhatsApp, espera ≤15 s a que algún elemento contenga el nombre del contacto,
+  busca botón por NOMBRE "Llamada de voz|Voice call|Audio call" (InvokePattern) o, en el WhatsApp nuevo, "Llamar|Call"
+  y luego el elemento "Llamada de voz" del menú → LLAMANDO / MENU / SIN_BOTON (nunca coordenadas ni teclas). herramientas:
+  `comunicar_por_whatsapp` {nombre, llamar (por defecto true)}: llamar = DELICADA (siempre confirma, "LLAMAR por
+  WhatsApp a X (+52…)"); llamar=false = normal (solo abre chat). Si no encuentra el botón o es WhatsApp Web, deja el
+  chat abierto y pide tocar 📞. PERSONALIDAD actualizada. Probado `revisar`; la UI Automation NO se pudo probar aquí.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

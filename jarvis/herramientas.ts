@@ -217,11 +217,18 @@ export const DECLARACIONES = [
     name: "comunicar_por_whatsapp",
     description:
       "Abre WhatsApp en el chat de un contacto para hablarle o llamarle ('comunícame con Anabel Gutiérrez', 'llama a mi " +
-      "mamá por WhatsApp', 'márcale a Juan'). Busca el número en la libreta de contactos de Jarvis. Solo abre el chat: " +
-      "no manda mensajes; el usuario toca el botón de llamada. Si no está en la libreta, pide el número y usa guardar_contacto.",
+      "mamá por WhatsApp', 'márcale a Juan'). Busca el número en la libreta de contactos de Jarvis. Con llamar=true, después " +
+      "de que el usuario confirme, aprieta él mismo el botón de llamada. Nunca manda mensajes. Si no está en la libreta, pide " +
+      "el número y usa guardar_contacto.",
     parametersJsonSchema: {
       type: "object",
-      properties: { nombre: { type: "string", description: "A quién, como lo dijo el usuario" } },
+      properties: {
+        nombre: { type: "string", description: "A quién, como lo dijo el usuario" },
+        llamar: {
+          type: "boolean",
+          description: "true = además de abrir el chat, aprieta 'Llamada de voz' (comunícame con / llámale / márcale); false = solo abrir el chat (quiero escribirle)",
+        },
+      },
       required: ["nombre"],
     },
   },
@@ -1104,12 +1111,26 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       }
       const c = encontrados[0];
       necesitaWindows();
+      const llamar = args.llamar !== false;
       return {
-        nivel: "normal",
+        // Llamar es comunicarse con otra persona: SIEMPRE se confirma. Solo abrir el chat se puede dejar recordado.
+        nivel: llamar ? "delicada" : "normal",
         tipo: "whatsapp_llamar",
-        descripcion: `Abrir WhatsApp con ${c.nombre} (${telefonoLegible(c.telefono)})`,
+        descripcion: llamar
+          ? `LLAMAR por WhatsApp a ${c.nombre} (${telefonoLegible(c.telefono)})`
+          : `Abrir WhatsApp con ${c.nombre} (${telefonoLegible(c.telefono)})`,
         ejecutar: async () => {
           const donde = await win.abrirChatWhatsapp(c.telefono);
+          if (llamar && donde === "app") {
+            const r = await win.apretarLlamarWhatsapp(c.nombre).catch(() => "sin_boton" as const);
+            if (r === "llamando") return { resultado: `Ya estoy llamando a ${c.nombre} por WhatsApp. Dilo en una frase corta.` };
+            return {
+              resultado:
+                r === "menu"
+                  ? `Abrí el chat de ${c.nombre} y el menú de llamada; dile al usuario que elija "Llamada de voz".`
+                  : `Abrí el chat de ${c.nombre}, pero no pude apretar el botón de llamar yo solo. Dile al usuario que toque el teléfono 📞 arriba a la derecha.`,
+            };
+          }
           return {
             resultado:
               donde === "app"

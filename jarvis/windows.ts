@@ -122,6 +122,65 @@ export async function abrirChatWhatsapp(telefono: string): Promise<"app" | "web"
   return salida.trim().endsWith("app") ? "app" : "web";
 }
 
+/**
+ * Aprieta el botón "Llamada de voz" de WhatsApp (con UI Automation de Windows, buscando el botón por su nombre, nunca
+ * por coordenadas) una vez que ya se ve el chat de esa persona. Si no encuentra el botón en 15 s, no hace nada.
+ * Solo se usa después de que el usuario confirmó la llamada.
+ */
+const SCRIPT_LLAMAR = `
+Add-Type -AssemblyName UIAutomationClient; Add-Type -AssemblyName UIAutomationTypes
+$AE = [System.Windows.Automation.AutomationElement]; $TS = [System.Windows.Automation.TreeScope]
+$C = [System.Windows.Automation.Condition]::TrueCondition
+$nombre = $env:JARVIS_NOMBRE.ToLower()
+function VentanaWA {
+  foreach ($p in (Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -match '^WhatsApp' -and $_.MainWindowHandle -ne 0 })) {
+    return $AE::FromHandle($p.MainWindowHandle)
+  }
+  return $null
+}
+function Buscar($raiz, $patron) {
+  foreach ($e in $raiz.FindAll($TS::Descendants, $C)) {
+    try { $n = $e.Current.Name; if ($n -and $n -match $patron) { return $e } } catch {}
+  }
+  return $null
+}
+function Apretar($e) {
+  try { $e.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern).Invoke(); return $true } catch { return $false }
+}
+$fin = (Get-Date).AddSeconds(15)
+while ((Get-Date) -lt $fin) {
+  $w = VentanaWA
+  if ($w) {
+    # Que ya se vea el chat de esa persona (su nombre aparece en la ventana)
+    $esChat = $false
+    foreach ($e in $w.FindAll($TS::Descendants, $C)) {
+      try { if ($e.Current.Name -and $e.Current.Name.ToLower().Contains($nombre)) { $esChat = $true; break } } catch {}
+    }
+    if ($esChat) {
+      $directo = Buscar $w '^(Llamada de voz|Voice call|Audio call)$'
+      if ($directo) { if (Apretar $directo) { 'LLAMANDO'; exit } }
+      else {
+        # WhatsApp nuevo: botón "Llamar" que abre un menú con "Llamada de voz"
+        $menu = Buscar $w '^(Llamar|Call)$'
+        if ($menu -and (Apretar $menu)) {
+          Start-Sleep -Milliseconds 1200
+          $voz = Buscar $w '^(Llamada de voz|Voice call|Audio call|Voz|Voice)$'
+          if ($voz -and (Apretar $voz)) { 'LLAMANDO'; exit }
+          'MENU'; exit
+        }
+      }
+    }
+  }
+  Start-Sleep -Milliseconds 800
+}
+'SIN_BOTON'
+`;
+
+export async function apretarLlamarWhatsapp(nombre: string): Promise<"llamando" | "menu" | "sin_boton"> {
+  const salida = (await powershell(SCRIPT_LLAMAR, { JARVIS_NOMBRE: nombre.slice(0, 80) })).trim();
+  return salida.endsWith("LLAMANDO") ? "llamando" : salida.endsWith("MENU") ? "menu" : "sin_boton";
+}
+
 export function abrirUrl(url: string): Promise<void> {
   return abrirVisible(url);
 }
