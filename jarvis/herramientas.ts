@@ -247,8 +247,9 @@ export const DECLARACIONES = [
   {
     name: "controlar_musica",
     description:
-      "Controla la música que está sonando (YouTube u otra en la laptop) con las teclas multimedia: pausar, reanudar, " +
-      "siguiente o anterior. Pausar y reanudar usan la misma tecla (play/pausa). Para el volumen usa controlar_volumen.",
+      "Controla la música o el VIDEO que está sonando en la laptop (YouTube, Netflix, Spotify, cualquier video en el " +
+      "navegador) con las teclas multimedia: pausar, reanudar, siguiente o anterior. Úsalo también para 'pausa el video'. " +
+      "Pausar y reanudar usan la misma tecla (play/pausa). Para el volumen usa controlar_volumen.",
     parametersJsonSchema: {
       type: "object",
       properties: { accion: { type: "string", enum: ["pausar", "reanudar", "siguiente", "anterior"] } },
@@ -1095,7 +1096,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       if (accion !== "pausar" && accion !== "reanudar" && accion !== "siguiente" && accion !== "anterior") {
         throw new ErrorHerramienta("Solo puedo pausar, reanudar, pasar a la siguiente o regresar a la anterior.");
       }
-      const nombres = { pausar: "Pausar la música", reanudar: "Reanudar la música", siguiente: "Siguiente canción", anterior: "Canción anterior" };
+      const nombres = { pausar: "Pausar la música o el video", reanudar: "Reanudar la música o el video", siguiente: "Siguiente canción o video", anterior: "Canción o video anterior" };
       return {
         nivel: "libre",
         tipo: "musica",

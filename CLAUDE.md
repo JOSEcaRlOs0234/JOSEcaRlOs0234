@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.18.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.18.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -403,6 +403,9 @@
   "Despertar a Jarvis", bloque "🎙️ Al oír mi voz". Probado con Eagle falso (pedazos, umbral, null, guardar/olvidar
   perfil) y la pantalla; NO con Eagle real (necesita la clave) ni en Windows. RECORDAR: el micrófono en Jarvis seguía sin
   sonido (pendiente revisar privacidad "apps de escritorio"/F4).
+- PEDIDO "PARA CLAUDE" (desde Jarvis 2.16.0, el usuario no había instalado 2.17): "pausa el video" → no tenía herramienta.
+  Ya existía `controlar_musica` (2.17, teclas multimedia sirven para cualquier video). v2.18.1: descripción y PERSONALIDAD
+  ahora dicen que también es para VIDEOS ("pausa el video", "ponle play").
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

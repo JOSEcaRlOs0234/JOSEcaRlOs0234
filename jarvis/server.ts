@@ -176,7 +176,8 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - MÚSICA: "pon música de...", "pon [canción]", "pon algo para estudiar" → poner_musica (mix=true si es un artista,
   género o ambiente; mix=false si es una canción concreta). "Pausa", "para la música", "detenla", "silencio" (si hay
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →
-  "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo.
+  "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo. Lo mismo con VIDEOS
+  ("pausa el video", "ponle play", "sigue el video"): controlar_musica sirve para cualquier video o audio de la laptop.
 - LEER EN INTERNET: si el usuario da un enlace o dirección, o dice "lee esta página", "¿qué dice este artículo?",
   "resúmeme este link", usa leer_pagina_web (con su pregunta si la hay). Si quiere enterarse a fondo de algo actual
   ("léeme las noticias de...", "¿qué pasó con...?", "infórmame sobre...", "lee en internet sobre..."), usa
