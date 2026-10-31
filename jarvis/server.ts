@@ -182,6 +182,10 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →
   "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo. Lo mismo con VIDEOS
   ("pausa el video", "ponle play", "sigue el video"): controlar_musica sirve para cualquier video o audio de la laptop.
+- CONEXIONES: si una búsqueda falla o preguntan "¿por qué no te conectas?", "¿tienes internet?", "¿qué pasa con Claude?",
+  usa revisar_conexiones y explica en palabras sencillas qué falla y cómo arreglarlo. No digas "no tengo internet" sin
+  revisarlo: casi siempre es el límite GRATUITO de búsquedas de Google (se arregla esperando). La consulta directa a
+  Claude es opcional y de pago; "mandar a Claude" (copiar y pegar) funciona sin clave.
 - ESTADÍSTICAS: SÍ tienes internet. Si piden cifras, porcentajes, cantidades o datos por sector/región/año ("¿qué
   porcentaje...?", "estadísticas de...", "¿cuánto se usa X por sector en México?"), usa buscar_estadisticas. Di en voz
   las cifras principales; el informe con cada dato, su año y su fuente queda en la pizarra. Nunca inventes números: si
@@ -348,14 +352,8 @@ async function preguntarAGemini(contents: any[]) {
 const agente = new Agente(preguntarAGemini);
 
 // Búsqueda en internet (Gemini + Google) para la herramienta "investigar"
-conectarInvestigador(async (pregunta) => {
-  try {
-    return await buscarEnInternet(ai, modeloActual, pregunta);
-  } catch (err) {
-    if (!convieneOtroModelo(err) || modeloActual === "gemini-3.8-flash") throw err;
-    return await buscarEnInternet(ai, "gemini-3.8-flash", pregunta);
-  }
-});
+// (prueba todos los modelos de respaldo y, si todos están en su límite por minuto, espera y reintenta una vez)
+conectarInvestigador((pregunta) => conPaciencia(() => conRespaldo((modelo) => buscarEnInternet(ai, modelo, pregunta))));
 
 /** Hace un pedido a Gemini probando los modelos de respaldo si el elegido está saturado o no existe. */
 async function conRespaldo<T>(
@@ -413,9 +411,88 @@ async function dibujarConRevision(descripcion: string): Promise<string> {
   return primero;
 }
 
+/**
+ * Revisión de conexiones: internet, clave de Gemini, búsqueda de Google y Claude. Cada prueba dice qué falla y cómo
+ * arreglarlo en palabras sencillas (lo usa la herramienta revisar_conexiones y el botón de Ajustes).
+ */
+type Prueba = { prueba: string; ok: boolean; detalle: string; solucion?: string };
+async function revisarConexiones(): Promise<Prueba[]> {
+  const resultado: Prueba[] = [];
+  const explicar = (err: any) => {
+    const texto = String(err?.message || err || "");
+    const codigo = Number(err?.status || err?.code || 0);
+    if (codigo === 429 || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(texto)) {
+      return { detalle: "Llegó al límite de uso GRATUITO de Google (por minuto o por día).", solucion: "Esperar unos minutos (o hasta mañana). No es falta de internet." };
+    }
+    if (codigo === 401 || /API key not valid|API_KEY_INVALID/i.test(texto)) {
+      return { detalle: "La clave de Gemini no es válida.", solucion: "Abrir 'Cambiar clave de Gemini.bat' y pegar una clave nueva de aistudio.google.com." };
+    }
+    if (codigo === 403 || /PERMISSION_DENIED|permission/i.test(texto)) {
+      return { detalle: "Google rechazó la clave (permiso denegado).", solucion: "Crear una clave nueva en aistudio.google.com y ponerla con 'Cambiar clave de Gemini.bat'." };
+    }
+    if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|network|timeout/i.test(texto)) {
+      return { detalle: "No se pudo llegar a los servidores de Google.", solucion: "Revisar el Wi-Fi; si hay internet, puede que un antivirus o firewall bloquee a Node.js." };
+    }
+    if (codigo >= 500) return { detalle: "Los servidores de Google tienen un problema temporal.", solucion: "Intentar en unos minutos." };
+    return { detalle: `Falló: ${texto.slice(0, 160)}`, solucion: "Intentar de nuevo; si sigue, mandárselo a Claude." };
+  };
+
+  // 1. ¿Hay internet?
+  try {
+    const r = await fetch("https://www.google.com/generate_204", { signal: AbortSignal.timeout(8000) });
+    resultado.push({ prueba: "Internet", ok: r.status === 204 || r.ok, detalle: r.status === 204 || r.ok ? "La laptop sí tiene internet." : `Respuesta rara (${r.status}).` });
+  } catch (err) {
+    resultado.push({ prueba: "Internet", ok: false, detalle: "La laptop no llega a internet.", solucion: "Revisar el Wi-Fi o el cable; si otras páginas abren, un antivirus o firewall puede estar bloqueando a Node.js." });
+  }
+  // 2. ¿La clave de Gemini sirve?
+  if (!claveConfigurada) {
+    resultado.push({ prueba: "Gemini (cerebro)", ok: false, detalle: "No hay clave de Gemini.", solucion: "Abrir 'Encender Jarvis' para ponerla." });
+  } else {
+    try {
+      await conRespaldo((modelo) => ai.models.generateContent({ model: modelo, contents: "Responde solo: ok" }));
+      resultado.push({ prueba: "Gemini (cerebro)", ok: true, detalle: "La clave funciona y Gemini contesta." });
+    } catch (err) {
+      resultado.push({ prueba: "Gemini (cerebro)", ok: false, ...explicar(err) });
+    }
+    // 3. ¿La búsqueda de Google (información reciente) funciona?
+    try {
+      const r = await conRespaldo((modelo) =>
+        ai.models.generateContent({ model: modelo, contents: "¿Qué fecha es hoy según internet? Responde en 5 palabras.", config: { tools: [{ googleSearch: {} }] } })
+      );
+      const fuentes = (r.candidates?.[0] as any)?.groundingMetadata?.groundingChunks?.length ?? 0;
+      resultado.push({
+        prueba: "Búsqueda en internet (Google)",
+        ok: true,
+        detalle: fuentes ? `Funciona (consultó ${fuentes} página(s)).` : "Contestó, pero esta vez no consultó páginas.",
+      });
+    } catch (err) {
+      resultado.push({ prueba: "Búsqueda en internet (Google)", ok: false, ...explicar(err) });
+    }
+  }
+  // 4. Claude (opcional, de pago)
+  resultado.push(
+    claudeConfigurado()
+      ? { prueba: "Conexión con Claude (consultar_a_claude)", ok: true, detalle: "Tiene clave puesta (cada consulta cuesta unos centavos)." }
+      : {
+          prueba: "Conexión con Claude (consultar_a_claude)",
+          ok: false,
+          detalle: "No está activada: es OPCIONAL y de pago (necesita una clave de console.anthropic.com con saldo).",
+          solucion:
+            "Si se quiere: abrir 'Configurar Claude.bat' y pegar la clave. Sin ella, 'mandar a Claude' (copiar y pegar en su chat) funciona igual.",
+        }
+  );
+  registrar("SISTEMA", `Revisión de conexiones: ${resultado.map((p) => `${p.prueba} ${p.ok ? "OK" : "FALLA"}`).join(", ")}`);
+  return resultado;
+}
+
+app.get("/api/diagnostico", async (_req, res) => {
+  res.json({ pruebas: await revisarConexiones() });
+});
+
 // Investigación a fondo y dibujos (herramientas investigar_a_fondo y dibujar)
 conectarIA({
-  investigarAFondo: (tema) => conRespaldo((modelo) => investigarAFondo(ai, modelo, tema)),
+  investigarAFondo: (tema) => conPaciencia(() => conRespaldo((modelo) => investigarAFondo(ai, modelo, tema))),
+  revisarConexiones: () => revisarConexiones(),
   dibujar: dibujarConRevision,
   // Documentos de Word, Excel y PowerPoint: investigar (fuentes confiables) → estructurar → armar el archivo
   crearDocumento: async (tipo, tema, indicaciones) => {

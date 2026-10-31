@@ -1395,6 +1395,21 @@ export default function App() {
     }
   };
 
+  // Revisión de conexiones (Ajustes → Cerebro)
+  const [conexiones, setConexiones] = useState<{ prueba: string; ok: boolean; detalle: string; solucion?: string }[] | null>(null);
+  const [revisandoConexiones, setRevisandoConexiones] = useState(false);
+  const revisarConexiones = async () => {
+    setRevisandoConexiones(true);
+    try {
+      const r = await fetch("/api/diagnostico");
+      if (r.ok) setConexiones((await r.json()).pruebas);
+    } catch {
+      showNotification("No pude hacer la revisión (¿Jarvis está encendido?).", "error");
+    } finally {
+      setRevisandoConexiones(false);
+    }
+  };
+
   const cambiarAplausos = async (cambios: {
     activo?: boolean;
     sensibilidad?: number;
@@ -1848,6 +1863,27 @@ export default function App() {
                 <RefreshCw className="w-3.5 h-3.5" />
               </button>
               </div>
+              <button
+                type="button"
+                onClick={revisarConexiones}
+                disabled={revisandoConexiones}
+                className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer disabled:opacity-40"
+              >
+                {revisandoConexiones ? "Revisando..." : "Revisar conexiones (internet, Google, Claude)"}
+              </button>
+              {conexiones && (
+                <ul className="flex flex-col gap-1">
+                  {conexiones.map((p) => (
+                    <li key={p.prueba} className="text-[10px] font-hud-mono leading-snug">
+                      <span className={p.ok ? "text-[#00f5a0]" : "text-[#ff9933]"}>
+                        {p.ok ? "✔" : "✘"} {p.prueba}:
+                      </span>{" "}
+                      <span className="text-[#e2f8ff]">{p.detalle}</span>
+                      {p.solucion && <span className="block text-[#68a8d8]">→ {p.solucion}</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
               {/* DETECTOR DE APLAUSOS (en segundo plano) */}

@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.23.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.23.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -460,6 +460,15 @@
   4 páginas + 2 PDFs (≤4 MB, van como inlineData) → informe. Herramienta `buscar_estadisticas` {tema} (libre) → pizarra
   "Datos: ..." con "## Fuentes". PERSONALIDAD "ESTADÍSTICAS" (sí tienes internet; tabla/Excel → crear_documento excel).
   Probado con fetch + Gemini simulados (página + PDF); NO con internet real.
+- v2.23.1 (pedido "Para Claude" desde 2.23.0: "por qué no se puede conectar a internet para buscar información
+  reciente y cómo solucionar la conexión con Claude"): causas encontradas: `investigar` solo probaba 2 modelos (ahora
+  `conectarInvestigador` = conPaciencia+conRespaldo; investigarAFondo también con conPaciencia) y TODOS los errores de
+  búsqueda decían "No pude buscar en internet" → Gemini creía que no había internet. `fallaDeBusqueda(err)` (herramientas.ts)
+  explica 429 (límite gratuito, NO falta de internet) / clave / 403 / red / 5xx; usado en investigar, investigar_a_fondo,
+  leer_en_internet y buscar_estadisticas. `revisarConexiones()` (server.ts): Internet (google.com/generate_204), Gemini
+  (generateContent "ok"), Búsqueda Google (googleSearch, cuenta groundingChunks), Claude (opcional/de pago; sin clave →
+  explica que mandar_a_claude funciona igual). `GET /api/diagnostico`, herramienta `revisar_conexiones` (libre), botón
+  "Revisar conexiones" en Ajustes → Cerebro. PERSONALIDAD "CONEXIONES". Probado con fetch simulado + captura.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

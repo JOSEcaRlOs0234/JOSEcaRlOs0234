@@ -66,6 +66,7 @@ let ia: {
   leerPaginaWeb?: (url: string, pregunta: string) => Promise<{ titulo: string; url: string; resumen: string; informe: string }>;
   leerSobreTema?: (tema: string) => Promise<Informe & { leidas: number }>;
   buscarEstadisticas?: (tema: string) => Promise<Informe & { leidas: number }>;
+  revisarConexiones?: () => Promise<{ prueba: string; ok: boolean; detalle: string; solucion?: string }[]>;
 } | null = null;
 export function conectarIA(funciones: NonNullable<typeof ia>): void {
   ia = funciones;
@@ -453,6 +454,13 @@ export const DECLARACIONES = [
       },
       required: ["que_falta"],
     },
+  },
+  {
+    name: "revisar_conexiones",
+    description:
+      "Revisa si funcionan: el internet de la laptop, la clave de Gemini, la búsqueda de Google (información reciente) y la " +
+      "conexión opcional con Claude. Dice qué falla y cómo arreglarlo. Úsalo si una búsqueda falla o preguntan por qué no te conectas.",
+    parametersJsonSchema: { type: "object", properties: {} },
   },
   {
     name: "buscar_estadisticas",
@@ -1475,8 +1483,8 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           let r: Informe;
           try {
             r = await ia.investigarAFondo(tema);
-          } catch {
-            throw new ErrorHerramienta("No pude buscar en internet en este momento.");
+          } catch (err) {
+            throw new ErrorHerramienta(fallaDeBusqueda(err));
           }
           const fuentes = r.fuentes.length
             ? "\n\n## Fuentes\n" + r.fuentes.map((f) => `- [${f.titulo.replace(/[\[\]]/g, "")}](${f.url})`).join("\n")
@@ -1692,6 +1700,22 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       };
     }
 
+    case "revisar_conexiones": {
+      return {
+        nivel: "libre",
+        tipo: "investigar",
+        descripcion: "Revisar las conexiones (internet, Gemini, Google y Claude)",
+        ejecutar: async () => {
+          if (!ia?.revisarConexiones) throw new ErrorHerramienta("La revisión no está disponible.");
+          const pruebas = await ia.revisarConexiones();
+          return {
+            pruebas: pruebas.map((p) => `${p.ok ? "✅" : "❌"} ${p.prueba}: ${p.detalle}${p.solucion ? ` → Solución: ${p.solucion}` : ""}`),
+            resultado: "Explica en palabras sencillas qué funciona, qué falla y cómo arreglarlo (un paso a la vez).",
+          };
+        },
+      };
+    }
+
     case "buscar_estadisticas": {
       const tema = texto(args.tema, "tema", 1000);
       return {
@@ -1708,7 +1732,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             throw new ErrorHerramienta(
               /429|quota|RESOURCE_EXHAUSTED|rate limit/i.test(mensaje)
                 ? "No es un problema de permisos ni de internet: se acabó por ahora el uso GRATUITO de Gemini. Que lo intente en unos minutos."
-                : "No pude buscar las estadísticas en este momento."
+                : fallaDeBusqueda(err)
             );
           }
           const fuentes = r.fuentes.length
@@ -1778,7 +1802,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             throw new ErrorHerramienta(
               /429|quota|RESOURCE_EXHAUSTED|rate limit/i.test(mensaje)
                 ? "No es un problema de permisos: se acabó por ahora el uso GRATUITO de Gemini. Que lo intente en unos minutos."
-                : "No pude leer en internet en este momento."
+                : fallaDeBusqueda(err)
             );
           }
           const fuentes = r.fuentes.length
@@ -1821,8 +1845,8 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           if (!investigador) throw new ErrorHerramienta("La búsqueda no está disponible.");
           try {
             return { respuesta: await investigador(pregunta) };
-          } catch {
-            throw new ErrorHerramienta("No pude buscar en internet en este momento.");
+          } catch (err) {
+            throw new ErrorHerramienta(fallaDeBusqueda(err));
           }
         },
       };
@@ -2108,4 +2132,23 @@ const PROCESOS: Record<string, string[]> = {
 function procesosDe(pedido: string): string[] {
   const n = normalizar(pedido).replace(/^(el|la|los|las)\s+/, "");
   return PROCESOS[n] ?? [n.replace(/\s+/g, "")];
+}
+
+// ------------------------------------------------------------------ fallas de búsqueda
+
+/** Explica en palabras sencillas por qué falló una búsqueda (para que Jarvis no diga "no hay internet" sin razón). */
+function fallaDeBusqueda(err: unknown): string {
+  const e = err as any;
+  const texto = String(e?.message || e || "");
+  const codigo = Number(e?.status || e?.code || 0);
+  if (codigo === 429 || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(texto)) {
+    return "No es falta de internet: se acabó por ahora el uso GRATUITO de búsquedas de Google en Gemini (hay límite por minuto y por día). Que lo intente en unos minutos.";
+  }
+  if (codigo === 401 || /API key not valid|API_KEY_INVALID/i.test(texto)) return "La clave de Gemini no es válida; hay que cambiarla con 'Cambiar clave de Gemini.bat'.";
+  if (codigo === 403 || /PERMISSION_DENIED/i.test(texto)) return "Google rechazó la clave de Gemini para buscar (permiso denegado).";
+  if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|ECONNRESET|network/i.test(texto)) {
+    return "No me pude conectar a Google: revisa el Wi-Fi (o un antivirus/firewall que bloquee a Node.js). Puedes usar revisar_conexiones.";
+  }
+  if (codigo >= 500) return "Los servidores de Google tienen un problema temporal; que lo intente en unos minutos.";
+  return "No pude buscar en internet en este momento. Usa revisar_conexiones para ver qué falla.";
 }
