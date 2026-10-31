@@ -65,6 +65,7 @@ let ia: {
   ) => Promise<{ archivo: string; titulo: string; fuentes: number; confiables: number; sinBusqueda?: boolean }>;
   leerPaginaWeb?: (url: string, pregunta: string) => Promise<{ titulo: string; url: string; resumen: string; informe: string }>;
   leerSobreTema?: (tema: string) => Promise<Informe & { leidas: number }>;
+  buscarEstadisticas?: (tema: string) => Promise<Informe & { leidas: number }>;
 } | null = null;
 export function conectarIA(funciones: NonNullable<typeof ia>): void {
   ia = funciones;
@@ -451,6 +452,21 @@ export const DECLARACIONES = [
         que_falta: { type: "string", description: "Qué capacidad te falta o qué falló, explicado claro para un programador" },
       },
       required: ["que_falta"],
+    },
+  },
+  {
+    name: "buscar_estadisticas",
+    description:
+      "Búsqueda PROFUNDA de datos y estadísticas: cifras, porcentajes, montos y desgloses por sector, región o año (por " +
+      "ejemplo 'porcentaje de aplicación de la nanotecnología por sector en México'). Busca primero en fuentes oficiales " +
+      "(INEGI, gob.mx, OCDE, Banco Mundial, universidades), lee las páginas y los informes en PDF, y deja en la pizarra " +
+      "cada cifra con su año y su fuente. Úsalo siempre que pidan números o estadísticas.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        tema: { type: "string", description: "Qué datos busca, con país, sector y años si los dijo el usuario" },
+      },
+      required: ["tema"],
     },
   },
   {
@@ -1671,6 +1687,39 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
               ? "Listo: abrí el chat de Claude y copié el mensaje. Dile al usuario en una frase que solo lo pegue con Ctrl+V y presione Enter."
               : "Abrí el chat de Claude pero no pude copiar el mensaje. Dile al usuario que escriba ahí lo que necesita.",
             mensaje,
+          };
+        },
+      };
+    }
+
+    case "buscar_estadisticas": {
+      const tema = texto(args.tema, "tema", 1000);
+      return {
+        nivel: "libre",
+        tipo: "investigar",
+        descripcion: `Buscar estadísticas: "${tema}"`,
+        ejecutar: async () => {
+          if (!ia?.buscarEstadisticas) throw new ErrorHerramienta("La búsqueda de estadísticas no está disponible.");
+          let r;
+          try {
+            r = await ia.buscarEstadisticas(tema);
+          } catch (err) {
+            const mensaje = err instanceof Error ? err.message : "";
+            throw new ErrorHerramienta(
+              /429|quota|RESOURCE_EXHAUSTED|rate limit/i.test(mensaje)
+                ? "No es un problema de permisos ni de internet: se acabó por ahora el uso GRATUITO de Gemini. Que lo intente en unos minutos."
+                : "No pude buscar las estadísticas en este momento."
+            );
+          }
+          const fuentes = r.fuentes.length
+            ? "\n\n## Fuentes\n" + r.fuentes.map((f, i) => `${i + 1}. [${f.titulo.replace(/[\[\]]/g, "")}](${f.url})`).join("\n")
+            : "";
+          escribirPizarra(`Datos: ${tema.slice(0, 70)}`, `**${r.resumen}**\n\n${r.informe}${fuentes}`, false);
+          return {
+            resumen_para_decir: r.resumen,
+            fuentes_leidas: r.leidas,
+            datos: r.informe.slice(0, 4000),
+            resultado: "El informe con cada cifra, su año y su fuente ya está en la pizarra. Di las cifras principales y que lo puede ver ahí.",
           };
         },
       };

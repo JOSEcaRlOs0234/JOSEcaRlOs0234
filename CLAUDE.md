@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.22.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.23.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -451,6 +451,15 @@
   (navegador y SSML de Windows; decirEnVoz volvió a la versión anterior) y la variante roja de PantallaArranque. Se quedó
   la pantalla de inicio (azul). Un datos/modo.json viejo en la laptop ya no se lee. Las notas v2.20–v2.21.2 de arriba
   quedan como historia: si algún día lo vuelve a pedir, partir de ahí (commit "Jarvis 2.21.2").
+- v2.23 ESTADÍSTICAS (pedido "Para Claude" desde 2.22.0: "búsqueda más profunda para estadísticas y datos por sector,
+  como % de aplicación de la nanotecnología en México"): `estadisticas.ts` (`INSTRUCCION_BUSQUEDA_DATOS` = varias
+  búsquedas, oficiales primero: INEGI, CONAHCYT/SECIHTI, SE, Banxico, OCDE, ONU, BM, CEPAL, universidades;
+  `busquedasDeDatos` = 2 consultas, la 2.ª solo si la 1.ª trae <4 fuentes; `pedidoDeEstadisticas` = RESUMEN + Datos
+  clave + Desglose + confiabilidad + "Lo que no se encontró", cada cifra con año y [n], NUNCA inventar). server.ts
+  `buscarEstadisticas` en conectarIA: grounding → direccionesReales/ordenarFuentes (≤8) → leerPagina en paralelo → hasta
+  4 páginas + 2 PDFs (≤4 MB, van como inlineData) → informe. Herramienta `buscar_estadisticas` {tema} (libre) → pizarra
+  "Datos: ..." con "## Fuentes". PERSONALIDAD "ESTADÍSTICAS" (sí tienes internet; tabla/Excel → crear_documento excel).
+  Probado con fetch + Gemini simulados (página + PDF); NO con internet real.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

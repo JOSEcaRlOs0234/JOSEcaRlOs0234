@@ -82,6 +82,7 @@ import {
   pedidoDeEstructura,
   type Fuente,
 } from "./documentos.ts";
+import { busquedasDeDatos, INSTRUCCION_BUSQUEDA_DATOS, pedidoDeEstadisticas } from "./estadisticas.ts";
 import { leerPagina, pedidoDeLectura, pedidoDeLecturaVarias, separarResumen, type PaginaLeida } from "./lector-web.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
 import { desconectarCanva, ErrorCanva, estadoCanva, terminarConexion, urlParaConectar } from "./canva.ts";
@@ -181,6 +182,11 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →
   "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo. Lo mismo con VIDEOS
   ("pausa el video", "ponle play", "sigue el video"): controlar_musica sirve para cualquier video o audio de la laptop.
+- ESTADÍSTICAS: SÍ tienes internet. Si piden cifras, porcentajes, cantidades o datos por sector/región/año ("¿qué
+  porcentaje...?", "estadísticas de...", "¿cuánto se usa X por sector en México?"), usa buscar_estadisticas. Di en voz
+  las cifras principales; el informe con cada dato, su año y su fuente queda en la pizarra. Nunca inventes números: si
+  no hay dato oficial exacto, dilo y da la mejor aproximación marcada como tal. Si quiere los datos en tabla o Excel,
+  después usa crear_documento tipo excel.
 - LEER EN INTERNET: si el usuario da un enlace o dirección, o dice "lee esta página", "¿qué dice este artículo?",
   "resúmeme este link", usa leer_pagina_web (con su pregunta si la hay). Si quiere enterarse a fondo de algo actual
   ("léeme las noticias de...", "¿qué pasó con...?", "infórmame sobre...", "lee en internet sobre..."), usa
@@ -521,6 +527,75 @@ conectarIA({
     }
     const r = await conPaciencia(() =>
       conRespaldo((modelo) => ai.models.generateContent({ model: modelo, contents: pedidoDeLecturaVarias(tema, paginas, notas) }))
+    );
+    return {
+      ...separarResumen(r.text ?? ""),
+      fuentes: paginas.map((p) => ({ titulo: p.titulo.slice(0, 80), url: p.url })),
+      leidas: paginas.length,
+    };
+  },
+  // Estadísticas: búsqueda de cifras (fuentes oficiales primero), lectura de páginas y PDFs, informe con [n]
+  buscarEstadisticas: async (tema) => {
+    const notas: string[] = [];
+    const crudas: Fuente[] = [];
+    for (const [i, consulta] of busquedasDeDatos(tema).entries()) {
+      // La segunda búsqueda solo si la primera trajo pocas fuentes (cuida el límite gratuito)
+      if (i > 0 && crudas.length >= 4) break;
+      try {
+        const busqueda = await conPaciencia(() =>
+          conRespaldo((modelo) =>
+            ai.models.generateContent({
+              model: modelo,
+              contents: consulta,
+              config: { tools: [{ googleSearch: {} }], systemInstruction: INSTRUCCION_BUSQUEDA_DATOS },
+            })
+          )
+        );
+        if (busqueda.text?.trim()) notas.push(busqueda.text.trim());
+        for (const trozo of (busqueda.candidates?.[0] as any)?.groundingMetadata?.groundingChunks ?? []) {
+          const url = trozo?.web?.uri;
+          if (typeof url === "string" && /^https?:\/\//.test(url)) crudas.push({ titulo: String(trozo.web.title || "Fuente").slice(0, 120), url });
+        }
+      } catch (err) {
+        if (i === 0) throw err;
+      }
+    }
+    const candidatas = ordenarFuentes(await direccionesReales(crudas.slice(0, 14))).slice(0, 8);
+    // Se leen en paralelo; se quedan hasta 4 páginas y 2 PDFs (los informes con números suelen ser PDF)
+    const lecturas = await Promise.allSettled(candidatas.map((f) => leerPagina(f.url)));
+    const paginas: PaginaLeida[] = [];
+    let pdfs = 0;
+    lecturas.forEach((l, i) => {
+      if (l.status !== "fulfilled") return;
+      const p = { ...l.value, titulo: candidatas[i].titulo || l.value.titulo };
+      if (p.pdf && pdfs < 2 && p.pdf.length <= 4 * 1024 * 1024) {
+        pdfs++;
+        paginas.push(p);
+      } else if (!p.pdf && p.texto.length >= 300 && paginas.filter((x) => !x.pdf).length < 4) paginas.push(p);
+    });
+    registrar("WEB", `Estadísticas de "${tema.slice(0, 80)}": ${paginas.length} fuentes leídas (${pdfs} PDF) de ${candidatas.length}`);
+    const textoNotas = notas.join("\n\n");
+    if (!paginas.length) {
+      const { resumen, informe } = separarResumen(textoNotas ? `RESUMEN: ${textoNotas.split("\n")[0]}\n${textoNotas}` : "");
+      return { resumen, informe, fuentes: candidatas, leidas: 0 };
+    }
+    const r = await conPaciencia(() =>
+      conRespaldo((modelo) =>
+        ai.models.generateContent({
+          model: modelo,
+          contents: [
+            {
+              role: "user",
+              parts: [
+                ...paginas
+                  .filter((p) => p.pdf)
+                  .map((p) => ({ inlineData: { mimeType: "application/pdf", data: p.pdf!.toString("base64") } })),
+                { text: pedidoDeEstadisticas(tema, paginas, textoNotas) },
+              ],
+            },
+          ],
+        })
+      )
     );
     return {
       ...separarResumen(r.text ?? ""),
