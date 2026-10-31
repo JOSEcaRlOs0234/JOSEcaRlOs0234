@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.21.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.21.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -434,6 +434,11 @@
   JARVIS_ULTRON=1 → voz masculina en español si hay y SSML <prosody pitch='x-low' rate='-10%'> con el texto escapado
   (SecurityElement.Escape; script sin comillas dobles). Probado en Playwright (pantalla en modo Ultron, voz 0.3/0.9);
   el SSML de Windows NO se pudo ejecutar aquí.
+- v2.21.1 (pedido "Para Claude" desde 2.20.0: "que al cambiar a Ultron diga 'Ultron' con voz grave y responda con tono
+  más imponente y de color rojo"): botón → `cambiarModoUltron` pone `modoUltronRef` y dice "Ultrón. En línea. Todos los
+  sistemas a máxima potencia." (pitch 0.3) / "Jarvis de vuelta, señor."; por voz, `cambiar_modo` pide a Gemini responder
+  exactamente esa frase. Chat: los mensajes de Jarvis se etiquetan "U.L.T.R.O.N." en ese modo (ya se ven rojos por el
+  filtro). `INSTRUCCION_ULTRON` con tono IMPONENTE, frases cortas, sin amenazas. Probado en Playwright.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

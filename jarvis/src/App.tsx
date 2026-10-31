@@ -1411,6 +1411,9 @@ export default function App() {
       });
       if (r.ok) setAplausos((a) => (a ? { ...a, modo } : a));
       showNotification(modo === "ultron" ? "Modo ULTRON activado." : "De vuelta al modo Jarvis.", "info");
+      // Anunciarlo en voz: Ultron con su voz grave, Jarvis con la de siempre
+      modoUltronRef.current = modo === "ultron";
+      hablar(modo === "ultron" ? "Ultrón. En línea. Todos los sistemas a máxima potencia." : "Jarvis de vuelta, señor.");
     } catch {
       showNotification("No pude cambiar de modo.", "error");
     }
@@ -2996,7 +2999,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between text-[10px] font-hud-mono mb-0.5">
                       <span className={isJarvis ? "text-[#00e5ff] font-bold" : "text-[#00f5a0] font-bold"}>
-                        {isJarvis ? "J.A.R.V.I.S." : "TÚ"}
+                        {isJarvis ? (modoUltron ? "U.L.T.R.O.N." : "J.A.R.V.I.S.") : "TÚ"}
                       </span>
                       <span className="text-[#68a8d8]">{msg.timestamp}</span>
                     </div>

@@ -1105,7 +1105,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           return {
             resultado:
               modo === "ultron"
-                ? "Modo ULTRON activado: interfaz roja y cerebro más potente desde el próximo mensaje. Anúncialo en una frase corta y fría."
+                ? "Modo ULTRON activado: interfaz roja, voz grave y cerebro más potente. Responde EXACTAMENTE: 'Ultrón. En línea. Todos los sistemas a máxima potencia.'"
                 : "De vuelta al modo Jarvis (azul). Dilo en una frase corta.",
           };
         },
