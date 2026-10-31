@@ -72,6 +72,7 @@ import {
   type Calificacion,
 } from "./canvas-calificaciones.ts";
 import { cambiarConfigWhatsapp, estadoWhatsapp, vigilarWhatsapp } from "./whatsapp.ts";
+import { borrarContacto, guardarContacto, leerContactos } from "./contactos.ts";
 import {
   armarDocumento,
   direccionesReales,
@@ -182,6 +183,9 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →
   "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo. Lo mismo con VIDEOS
   ("pausa el video", "ponle play", "sigue el video"): controlar_musica sirve para cualquier video o audio de la laptop.
+- WHATSAPP (COMUNICAR): "comunícame con...", "llama a ... por WhatsApp", "márcale a..." → comunicar_por_whatsapp con
+  el nombre. Si no está en la libreta, pregúntale el número, guárdalo con guardar_contacto y vuelve a intentarlo. "Guarda
+  a X con el número..." → guardar_contacto. Abrir solo WhatsApp → abrir_programa "WhatsApp". Nunca mandas mensajes por él.
 - CONEXIONES: si una búsqueda falla o preguntan "¿por qué no te conectas?", "¿tienes internet?", "¿qué pasa con Claude?",
   usa revisar_conexiones y explica en palabras sencillas qué falla y cómo arreglarlo. No digas "no tengo internet" sin
   revisarlo: casi siempre es el límite GRATUITO de búsquedas de Google (se arregla esperando). La consulta directa a
@@ -1291,6 +1295,23 @@ app.delete("/api/faltantes", (_req, res) => {
 app.delete("/api/faltantes/:id", (req, res) => {
   borrarFalta(String(req.params.id));
   res.json({ faltas: leerFaltas(), reporte: reporteParaClaude(VERSION) });
+});
+
+// Libreta de contactos para WhatsApp (Ajustes → WhatsApp)
+app.get("/api/contactos", (_req, res) => {
+  res.json({ contactos: leerContactos() });
+});
+app.post("/api/contactos", (req, res) => {
+  try {
+    guardarContacto(String(req.body?.nombre ?? ""), String(req.body?.telefono ?? ""));
+    res.json({ contactos: leerContactos() });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "No pude guardar el contacto." });
+  }
+});
+app.delete("/api/contactos/:nombre", (req, res) => {
+  borrarContacto(String(req.params.nombre));
+  res.json({ contactos: leerContactos() });
 });
 
 app.get("/api/whatsapp", (_req, res) => {

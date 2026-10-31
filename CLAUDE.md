@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.23.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.24.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -469,6 +469,17 @@
   (generateContent "ok"), Búsqueda Google (googleSearch, cuenta groundingChunks), Claude (opcional/de pago; sin clave →
   explica que mandar_a_claude funciona igual). `GET /api/diagnostico`, herramienta `revisar_conexiones` (libre), botón
   "Revisar conexiones" en Ajustes → Cerebro. PERSONALIDAD "CONEXIONES". Probado con fetch simulado + captura.
+- v2.24 COMUNICAR POR WHATSAPP (pedido: "que abra WhatsApp y si le digo 'comunícame con Anabel Gutiérrez' u otra persona
+  me la contacte"; eligió la opción 2 = hacer llamadas, no avisos de llamadas): `contactos.ts` = libreta propia en
+  datos/contactos.json (Jarvis NO lee los contactos de WhatsApp), `normalizarTelefono` (10 dígitos MX → 52...; 521 → 52;
+  +lada), `buscarContacto` (sin acentos; exacto o todas las palabras; varios → preguntar). windows.ts `abrirChatWhatsapp`
+  = si existe HKCR\whatsapp → `whatsapp://send?phone=N` (app), si no `https://web.whatsapp.com/send?phone=N`; SOLO abre el
+  chat (el usuario toca 📞; no se puede iniciar la llamada por enlace ni se automatiza el clic). Herramientas:
+  `comunicar_por_whatsapp` {nombre} (normal, tipo recordable "whatsapp_llamar"; la descripción del permiso muestra nombre
+  y número; sin contacto → pedir número + guardar_contacto), `guardar_contacto` (libre), `ver_contactos` (libre),
+  `borrar_contacto` (normal). `GET/POST /api/contactos`, `DELETE /api/contactos/:nombre`; Ajustes → WhatsApp → lista
+  "Contactos para 'comunícame con...'" con agregar/quitar. PERSONALIDAD "WHATSAPP (COMUNICAR)". Probado contactos y
+  revisar; abrir WhatsApp NO probado en Windows.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

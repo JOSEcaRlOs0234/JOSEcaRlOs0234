@@ -14,6 +14,7 @@ import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZA
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
 import { mensajesRecientes } from "./whatsapp.ts";
+import { borrarContacto, buscarContacto, guardarContacto, leerContactos, telefonoLegible } from "./contactos.ts";
 import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
 import { calificacionesConfiguradas, descargarCalificaciones, fechaLegible } from "./canvas-calificaciones.ts";
 import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
@@ -211,6 +212,39 @@ export const DECLARACIONES = [
       },
       required: ["tipo", "tema"],
     },
+  },
+  {
+    name: "comunicar_por_whatsapp",
+    description:
+      "Abre WhatsApp en el chat de un contacto para hablarle o llamarle ('comunícame con Anabel Gutiérrez', 'llama a mi " +
+      "mamá por WhatsApp', 'márcale a Juan'). Busca el número en la libreta de contactos de Jarvis. Solo abre el chat: " +
+      "no manda mensajes; el usuario toca el botón de llamada. Si no está en la libreta, pide el número y usa guardar_contacto.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { nombre: { type: "string", description: "A quién, como lo dijo el usuario" } },
+      required: ["nombre"],
+    },
+  },
+  {
+    name: "guardar_contacto",
+    description:
+      "Guarda (o actualiza) un contacto en la libreta de Jarvis para WhatsApp: nombre y número. Números de México con sus " +
+      "10 dígitos; de otro país, con su lada (+1, +34...).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: { nombre: { type: "string" }, telefono: { type: "string" } },
+      required: ["nombre", "telefono"],
+    },
+  },
+  {
+    name: "ver_contactos",
+    description: "Lista los contactos guardados en la libreta de Jarvis (nombre y número).",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "borrar_contacto",
+    description: "Borra un contacto de la libreta de Jarvis.",
+    parametersJsonSchema: { type: "object", properties: { nombre: { type: "string" } }, required: ["nombre"] },
   },
   {
     name: "mensajes_whatsapp",
@@ -1046,6 +1080,85 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             }
             throw new ErrorHerramienta(`No pude crear el archivo${mensaje ? `: ${mensaje.slice(0, 200)}` : "."}`);
           }
+        },
+      };
+    }
+
+    case "comunicar_por_whatsapp": {
+      const pedido = texto(args.nombre, "nombre", 80);
+      const encontrados = buscarContacto(pedido);
+      if (!encontrados.length) {
+        throw new ErrorHerramienta(
+          `No tengo a "${pedido}" en la libreta de contactos. Pídele al usuario su número y usa guardar_contacto; después vuelve a intentarlo.`
+        );
+      }
+      if (encontrados.length > 1) {
+        throw new ErrorHerramienta(
+          `Hay varios contactos que coinciden: ${encontrados.map((c) => c.nombre).join(", ")}. Pregúntale al usuario cuál.`
+        );
+      }
+      const c = encontrados[0];
+      necesitaWindows();
+      return {
+        nivel: "normal",
+        tipo: "whatsapp_llamar",
+        descripcion: `Abrir WhatsApp con ${c.nombre} (${telefonoLegible(c.telefono)})`,
+        ejecutar: async () => {
+          const donde = await win.abrirChatWhatsapp(c.telefono);
+          return {
+            resultado:
+              donde === "app"
+                ? `Abrí el chat de ${c.nombre} en WhatsApp. Dile al usuario que toque el botón del teléfono 📞 (o la cámara para videollamada) arriba a la derecha.`
+                : `No encontré la app de WhatsApp, así que abrí WhatsApp Web con ${c.nombre}. Ahí puede escribirle; para llamar necesita la app de WhatsApp para Windows.`,
+          };
+        },
+      };
+    }
+
+    case "guardar_contacto": {
+      const nombre = texto(args.nombre, "nombre", 80);
+      const telefono = texto(args.telefono, "telefono", 30);
+      return {
+        nivel: "libre",
+        tipo: "contactos",
+        descripcion: `Guardar contacto: ${nombre}`,
+        ejecutar: async () => {
+          try {
+            const c = guardarContacto(nombre, telefono);
+            return { resultado: `Guardé a ${c.nombre} con el número ${telefonoLegible(c.telefono)}.` };
+          } catch (err) {
+            throw new ErrorHerramienta(err instanceof Error ? err.message : "No pude guardar el contacto.");
+          }
+        },
+      };
+    }
+
+    case "ver_contactos": {
+      return {
+        nivel: "libre",
+        tipo: "contactos",
+        descripcion: "Ver los contactos guardados",
+        ejecutar: async () => {
+          const lista = leerContactos();
+          return lista.length
+            ? { contactos: lista.map((c) => `${c.nombre}: ${telefonoLegible(c.telefono)}`) }
+            : { resultado: "La libreta de contactos está vacía." };
+        },
+      };
+    }
+
+    case "borrar_contacto": {
+      const nombre = texto(args.nombre, "nombre", 80);
+      return {
+        nivel: "normal",
+        tipo: "contactos_borrar",
+        descripcion: `Borrar el contacto ${nombre}`,
+        ejecutar: async () => {
+          const exacto = buscarContacto(nombre);
+          if (exacto.length !== 1 || !borrarContacto(exacto[0].nombre)) {
+            throw new ErrorHerramienta(exacto.length > 1 ? "Hay varios con ese nombre; dime cuál." : "No encontré ese contacto.");
+          }
+          return { resultado: `Borré a ${exacto[0].nombre} de la libreta.` };
         },
       };
     }
@@ -2097,6 +2210,8 @@ async function revisarCanva(nombre: string, args: Record<string, unknown>): Prom
 
 // Nombres legibles de los permisos que se pueden recordar
 export const NOMBRES_PERMISOS: Record<string, string> = {
+  whatsapp_llamar: "Abrir WhatsApp con un contacto",
+  contactos_borrar: "Borrar contactos",
   cerrar_programas: "Cerrar programas",
   musica: "Poner música en YouTube",
   abrir_programa: "Abrir programas",

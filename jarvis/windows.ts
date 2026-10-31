@@ -108,6 +108,20 @@ export function copiarAlPortapapeles(texto: string): Promise<void> {
   return powershell("Set-Clipboard -Value $env:JARVIS_TEXTO", { JARVIS_TEXTO: texto }).then(() => undefined);
 }
 
+/**
+ * Abre el chat de WhatsApp con ese número: en la app de WhatsApp si está instalada (enlace whatsapp://), si no en
+ * WhatsApp Web. Solo ABRE el chat; no manda nada ni llama (el usuario toca el botón de llamada).
+ */
+export async function abrirChatWhatsapp(telefono: string): Promise<"app" | "web"> {
+  if (!/^\d{10,15}$/.test(telefono)) throw new Error("Número no válido.");
+  const salida = await powershell(
+    "if (Test-Path 'Registry::HKEY_CLASSES_ROOT\\whatsapp') { Start-Process ('whatsapp://send?phone=' + $env:JARVIS_TEL); 'app' } " +
+      "else { Start-Process ('https://web.whatsapp.com/send?phone=' + $env:JARVIS_TEL) -WindowStyle Normal; 'web' }",
+    { JARVIS_TEL: telefono }
+  );
+  return salida.trim().endsWith("app") ? "app" : "web";
+}
+
 export function abrirUrl(url: string): Promise<void> {
   return abrirVisible(url);
 }

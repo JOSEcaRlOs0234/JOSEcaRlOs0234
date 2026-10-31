@@ -939,6 +939,47 @@ export default function App() {
     }
   };
 
+  // Libreta de contactos (para "comunícame con...")
+  const [contactos, setContactos] = useState<{ nombre: string; telefono: string }[]>([]);
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoTelefono, setNuevoTelefono] = useState("");
+  const cargarContactos = useCallback(async () => {
+    try {
+      const r = await fetch("/api/contactos");
+      if (r.ok) setContactos((await r.json()).contactos);
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+  useEffect(() => {
+    if (ajustesAbiertos) cargarContactos();
+  }, [ajustesAbiertos, cargarContactos]);
+  const agregarContacto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const r = await fetch("/api/contactos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nombre: nuevoNombre, telefono: nuevoTelefono }),
+      });
+      const datos = await r.json();
+      if (!r.ok) return showNotification(datos.error || "No pude guardar el contacto.", "error");
+      setContactos(datos.contactos);
+      setNuevoNombre("");
+      setNuevoTelefono("");
+    } catch {
+      showNotification("No pude guardar el contacto.", "error");
+    }
+  };
+  const quitarContacto = async (nombre: string) => {
+    try {
+      const r = await fetch(`/api/contactos/${encodeURIComponent(nombre)}`, { method: "DELETE" });
+      if (r.ok) setContactos((await r.json()).contactos);
+    } catch {
+      showNotification("No pude borrar el contacto.", "error");
+    }
+  };
+
   const cambiarWhatsapp = async (cambio: { activo?: boolean; voz?: boolean }) => {
     try {
       const r = await fetch("/api/whatsapp", {
@@ -2318,6 +2359,55 @@ export default function App() {
                   Nunca leo tus mensajes: solo veo el nombre en el aviso de Windows. Necesitas la app de WhatsApp (o WhatsApp
                   Web) con sus notificaciones activadas.
                 </p>
+                {/* Libreta para "comunícame con..." */}
+                <div className="flex flex-col gap-1.5 border-t border-[#00e5ff]/15 pt-2">
+                  <span className="text-[11px] font-hud-mono text-[#b8f4ff]">Contactos para &ldquo;comunícame con...&rdquo;</span>
+                  {contactos.length ? (
+                    <ul className="flex flex-col gap-1 max-h-40 overflow-y-auto pr-1">
+                      {contactos.map((c) => (
+                        <li key={c.nombre} className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff]">
+                          <span className="flex-1 truncate">{c.nombre}</span>
+                          <span className="text-[#68a8d8]">+{c.telefono}</span>
+                          <button
+                            type="button"
+                            onClick={() => quitarContacto(c.nombre)}
+                            title="Quitar"
+                            className="text-[#68a8d8] hover:text-[#ff5577] cursor-pointer"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                      Aún no hay contactos. Agrégalos aquí o dile a Jarvis: &ldquo;guarda a Anabel Gutiérrez, su número es 81 1234 5678&rdquo;.
+                    </p>
+                  )}
+                  <form onSubmit={agregarContacto} className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={nuevoNombre}
+                      onChange={(e) => setNuevoNombre(e.target.value)}
+                      placeholder="Nombre"
+                      className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                    <input
+                      type="tel"
+                      value={nuevoTelefono}
+                      onChange={(e) => setNuevoTelefono(e.target.value)}
+                      placeholder="Número (10 dígitos)"
+                      className="w-32 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!nuevoNombre.trim() || !nuevoTelefono.trim()}
+                      className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer disabled:opacity-40"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                    </button>
+                  </form>
+                </div>
               </div>
 
               {/* PANTALLA DE INICIO */}
