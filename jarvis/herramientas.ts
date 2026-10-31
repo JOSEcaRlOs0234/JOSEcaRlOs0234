@@ -14,7 +14,7 @@ import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZA
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
 import { mensajesRecientes } from "./whatsapp.ts";
-import { borrarContacto, buscarContacto, guardarContacto, leerContactos, telefonoLegible } from "./contactos.ts";
+import { borrarContacto, buscarContacto, guardarContacto, leerContactos, nombresParecidos, telefonoLegible } from "./contactos.ts";
 import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
 import { calificacionesConfiguradas, descargarCalificaciones, fechaLegible } from "./canvas-calificaciones.ts";
 import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
@@ -1088,8 +1088,13 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       const pedido = texto(args.nombre, "nombre", 80);
       const encontrados = buscarContacto(pedido);
       if (!encontrados.length) {
+        const total = leerContactos().length;
+        const sugerencias = nombresParecidos(pedido);
         throw new ErrorHerramienta(
-          `No tengo a "${pedido}" en la libreta de contactos. Pídele al usuario su número y usa guardar_contacto; después vuelve a intentarlo.`
+          total
+            ? `No encontré a "${pedido}" entre los ${total} contactos. Los más parecidos son: ${sugerencias.join(", ")}. ` +
+                "Pregúntale al usuario si es alguno de esos (y usa ese nombre exacto); si no, pídele el número y usa guardar_contacto."
+            : "La libreta de contactos está vacía. Pídele el número (o que importe sus contactos en Ajustes → WhatsApp) y usa guardar_contacto."
         );
       }
       if (encontrados.length > 1) {

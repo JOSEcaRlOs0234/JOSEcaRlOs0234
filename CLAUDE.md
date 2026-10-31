@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.24.2). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.24.3). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -490,6 +490,10 @@
   .vcf → Ajustes → WhatsApp → Importar). "comunícame con Anabel Gutiérrez" no la encontró: en su iPhone está escrita
   "Anabel Gutierrrez" (r de más). v2.24.2: `buscarContacto` ahora, si nada coincide, perdona errores de escritura
   (`distancia` Levenshtein por palabra: 1 letra en palabras de 4–6, 2 en ≥7; se quedan los más parecidos; nadie si no hay).
+- PRUEBA REAL (1:01 p.m.): "comunícame con anabel gutierrrez" (bien escrito) y Jarvis repitió "no la encuentro" →
+  probablemente Gemini contestó de memoria por el historial del chat (sin llamar la herramienta) y/o seguía en 2.24.1.
+  v2.24.3: PERSONALIDAD obliga a usar comunicar_por_whatsapp SIEMPRE en ese turno; si no encuentra, el error dice cuántos
+  contactos hay y `nombresParecidos` (3 más cercanos) para preguntar. Pedirle al usuario "Nueva conversación" al probar.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

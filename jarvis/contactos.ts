@@ -250,3 +250,33 @@ export function importarContactos(nuevos: Contacto[]): { agregados: number; tota
   guardar(lista);
   return { agregados, total: Math.min(lista.length, MAX) };
 }
+
+/** Los nombres más parecidos (para sugerir cuando no se encuentra a nadie). */
+export function nombresParecidos(pedido: string, cuantos = 3): string[] {
+  const p = sinAcentos(pedido).split(" ").filter(Boolean);
+  if (!p.length) return [];
+  return leerContactos()
+    .map((c) => {
+      const del = sinAcentos(c.nombre).split(" ");
+      const total = p.reduce((suma, w) => suma + Math.min(...del.map((x) => distanciaLibre(w, x))), 0);
+      return { nombre: c.nombre, total };
+    })
+    .sort((a, b) => a.total - b.total)
+    .slice(0, cuantos)
+    .map((x) => x.nombre);
+}
+
+/** Como `distancia`, pero sin tope (para ordenar sugerencias). */
+function distanciaLibre(a: string, b: string): number {
+  const fila = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let anterior = fila[0];
+    fila[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const guardado = fila[j];
+      fila[j] = Math.min(fila[j] + 1, fila[j - 1] + 1, anterior + (a[i - 1] === b[j - 1] ? 0 : 1));
+      anterior = guardado;
+    }
+  }
+  return fila[b.length];
+}
