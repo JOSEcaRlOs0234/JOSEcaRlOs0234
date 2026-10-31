@@ -8,7 +8,7 @@
  */
 
 import express from "express";
-import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
@@ -71,8 +71,6 @@ import {
   vigilarCalificaciones,
   type Calificacion,
 } from "./canvas-calificaciones.ts";
-import { cambiarConfigWhatsapp, estadoWhatsapp, vigilarWhatsapp } from "./whatsapp.ts";
-import { borrarContacto, guardarContacto, importarContactos, leerArchivoContactos, leerContactos } from "./contactos.ts";
 import {
   armarDocumento,
   direccionesReales,
@@ -164,8 +162,6 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
 - Configuración de Windows: cambiar_brillo, modo_oscuro, wifi_bluetooth, ver_estado_laptop (batería, red, brillo) y
   abrir_configuracion para todo lo demás (abre la sección para que el usuario la vea). Nunca digas que algo cambió si
   la herramienta dio error.
-- WhatsApp: solo sabes DE QUIÉN llegaron mensajes (mensajes_whatsapp), NUNCA lo que dicen; no puedes leerlos ni
-  contestarlos. Si te piden leer un mensaje, explica que por privacidad solo avisas quién escribió.
 - Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
   aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
   calificaciones_canvas para "¿ya me calificaron?", "¿cuánto saqué en...?", "¿qué calificaciones tengo?". Jarvis avisa
@@ -183,13 +179,6 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →
   "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo. Lo mismo con VIDEOS
   ("pausa el video", "ponle play", "sigue el video"): controlar_musica sirve para cualquier video o audio de la laptop.
-- WHATSAPP (COMUNICAR): "comunícame con...", "llama a ... por WhatsApp", "márcale a..." → comunicar_por_whatsapp con
-  el nombre y llamar=true (se le pide confirmación y Jarvis aprieta el botón de llamada); "quiero escribirle a..." /
-  "abre el chat de..." → llamar=false. SIEMPRE usa la herramienta cada vez que lo pida, aunque antes no lo hayas encontrado (la libreta pudo
-  cambiar o el usuario pudo importar sus contactos); NUNCA contestes que no está sin haberla usado en ESTE turno. Si no
-  está, di los nombres parecidos que te dé; si no es ninguno, pregúntale el número, guárdalo con guardar_contacto y
-  vuelve a intentarlo. "Guarda
-  a X con el número..." → guardar_contacto. Abrir solo WhatsApp → abrir_programa "WhatsApp". Nunca mandas mensajes por él.
 - CONEXIONES: si una búsqueda falla o preguntan "¿por qué no te conectas?", "¿tienes internet?", "¿qué pasa con Claude?",
   usa revisar_conexiones y explica en palabras sencillas qué falla y cómo arreglarlo. No digas "no tengo internet" sin
   revisarlo: casi siempre es el límite GRATUITO de búsquedas de Google (se arregla esperando). La consulta directa a
@@ -259,8 +248,7 @@ const leerJson = express.json({ limit: "1mb" });
 app.use((req, res, next) =>
   req.path === "/api/dibujos" ||
   req.path === "/api/camara/foto" ||
-  req.path === "/api/clase/audio" ||
-  req.path === "/api/contactos/importar"
+  req.path === "/api/clase/audio"
     ? next()
     : leerJson(req, res, next)
 );
@@ -1259,24 +1247,14 @@ app.delete("/api/canvas/token", (_req, res) => {
   res.json(estadoCalificaciones());
 });
 
-// WhatsApp: avisa DE QUIÉN llegó un mensaje (nunca lo lee). Mismo contacto: máximo un aviso cada 2 minutos.
-const ultimoAvisoWhatsapp = new Map<string, number>();
-vigilarWhatsapp((remitentes) => {
-  const ahora = Date.now();
-  const nuevos = remitentes.filter((r) => ahora - (ultimoAvisoWhatsapp.get(r.de) ?? 0) > 2 * 60 * 1000);
-  if (!nuevos.length) return;
-  for (const r of nuevos) ultimoAvisoWhatsapp.set(r.de, ahora);
-  const nombres = nuevos.map((r) => (r.cuantos > 1 ? `${r.de} (${r.cuantos} mensajes)` : r.de));
-  const lista = nombres.length > 1 ? `${nombres.slice(0, -1).join(", ")} y ${nombres.at(-1)}` : nombres[0];
-  const texto = `Señor, tiene ${nuevos.length > 1 || nuevos[0].cuantos > 1 ? "mensajes" : "un mensaje"} de WhatsApp de ${lista}.`;
-  avisos = [...avisos, { id: siguienteAviso++, texto, icono: "💬", silencioso: !estadoWhatsapp().voz }].slice(-20);
-  registrar("WHATSAPP", `Mensaje de ${lista}`);
-  // Sin ventana a la vista lo dice Windows (si la voz está activada y no hay clase)
-  if (!hayVentanaVisible() && !claseActiva() && estadoWhatsapp().voz) {
-    oido.pausar(8000);
-    void decirEnVoz(texto);
+// Se quitó todo lo de WhatsApp y contactos (v2.26): se borran los datos que guardaban, por privacidad
+for (const viejo of ["contactos.json", "whatsapp.json", "tmp-notificaciones"]) {
+  try {
+    rmSync(path.join(CARPETA_DATOS, viejo), { recursive: true, force: true });
+  } catch {
+    // Si no se pudo, no pasa nada
   }
-}, process.platform === "win32");
+}
 
 // "Para Claude": lo que le falta a Jarvis (también queda en Documentos\Jarvis\Para Claude.txt)
 cuandoCambienFaltas(() => {
@@ -1302,47 +1280,6 @@ app.delete("/api/faltantes", (_req, res) => {
 app.delete("/api/faltantes/:id", (req, res) => {
   borrarFalta(String(req.params.id));
   res.json({ faltas: leerFaltas(), reporte: reporteParaClaude(VERSION) });
-});
-
-// Libreta de contactos para WhatsApp (Ajustes → WhatsApp)
-app.get("/api/contactos", (_req, res) => {
-  res.json({ contactos: leerContactos() });
-});
-app.post("/api/contactos", (req, res) => {
-  try {
-    guardarContacto(String(req.body?.nombre ?? ""), String(req.body?.telefono ?? ""));
-    res.json({ contactos: leerContactos() });
-  } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : "No pude guardar el contacto." });
-  }
-});
-// Importar todos los contactos del celular (archivo .vcf o .csv de Google Contactos / iPhone). Se quedan en la laptop.
-app.post("/api/contactos/importar", express.json({ limit: "8mb" }), (req, res) => {
-  const texto = typeof req.body?.texto === "string" ? req.body.texto : "";
-  const leidos = leerArchivoContactos(texto);
-  if (!leidos.length) {
-    return res.status(400).json({ error: "No encontré contactos con número en ese archivo. Debe ser .vcf o .csv de Google Contactos." });
-  }
-  const r = importarContactos(leidos);
-  registrar("SISTEMA", `Contactos importados: ${leidos.length} leídos, ${r.agregados} nuevos (total ${r.total}).`);
-  res.json({ ...r, leidos: leidos.length, contactos: leerContactos() });
-});
-
-app.delete("/api/contactos/:nombre", (req, res) => {
-  borrarContacto(String(req.params.nombre));
-  res.json({ contactos: leerContactos() });
-});
-
-app.get("/api/whatsapp", (_req, res) => {
-  res.json(estadoWhatsapp());
-});
-
-app.post("/api/whatsapp", (req, res) => {
-  cambiarConfigWhatsapp({
-    activo: typeof req.body?.activo === "boolean" ? req.body.activo : undefined,
-    voz: typeof req.body?.voz === "boolean" ? req.body.voz : undefined,
-  });
-  res.json(estadoWhatsapp());
 });
 
 // Encendido automático: Windows enciende Jarvis 1 minuto antes del siguiente recordatorio, aunque esté apagado

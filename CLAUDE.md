@@ -17,6 +17,7 @@
    Después: volver a la Fase 2 (Spotify).
 5. WhatsApp (antes: explicar opciones, riesgos de bloqueo, recomendar).
    v2.12: el usuario pidió SOLO avisos de quién escribe, sin leer mensajes → hecho vía notificaciones de Windows (sin riesgo).
+   v2.26: el usuario pidió QUITAR todo lo de WhatsApp (avisos, llamadas y contactos) → eliminado.
    Extra v2.5: correo Gmail. v2.5.1: el usuario NO quiere el panel del correo → se quitó de la interfaz; el código del
    servidor (correo.ts, herramientas, /api/correo) sigue ahí sin usar. Si lo pide: será su Gmail PERSONAL.
 
@@ -47,7 +48,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.25.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.26.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -502,6 +503,13 @@
   `comunicar_por_whatsapp` {nombre, llamar (por defecto true)}: llamar = DELICADA (siempre confirma, "LLAMAR por
   WhatsApp a X (+52…)"); llamar=false = normal (solo abre chat). Si no encuentra el botón o es WhatsApp Web, deja el
   chat abierto y pide tocar 📞. PERSONALIDAD actualizada. Probado `revisar`; la UI Automation NO se pudo probar aquí.
+- v2.26 SE QUITÓ TODO WHATSAPP Y CONTACTOS (pedido: "todo está bien, solo elimina la parte de WhatsApp y de los
+  contactos"): borrados whatsapp.ts y contactos.ts; herramientas mensajes_whatsapp, comunicar_por_whatsapp,
+  guardar/ver/borrar_contacto; permisos whatsapp_llamar/contactos_borrar; windows.ts abrirChatWhatsapp/SCRIPT_LLAMAR;
+  server.ts vigilarWhatsapp + avisos 💬, /api/whatsapp, /api/contactos*, PERSONALIDAD de WhatsApp; Ajustes → WhatsApp.
+  Al iniciar se BORRAN datos/contactos.json, datos/whatsapp.json y datos/tmp-notificaciones (privacidad). Se quedan:
+  abrir/cerrar la app de WhatsApp como cualquier programa. Las notas v2.12 y v2.24–v2.25 quedan como historia (commit
+  "Jarvis 2.25.0" si algún día lo vuelve a pedir).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

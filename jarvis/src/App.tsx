@@ -29,7 +29,6 @@ import {
   StickyNote,
   GraduationCap,
   BookOpenCheck,
-  MessageCircle,
   Settings,
   Palette,
   Lightbulb,
@@ -439,14 +438,6 @@ export default function App() {
   });
   const [canvaLlaves, setCanvaLlaves] = useState({ clientId: "", clientSecret: "" });
   const [canvaEsperando, setCanvaEsperando] = useState(false);
-
-  // WhatsApp (avisos de quién escribe)
-  const [whatsapp, setWhatsapp] = useState<{ activo: boolean; voz: boolean; funcionando: boolean; error: string | null }>({
-    activo: true,
-    voz: true,
-    funcionando: false,
-    error: null,
-  });
 
   // Canvas del Tec (tareas)
   const [canvasLms, setCanvasLms] = useState<{ configurado: boolean; ultimaRevision: number | null; error: string | null }>({
@@ -898,19 +889,6 @@ export default function App() {
     }
   };
 
-  const cargarWhatsapp = useCallback(async () => {
-    try {
-      const r = await fetch("/api/whatsapp");
-      if (r.ok) setWhatsapp(await r.json());
-    } catch {
-      // Se reintenta al abrir Ajustes
-    }
-  }, []);
-
-  useEffect(() => {
-    if (ajustesAbiertos) cargarWhatsapp();
-  }, [ajustesAbiertos, cargarWhatsapp]);
-
   // "Para Claude": lo que le falta a Jarvis
   const [paraClaude, setParaClaude] = useState<{
     faltas: { id: string; tipo: "falta" | "error"; pedido: string; queFalta: string; veces: number; ultima: number; enviada?: number }[];
@@ -936,81 +914,6 @@ export default function App() {
       if (r.ok) setParaClaude(await r.json());
     } catch {
       showNotification("No pude borrar de la lista.", "error");
-    }
-  };
-
-  // Libreta de contactos (para "comunícame con...")
-  const [contactos, setContactos] = useState<{ nombre: string; telefono: string }[]>([]);
-  const [nuevoNombre, setNuevoNombre] = useState("");
-  const [nuevoTelefono, setNuevoTelefono] = useState("");
-  const cargarContactos = useCallback(async () => {
-    try {
-      const r = await fetch("/api/contactos");
-      if (r.ok) setContactos((await r.json()).contactos);
-    } catch {
-      // Se reintenta al abrir Ajustes
-    }
-  }, []);
-  useEffect(() => {
-    if (ajustesAbiertos) cargarContactos();
-  }, [ajustesAbiertos, cargarContactos]);
-  const agregarContacto = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const r = await fetch("/api/contactos", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nombre: nuevoNombre, telefono: nuevoTelefono }),
-      });
-      const datos = await r.json();
-      if (!r.ok) return showNotification(datos.error || "No pude guardar el contacto.", "error");
-      setContactos(datos.contactos);
-      setNuevoNombre("");
-      setNuevoTelefono("");
-    } catch {
-      showNotification("No pude guardar el contacto.", "error");
-    }
-  };
-  // Importar TODOS los contactos del celular de una vez (archivo .vcf o .csv de Google Contactos / iPhone)
-  const importarArchivoContactos = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const archivo = e.target.files?.[0];
-    e.target.value = "";
-    if (!archivo) return;
-    if (archivo.size > 7 * 1024 * 1024) return showNotification("Ese archivo es demasiado grande.", "error");
-    try {
-      const r = await fetch("/api/contactos/importar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texto: await archivo.text() }),
-      });
-      const datos = await r.json();
-      if (!r.ok) return showNotification(datos.error || "No pude leer ese archivo.", "error");
-      setContactos(datos.contactos);
-      showNotification(`Listo: leí ${datos.leidos} contactos (${datos.agregados} nuevos). Ya puedes decir "comunícame con..."`, "info");
-    } catch {
-      showNotification("No pude importar los contactos.", "error");
-    }
-  };
-
-  const quitarContacto = async (nombre: string) => {
-    try {
-      const r = await fetch(`/api/contactos/${encodeURIComponent(nombre)}`, { method: "DELETE" });
-      if (r.ok) setContactos((await r.json()).contactos);
-    } catch {
-      showNotification("No pude borrar el contacto.", "error");
-    }
-  };
-
-  const cambiarWhatsapp = async (cambio: { activo?: boolean; voz?: boolean }) => {
-    try {
-      const r = await fetch("/api/whatsapp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cambio),
-      });
-      if (r.ok) setWhatsapp(await r.json());
-    } catch {
-      showNotification("No pude cambiar los avisos de WhatsApp.", "error");
     }
   };
 
@@ -2345,95 +2248,6 @@ export default function App() {
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </form>
-              </div>
-
-              {/* WHATSAPP (solo quién escribe) */}
-              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
-                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="w-4 h-4 text-[#00e5ff]" />
-                    <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">WhatsApp</h2>
-                  </div>
-                  <span
-                    className={`font-hud-mono text-[10px] ${
-                      !whatsapp.activo ? "text-[#68a8d8]" : whatsapp.funcionando ? "text-[#00f5a0]" : "text-[#ff9933]"
-                    }`}
-                  >
-                    {!whatsapp.activo ? "APAGADO" : whatsapp.funcionando ? "AVISANDO" : "REVISANDO..."}
-                  </span>
-                </div>
-                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer">
-                  <input type="checkbox" checked={whatsapp.activo} onChange={(e) => cambiarWhatsapp({ activo: e.target.checked })} />
-                  Avisarme quién me escribe
-                </label>
-                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={whatsapp.voz}
-                    disabled={!whatsapp.activo}
-                    onChange={(e) => cambiarWhatsapp({ voz: e.target.checked })}
-                  />
-                  Decirlo en voz alta
-                </label>
-                {whatsapp.error && <p className="text-[10px] font-hud-mono text-[#ff9933] leading-snug">{whatsapp.error}</p>}
-                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                  Nunca leo tus mensajes: solo veo el nombre en el aviso de Windows. Necesitas la app de WhatsApp (o WhatsApp
-                  Web) con sus notificaciones activadas.
-                </p>
-                {/* Libreta para "comunícame con..." */}
-                <div className="flex flex-col gap-1.5 border-t border-[#00e5ff]/15 pt-2">
-                  <span className="text-[11px] font-hud-mono text-[#b8f4ff]">Contactos para &ldquo;comunícame con...&rdquo;</span>
-                  {contactos.length ? (
-                    <ul className="flex flex-col gap-1 max-h-40 overflow-y-auto pr-1">
-                      <li className="text-[10px] font-hud-mono text-[#68a8d8]">{contactos.length} contactos</li>
-                      {contactos.map((c) => (
-                        <li key={c.nombre} className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff]">
-                          <span className="flex-1 truncate">{c.nombre}</span>
-                          <span className="text-[#68a8d8]">+{c.telefono}</span>
-                          <button
-                            type="button"
-                            onClick={() => quitarContacto(c.nombre)}
-                            title="Quitar"
-                            className="text-[#68a8d8] hover:text-[#ff5577] cursor-pointer"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
-                      Aún no hay contactos. Agrégalos aquí o dile a Jarvis: &ldquo;guarda a Anabel Gutiérrez, su número es 81 1234 5678&rdquo;.
-                    </p>
-                  )}
-                  <label className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#00e5ff]/40 text-[#b8f4ff] hover:bg-[#00e5ff]/15 cursor-pointer">
-                    Importar todos mis contactos (archivo .vcf o .csv)
-                    <input type="file" accept=".vcf,.csv,text/vcard,text/csv" onChange={importarArchivoContactos} className="hidden" />
-                  </label>
-                  <form onSubmit={agregarContacto} className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={nuevoNombre}
-                      onChange={(e) => setNuevoNombre(e.target.value)}
-                      placeholder="Nombre"
-                      className="flex-1 min-w-0 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
-                    />
-                    <input
-                      type="tel"
-                      value={nuevoTelefono}
-                      onChange={(e) => setNuevoTelefono(e.target.value)}
-                      placeholder="Número (10 dígitos)"
-                      className="w-32 bg-[#05162e] border border-[#00e5ff]/40 px-2 py-1 text-[11px] font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!nuevoNombre.trim() || !nuevoTelefono.trim()}
-                      className="px-2 py-1 bg-[#00e5ff]/20 border border-[#00e5ff] text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer disabled:opacity-40"
-                    >
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </form>
-                </div>
               </div>
 
               {/* PANTALLA DE INICIO */}
