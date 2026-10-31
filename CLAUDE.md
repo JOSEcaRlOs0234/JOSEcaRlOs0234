@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.21.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.21.2). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -439,6 +439,12 @@
   sistemas a máxima potencia." (pitch 0.3) / "Jarvis de vuelta, señor."; por voz, `cambiar_modo` pide a Gemini responder
   exactamente esa frase. Chat: los mensajes de Jarvis se etiquetan "U.L.T.R.O.N." en ese modo (ya se ven rojos por el
   filtro). `INSTRUCCION_ULTRON` con tono IMPONENTE, frases cortas, sin amenazas. Probado en Playwright.
+- v2.21.2 (usuario: "Ultron está fallando, que solo se use para temas DEMASIADO complejos, que no se active para las
+  tareas que le pido"): Gemini lo prendía solo (la descripción decía "para tareas pesadas") y se quedaba prendido.
+  Ahora `cambiar_modo` tiene `motivo` pedido_del_usuario | tema_extremadamente_complejo y una descripción estricta
+  (lista de lo que NUNCA lo activa; "en duda, no"). modo.ts guarda `automatico`; `responderResultado` (server.ts) regresa
+  a Jarvis al terminar la respuesta si fue automático (`modoAutomatico`). Prendido por el usuario se queda hasta que lo
+  quite. PERSONALIDAD "MODO ULTRON" reescrita. Probado con Gemini simulado (automático vuelve; manual se queda; usa Pro).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

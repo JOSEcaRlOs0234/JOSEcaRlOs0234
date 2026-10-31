@@ -19,9 +19,22 @@ export function modoActual(): Modo {
   }
 }
 
-export function cambiarModo(modo: Modo): void {
+/**
+ * `automatico` = Jarvis lo prendió solo para UN problema extremadamente complejo: al terminar esa respuesta vuelve
+ * solo al modo Jarvis. Si lo prende el usuario (botón o "activa Ultron"), se queda hasta que el usuario lo quite.
+ */
+export function cambiarModo(modo: Modo, automatico = false): void {
   if (!existsSync(CARPETA_DATOS)) mkdirSync(CARPETA_DATOS, { recursive: true });
-  writeFileSync(ARCHIVO, JSON.stringify({ modo }, null, 2), "utf8");
+  writeFileSync(ARCHIVO, JSON.stringify({ modo, automatico: modo === "ultron" && automatico }, null, 2), "utf8");
+}
+
+export function modoAutomatico(): boolean {
+  try {
+    const d = JSON.parse(readFileSync(ARCHIVO, "utf8"));
+    return d.modo === "ultron" && d.automatico === true;
+  } catch {
+    return false;
+  }
 }
 
 /** Lo que se le agrega a las instrucciones de Gemini en modo Ultron. */

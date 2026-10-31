@@ -233,11 +233,19 @@ export const DECLARACIONES = [
   {
     name: "cambiar_modo",
     description:
-      "Cambia el modo de Jarvis: 'ultron' = modo rojo y futurista para tareas pesadas (usa el cerebro más potente y piensa " +
-      "con más cuidado); 'jarvis' = modo normal azul.",
+      "Cambia el modo: 'ultron' (rojo, cerebro más potente) o 'jarvis' (normal azul). ÚSALO CON ULTRON SOLO SI: (a) el " +
+      "usuario lo pide por su nombre ('activa Ultron', 'modo Ultron', 'modo rojo') → motivo 'pedido_del_usuario', o (b) el " +
+      "problema es EXTREMADAMENTE complejo (demostraciones o problemas avanzados de varios pasos de cálculo, física o " +
+      "ingeniería; análisis técnico muy largo; investigación profunda que compara muchas fuentes) → motivo " +
+      "'tema_extremadamente_complejo'. NUNCA para lo de todos los días: música, abrir o cerrar programas, volumen, " +
+      "recordatorios, notas, clima, noticias, Canvas, WhatsApp, documentos, dibujos, explicar un tema normal, tareas de " +
+      "la escuela comunes, preguntas sencillas o platicar. En duda, NO actives Ultron.",
     parametersJsonSchema: {
       type: "object",
-      properties: { modo: { type: "string", enum: ["jarvis", "ultron"] } },
+      properties: {
+        modo: { type: "string", enum: ["jarvis", "ultron"] },
+        motivo: { type: "string", enum: ["pedido_del_usuario", "tema_extremadamente_complejo"] },
+      },
       required: ["modo"],
     },
   },
@@ -1096,17 +1104,21 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
 
     case "cambiar_modo": {
       const modo = args.modo === "ultron" ? "ultron" : "jarvis";
+      // Si Jarvis lo prende solo (problema extremadamente complejo), al terminar esa respuesta vuelve a Jarvis
+      const automatico = modo === "ultron" && args.motivo === "tema_extremadamente_complejo";
       return {
         nivel: "libre",
         tipo: "modo",
-        descripcion: modo === "ultron" ? "Activar el modo ULTRON" : "Volver al modo Jarvis",
+        descripcion: modo === "ultron" ? `Activar el modo ULTRON${automatico ? " (solo para este problema)" : ""}` : "Volver al modo Jarvis",
         ejecutar: async () => {
-          cambiarModo(modo);
+          cambiarModo(modo, automatico);
           return {
             resultado:
-              modo === "ultron"
-                ? "Modo ULTRON activado: interfaz roja, voz grave y cerebro más potente. Responde EXACTAMENTE: 'Ultrón. En línea. Todos los sistemas a máxima potencia.'"
-                : "De vuelta al modo Jarvis (azul). Dilo en una frase corta.",
+              modo === "jarvis"
+                ? "De vuelta al modo Jarvis (azul). Dilo en una frase corta."
+                : automatico
+                ? "Modo ULTRON activado SOLO para este problema (al terminar tu respuesta vuelves solo a Jarvis). Empieza con 'Ultrón en línea.' y resuélvelo a fondo."
+                : "Modo ULTRON activado: interfaz roja, voz grave y cerebro más potente. Responde EXACTAMENTE: 'Ultrón. En línea. Todos los sistemas a máxima potencia.'",
           };
         },
       };
