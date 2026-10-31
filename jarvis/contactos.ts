@@ -83,10 +83,43 @@ export function buscarContacto(pedido: string): Contacto[] {
   const exacto = lista.filter((c) => sinAcentos(c.nombre) === p);
   if (exacto.length) return exacto;
   const palabras = p.split(" ").filter((w) => w.length > 1);
-  return lista.filter((c) => {
+  const contienen = lista.filter((c) => {
     const nombre = sinAcentos(c.nombre);
     return palabras.every((w) => nombre.includes(w));
   });
+  if (contienen.length) return contienen;
+  // Perdona errores de escritura ("Gutierrrez", "Gutierez", "Anabell"): cada palabra pedida debe parecerse mucho a
+  // alguna palabra del nombre (1 letra distinta en palabras cortas, 2 en largas). Se quedan los más parecidos.
+  const parecidos = lista
+    .map((c) => {
+      const del = sinAcentos(c.nombre).split(" ");
+      let total = 0;
+      for (const w of palabras) {
+        const mejor = Math.min(...del.map((x) => distancia(w, x)));
+        if (mejor > (w.length >= 7 ? 2 : w.length >= 4 ? 1 : 0)) return null;
+        total += mejor;
+      }
+      return { c, total };
+    })
+    .filter((x): x is { c: Contacto; total: number } => x !== null);
+  const menor = Math.min(...parecidos.map((x) => x.total));
+  return parecidos.filter((x) => x.total === menor).map((x) => x.c);
+}
+
+/** Cuántas letras hay que cambiar, poner o quitar para pasar de una palabra a otra (distancia de Levenshtein). */
+function distancia(a: string, b: string): number {
+  if (Math.abs(a.length - b.length) > 2) return 99;
+  const fila = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let anterior = fila[0];
+    fila[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const guardado = fila[j];
+      fila[j] = Math.min(fila[j] + 1, fila[j - 1] + 1, anterior + (a[i - 1] === b[j - 1] ? 0 : 1));
+      anterior = guardado;
+    }
+  }
+  return fila[b.length];
 }
 
 /** Número para mostrar: +52 81 1234 5678. */
