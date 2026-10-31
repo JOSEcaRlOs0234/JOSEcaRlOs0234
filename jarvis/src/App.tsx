@@ -92,7 +92,6 @@ interface EstadoAplausos {
   activacion: number;
   avisos?: { id: number; texto: string; icono?: string; silencioso?: boolean }[];
   pedirFoto?: number;
-  modo?: "jarvis" | "ultron";
   clase?: {
     id: string;
     materia: string;
@@ -487,11 +486,7 @@ export default function App() {
 
   // Detector de aplausos en segundo plano (lo maneja el servidor)
   const [aplausos, setAplausos] = useState<EstadoAplausos | null>(null);
-  // Modo Ultron (para la voz grave) y pantalla de arranque
-  const modoUltronRef = useRef(false);
-  useEffect(() => {
-    modoUltronRef.current = aplausos?.modo === "ultron";
-  }, [aplausos?.modo]);
+  // Pantalla de arranque
   const [duracionArranque, setDuracionArranque] = useState<DuracionArranque>(leerDuracionArranque);
   const [mostrarArranque, setMostrarArranque] = useState(() => {
     try {
@@ -1088,9 +1083,8 @@ export default function App() {
     texto = formulasEnPalabras(texto);
     const frase = new SpeechSynthesisUtterance(texto);
     frase.lang = "es-MX";
-    // Ultron habla más grave y un poco más lento
-    frase.rate = modoUltronRef.current ? 0.9 : 1;
-    frase.pitch = modoUltronRef.current ? 0.3 : 0.85;
+    frase.rate = 1;
+    frase.pitch = 0.85;
     const voz = elegirVoz();
     if (voz) {
       frase.voice = voz;
@@ -1398,24 +1392,6 @@ export default function App() {
       if (r.ok) setMicrofonos((await r.json()).microfonos ?? []);
     } catch {
       // Se reintenta al abrir el menú
-    }
-  };
-
-  const cambiarModoUltron = async () => {
-    const modo = aplausos?.modo === "ultron" ? "jarvis" : "ultron";
-    try {
-      const r = await fetch("/api/modo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modo }),
-      });
-      if (r.ok) setAplausos((a) => (a ? { ...a, modo } : a));
-      showNotification(modo === "ultron" ? "Modo ULTRON activado." : "De vuelta al modo Jarvis.", "info");
-      // Anunciarlo en voz: Ultron con su voz grave, Jarvis con la de siempre
-      modoUltronRef.current = modo === "ultron";
-      hablar(modo === "ultron" ? "Ultrón. En línea. Todos los sistemas a máxima potencia." : "Jarvis de vuelta, señor.");
-    } catch {
-      showNotification("No pude cambiar de modo.", "error");
     }
   };
 
@@ -1807,19 +1783,12 @@ export default function App() {
       ? { texto: "Gemini listo", color: "text-[#00f5a0]" }
       : { texto: "Falta la clave de Gemini", color: "text-[#ff9933]" };
 
-  const modoUltron = aplausos?.modo === "ultron";
-
   return (
-    <div
-      className={`hud-viewport-bg relative w-screen h-screen overflow-hidden flex flex-col justify-between p-2.5 sm:p-4 text-[#e2f8ff] ${
-        modoUltron ? "modo-ultron" : ""
-      }`}
-    >
+    <div className="hud-viewport-bg relative w-screen h-screen overflow-hidden flex flex-col justify-between p-2.5 sm:p-4 text-[#e2f8ff]">
       <NotificationStack notifications={notifications} onDismiss={dismissNotification} />
       {mostrarArranque && (
         <PantallaArranque
           duracion={DURACIONES[duracionArranque].ms || 2000}
-          ultron={aplausos?.modo === "ultron"}
           alTerminar={() => setMostrarArranque(false)}
         />
       )}
@@ -2684,32 +2653,15 @@ export default function App() {
       <header className="flex items-center justify-between gap-4 px-3 py-1.5 border-b border-[#00e5ff]/25 bg-[#041022]/80 backdrop-blur-md z-20 shrink-0">
         <div className="flex items-center gap-3 min-w-0">
           <Radio className="w-4 h-4 text-[#00e5ff] shrink-0" />
-          <span
-            className={`font-hud-display font-bold tracking-[0.22em] text-sm sm:text-base text-[#e2f8ff] whitespace-nowrap ${
-              modoUltron ? "titulo-ultron" : ""
-            }`}
-            data-texto={modoUltron ? "U.L.T.R.O.N." : "J.A.R.V.I.S."}
-          >
-            {modoUltron ? "U.L.T.R.O.N." : "J.A.R.V.I.S."}
+          <span className="font-hud-display font-bold tracking-[0.22em] text-sm sm:text-base text-[#e2f8ff] whitespace-nowrap">
+            J.A.R.V.I.S.
           </span>
           <span className="hidden md:inline-block text-[#68a8d8] font-hud-mono text-xs">
-            {modoUltron ? "· MODO TAREAS PESADAS" : "· ASISTENTE PERSONAL"}
+            · ASISTENTE PERSONAL
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0 font-hud-mono text-xs">
           <span className={estadoServidor.color}>● {estadoServidor.texto}</span>
-          <button
-            type="button"
-            onClick={cambiarModoUltron}
-            className={`sin-ultron ml-1 px-2 py-0.5 border cursor-pointer flex items-center gap-1 font-bold tracking-widest ${
-              modoUltron
-                ? "border-[#ff2a2a] text-[#ff4d4d] bg-[#ff2a2a]/20 boton-ultron-activo"
-                : "border-[#ff2a2a]/50 text-[#ff6b6b] hover:bg-[#ff2a2a]/15"
-            }`}
-            title={modoUltron ? "Volver al modo Jarvis (azul)" : "Modo ULTRON: rojo, para tareas pesadas (usa el cerebro más potente)"}
-          >
-            {modoUltron ? "◉ ULTRON" : "○ ULTRON"}
-          </button>
           <button
             type="button"
             onClick={() => setAjustesAbiertos(true)}
@@ -2722,7 +2674,7 @@ export default function App() {
           <button
             type="button"
             onClick={apagarJarvis}
-            className="sin-ultron ml-1 px-2 py-0.5 border border-[#ff3355]/50 text-[#ff3355] hover:bg-[#ff3355]/15 cursor-pointer flex items-center gap-1"
+            className="ml-1 px-2 py-0.5 border border-[#ff3355]/50 text-[#ff3355] hover:bg-[#ff3355]/15 cursor-pointer flex items-center gap-1"
             title="Apagar a Jarvis por completo (cerrar la ventana no lo apaga)"
           >
             <Power className="w-3.5 h-3.5" />
@@ -2999,7 +2951,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between text-[10px] font-hud-mono mb-0.5">
                       <span className={isJarvis ? "text-[#00e5ff] font-bold" : "text-[#00f5a0] font-bold"}>
-                        {isJarvis ? (modoUltron ? "U.L.T.R.O.N." : "J.A.R.V.I.S.") : "TÚ"}
+                        {isJarvis ? "J.A.R.V.I.S." : "TÚ"}
                       </span>
                       <span className="text-[#68a8d8]">{msg.timestamp}</span>
                     </div>

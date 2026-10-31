@@ -4,7 +4,6 @@
  * También maneja el "arranque con Windows" (un acceso directo en la carpeta Inicio de Windows).
  */
 
-import { modoActual } from "./modo.ts";
 import { AprendizVoz, hayPerfil, olvidarPerfil, perfilDesdeMuestras, ReconocedorVoz, umbralVoz } from "./voz.ts";
 import { execFile } from "child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
@@ -631,16 +630,9 @@ export function decirEnVoz(texto: string): Promise<void> {
   if (!esWindows) return Promise.resolve();
   return powershell(
     "Add-Type -AssemblyName System.Speech; $s=New-Object System.Speech.Synthesis.SpeechSynthesizer;" +
-      "$vs=$s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es*' };" +
-      // Ultron: de preferencia voz de hombre, más grave y un poco más lenta (SSML con el texto escapado)
-      "if($env:JARVIS_ULTRON -eq '1'){ $h=$vs | Where-Object { $_.VoiceInfo.Gender -eq 'Male' } | Select-Object -First 1; if($h){ $vs=@($h) } };" +
-      "$v=$vs | Select-Object -First 1; if($v){ $s.SelectVoice($v.VoiceInfo.Name) }; $s.Rate=0;" +
-      "if($env:JARVIS_ULTRON -eq '1'){ $c=if($v){$v.VoiceInfo.Culture.Name}else{'es-MX'};" +
-      "$t=[System.Security.SecurityElement]::Escape($env:JARVIS_TEXTO);" +
-      "$x='<speak version=''1.0'' xmlns=''http://www.w3.org/2001/10/synthesis'' xml:lang=''' + $c + '''><prosody pitch=''x-low'' rate=''-10%''>' + $t + '</prosody></speak>';" +
-      "$s.SpeakSsml($x) }" +
-      " else { $s.Speak($env:JARVIS_TEXTO) }",
-    { JARVIS_TEXTO: texto, JARVIS_ULTRON: modoActual() === "ultron" ? "1" : "0" }
+      "$v=$s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like 'es*' } | Select-Object -First 1;" +
+      "if($v){ $s.SelectVoice($v.VoiceInfo.Name) }; $s.Rate=0; $s.Speak($env:JARVIS_TEXTO)",
+    { JARVIS_TEXTO: texto }
   ).then(
     () => undefined,
     () => undefined

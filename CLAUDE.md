@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.21.2). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.22.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -445,6 +445,12 @@
   (lista de lo que NUNCA lo activa; "en duda, no"). modo.ts guarda `automatico`; `responderResultado` (server.ts) regresa
   a Jarvis al terminar la respuesta si fue automático (`modoAutomatico`). Prendido por el usuario se queda hasta que lo
   quite. PERSONALIDAD "MODO ULTRON" reescrita. Probado con Gemini simulado (automático vuelve; manual se queda; usa Pro).
+- v2.22 SE QUITÓ ULTRON (pedido: "mejor quítale lo de Ultron, lo demás está súper bien, solo lo de Ultron por ahora no"):
+  borrados modo.ts, herramienta cambiar_modo, PERSONALIDAD "MODO ULTRON", preferencia de Pro en preguntarAGemini, `modo`
+  del latido, POST /api/modo, botón y clase `modo-ultron`, CSS de Ultron, etiqueta U.L.T.R.O.N. del chat, voz grave
+  (navegador y SSML de Windows; decirEnVoz volvió a la versión anterior) y la variante roja de PantallaArranque. Se quedó
+  la pantalla de inicio (azul). Un datos/modo.json viejo en la laptop ya no se lee. Las notas v2.20–v2.21.2 de arriba
+  quedan como historia: si algún día lo vuelve a pedir, partir de ahí (commit "Jarvis 2.21.2").
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

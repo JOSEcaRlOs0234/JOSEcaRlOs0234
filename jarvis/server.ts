@@ -97,7 +97,6 @@ import {
 import { correoConfigurado, correoValido, explicarErrorCorreo, probarCuenta, usuarioCorreo } from "./correo.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { copiarMuestras } from "./voz.ts";
-import { cambiarModo, INSTRUCCION_ULTRON, modoActual, modoAutomatico } from "./modo.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
 import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
 import { abrirRuta, carpetasUsuario, programarEncendido, tocarSonido } from "./windows.ts";
@@ -174,11 +173,6 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   todavía no sabes hacerlo y PREGÚNTALE "¿Quiere que se lo mande a Claude para que me lo agregue?". Solo si dice que sí
   (sí, claro, mándaselo...), usa mandar_a_claude con su pedido y qué te falta. Si dice que no, no lo mandes. No lo
   ofrezcas por fallas de internet ni por el límite gratuito de Gemini (eso no es algo que falte).
-- MODO ULTRON: SOLO si el usuario lo pide por su nombre ("activa Ultron", "modo Ultron", "modo rojo") → cambiar_modo
-  "ultron" con motivo "pedido_del_usuario". Por tu cuenta, SOLO para problemas EXTREMADAMENTE complejos (ver la
-  descripción de cambiar_modo) con motivo "tema_extremadamente_complejo"; al terminar esa respuesta vuelves solo a
-  Jarvis. NUNCA lo actives para las tareas de todos los días; en duda, no. "Vuelve a Jarvis", "modo normal",
-  "desactiva Ultron" → cambiar_modo "jarvis".
 - CERRAR PROGRAMAS: "cierra Chrome/Word/...", "cierra eso" → cerrar_programa con el nombre; "cierra todo" →
   todos=true (siempre pide confirmación). Si no sabes el nombre exacto, primero ver_programas_abiertos. Nunca cierras
   tu propia ventana.
@@ -235,8 +229,7 @@ function instrucciones(): string {
   const textoPendientes = pendientes.length
     ? "Recordatorios pendientes:\n" + pendientes.slice(0, 15).map((r) => `- [${r.id}] ${cuandoLegible(r.cuando)}: ${r.texto}`).join("\n")
     : "No hay recordatorios pendientes.";
-  const ultron = modoActual() === "ultron" ? `\n\n${INSTRUCCION_ULTRON}` : "";
-  return `${PERSONALIDAD}${ultron}\n\nFecha y hora actual: ${hoy}.\n\n${textoPendientes}\n\n${recuerdosParaGemini()}`;
+  return `${PERSONALIDAD}\n\nFecha y hora actual: ${hoy}.\n\n${textoPendientes}\n\n${recuerdosParaGemini()}`;
 }
 
 const ai = new GoogleGenAI({ apiKey: CLAVE || "sin-clave" });
@@ -317,10 +310,7 @@ async function preguntarAGemini(contents: any[]) {
 
   let respuesta;
   let ultimoError: any;
-  // En modo Ultron se prefiere el cerebro más potente (Pro); si llegó a su límite gratuito, siguen los de siempre
-  const ultron = modoActual() === "ultron";
-  const orden = ultron ? ordenDePrueba(MODELO_DIBUJO).filter((m, i, l) => l.indexOf(m) === i) : ordenDePrueba(modeloActual);
-  for (const modelo of orden) {
+  for (const modelo of ordenDePrueba(modeloActual)) {
     try {
       respuesta = await pedir(modelo);
       if (modelo !== modeloActual) registrar("AVISO", `Respondió el modelo de respaldo ${modelo}.`);
@@ -330,7 +320,7 @@ async function preguntarAGemini(contents: any[]) {
       if (!convieneOtroModelo(err)) throw err;
       // Límite gratuito (429) o saturado: descansar 1 minuto; si no existe (404): 1 hora
       const estado = Number((err as any)?.status ?? 0);
-      enfriarModelo(modelo, estado === 404 ? 60 * 60 * 1000 : ultron && modelo === MODELO_DIBUJO ? 30 * 60 * 1000 : 60 * 1000);
+      enfriarModelo(modelo, estado === 404 ? 60 * 60 * 1000 : 60 * 1000);
       registrar("AVISO", `El modelo ${modelo} falló (${estado || "?"}); probando otro.`);
     }
   }
@@ -563,11 +553,6 @@ conectarIA({
 function responderResultado(res: express.Response, resultado: Awaited<ReturnType<Agente["conversar"]>>) {
   if ("confirmacion" in resultado) return res.json(resultado);
   const texto = resultado.texto || "Hecho, señor.";
-  // Si Ultron se prendió solo para un problema muy complejo, ya terminó: de vuelta a Jarvis
-  if (modoAutomatico()) {
-    cambiarModo("jarvis");
-    registrar("SISTEMA", "Ultron terminó el problema complejo: de vuelta al modo Jarvis.");
-  }
   registrar("CHAT", `Jarvis: ${texto}`);
   guardarEnHistorial("jarvis", texto);
   res.json({ texto });
@@ -1202,17 +1187,7 @@ app.get("/api/aplausos", (req, res) => {
     pedirFoto: fotoPedida(),
     // Modo clase: la ventana graba mientras esté "escuchando"
     clase: estadoClase(),
-    // Modo Jarvis (azul) o Ultron (rojo)
-    modo: modoActual(),
   });
-});
-
-// Cambiar entre modo Jarvis (azul) y Ultron (rojo, tareas pesadas) desde el botón de la barra superior
-app.post("/api/modo", (req, res) => {
-  const modo = req.body?.modo === "ultron" ? "ultron" : "jarvis";
-  cambiarModo(modo);
-  registrar("SISTEMA", modo === "ultron" ? "Modo ULTRON activado." : "Modo Jarvis activado.");
-  res.json({ modo });
 });
 
 app.post("/api/aplausos/config", async (req, res) => {

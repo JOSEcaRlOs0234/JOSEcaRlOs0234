@@ -45,7 +45,7 @@ const SISTEMAS = [
   "Interfaz holográfica",
 ];
 
-export function PantallaArranque({ duracion, ultron, alTerminar }: { duracion: number; ultron: boolean; alTerminar: () => void }) {
+export function PantallaArranque({ duracion, alTerminar }: { duracion: number; alTerminar: () => void }) {
   const [avance, setAvance] = useState(0);
   const [listo, setListo] = useState<{ segundos: string; version: string; gemini: boolean } | null>(null);
   const [saliendo, setSaliendo] = useState(false);
@@ -88,8 +88,8 @@ export function PantallaArranque({ duracion, ultron, alTerminar }: { duracion: n
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [duracion]);
 
-  const color = ultron ? "#ff3b3b" : "#00e5ff";
-  const nombre = ultron ? "U.L.T.R.O.N." : "J.A.R.V.I.S.";
+  const color = "#00e5ff";
+  const nombre = "J.A.R.V.I.S.";
   const visibles = Math.floor(avance * SISTEMAS.length);
 
   return (
@@ -99,9 +99,7 @@ export function PantallaArranque({ duracion, ultron, alTerminar }: { duracion: n
       className="fixed inset-0 z-[60] flex items-center justify-center cursor-pointer select-none transition-opacity duration-500"
       style={{
         opacity: saliendo ? 0 : 1,
-        background: ultron
-          ? "radial-gradient(circle at 50% 45%, rgba(120,0,0,0.55), #050000 70%), #050000"
-          : "radial-gradient(circle at 50% 45%, rgba(0,70,140,0.55), #02060d 70%), #02060d",
+        background: "radial-gradient(circle at 50% 45%, rgba(0,70,140,0.55), #02060d 70%), #02060d",
       }}
     >
       <div className="w-[min(560px,90vw)] flex flex-col items-center gap-5 font-hud-mono">

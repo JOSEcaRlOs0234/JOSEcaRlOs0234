@@ -30,7 +30,6 @@ import {
   TIPOS_DISENO,
 } from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
-import { cambiarModo } from "./modo.ts";
 import { buscarEnYoutube, urlDeBusqueda, urlParaReproducir } from "./musica.ts";
 import { anotarFalta, buscarFalta, marcarEnviada, mensajeParaClaude } from "./faltantes.ts";
 import type { Informe } from "./consultas.ts";
@@ -228,25 +227,6 @@ export const DECLARACIONES = [
         dias: { type: "integer", description: "Cuántos días hacia adelante (1 a 60)" },
         materia: { type: "string", description: "Solo de esta materia (opcional)" },
       },
-    },
-  },
-  {
-    name: "cambiar_modo",
-    description:
-      "Cambia el modo: 'ultron' (rojo, cerebro más potente) o 'jarvis' (normal azul). ÚSALO CON ULTRON SOLO SI: (a) el " +
-      "usuario lo pide por su nombre ('activa Ultron', 'modo Ultron', 'modo rojo') → motivo 'pedido_del_usuario', o (b) el " +
-      "problema es EXTREMADAMENTE complejo (demostraciones o problemas avanzados de varios pasos de cálculo, física o " +
-      "ingeniería; análisis técnico muy largo; investigación profunda que compara muchas fuentes) → motivo " +
-      "'tema_extremadamente_complejo'. NUNCA para lo de todos los días: música, abrir o cerrar programas, volumen, " +
-      "recordatorios, notas, clima, noticias, Canvas, WhatsApp, documentos, dibujos, explicar un tema normal, tareas de " +
-      "la escuela comunes, preguntas sencillas o platicar. En duda, NO actives Ultron.",
-    parametersJsonSchema: {
-      type: "object",
-      properties: {
-        modo: { type: "string", enum: ["jarvis", "ultron"] },
-        motivo: { type: "string", enum: ["pedido_del_usuario", "tema_extremadamente_complejo"] },
-      },
-      required: ["modo"],
     },
   },
   {
@@ -1098,28 +1078,6 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             .slice(0, 40)
             .map((t) => ({ tarea: t.titulo, materia: t.materia, entrega: entregaLegible(t) }));
           return lista.length ? { tareas: lista } : { resultado: `No hay tareas con entrega en los próximos ${dias} días.` };
-        },
-      };
-    }
-
-    case "cambiar_modo": {
-      const modo = args.modo === "ultron" ? "ultron" : "jarvis";
-      // Si Jarvis lo prende solo (problema extremadamente complejo), al terminar esa respuesta vuelve a Jarvis
-      const automatico = modo === "ultron" && args.motivo === "tema_extremadamente_complejo";
-      return {
-        nivel: "libre",
-        tipo: "modo",
-        descripcion: modo === "ultron" ? `Activar el modo ULTRON${automatico ? " (solo para este problema)" : ""}` : "Volver al modo Jarvis",
-        ejecutar: async () => {
-          cambiarModo(modo, automatico);
-          return {
-            resultado:
-              modo === "jarvis"
-                ? "De vuelta al modo Jarvis (azul). Dilo en una frase corta."
-                : automatico
-                ? "Modo ULTRON activado SOLO para este problema (al terminar tu respuesta vuelves solo a Jarvis). Empieza con 'Ultrón en línea.' y resuélvelo a fondo."
-                : "Modo ULTRON activado: interfaz roja, voz grave y cerebro más potente. Responde EXACTAMENTE: 'Ultrón. En línea. Todos los sistemas a máxima potencia.'",
-          };
         },
       };
     }
