@@ -312,6 +312,85 @@ export async function estadoLaptop(): Promise<Record<string, unknown>> {
   return JSON.parse(salida.trim() || "{}");
 }
 
+// ------------------------------------------------------------------ ventanas abiertas (ver y cerrar)
+
+export interface VentanaAbierta {
+  programa: string; // nombre del proceso, por ejemplo "chrome"
+  ventana: string; // título de la ventana
+}
+
+// Lo que NUNCA se cierra: Jarvis (su servidor y lanzadores) y piezas de Windows
+const PROTEGIDOS = [
+  "node", "powershell", "pwsh", "wscript", "cscript", "cmd", "conhost", "windowsterminal", "openconsole", "dwm",
+  "csrss", "winlogon", "lsass", "services", "svchost", "searchhost", "startmenuexperiencehost", "shellexperiencehost",
+  "textinputhost", "lockapp", "systemsettingsbroker", "taskmgr",
+];
+
+// Ventanas visibles con título (sin las ventanitas hijas). Por cada una: programa y título.
+// JARVIS_CERRAR = lista de programas separados por coma ("*" = todos), JARVIS_TITULO = texto del título (apps de la
+// Tienda, que viven dentro de "ApplicationFrameHost"). Cerrar = mandar WM_CLOSE (como el botón X): nunca se fuerza.
+const SCRIPT_VENTANAS = `
+Add-Type -TypeDefinition @'
+using System; using System.Text; using System.Runtime.InteropServices; using System.Collections.Generic;
+public static class VentanasJarvis {
+  public delegate bool Proc(IntPtr h, IntPtr l);
+  [DllImport("user32.dll")] static extern bool EnumWindows(Proc f, IntPtr l);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  public static List<object[]> Lista() {
+    var r = new List<object[]>();
+    EnumWindows((h, l) => {
+      if (!IsWindowVisible(h) || GetWindow(h, 4) != IntPtr.Zero) return true;
+      var sb = new StringBuilder(512); GetWindowText(h, sb, 512);
+      if (sb.Length == 0) return true;
+      uint pid; GetWindowThreadProcessId(h, out pid);
+      r.Add(new object[] { h, (int)pid, sb.ToString() });
+      return true;
+    }, IntPtr.Zero);
+    return r;
+  }
+}
+'@
+$protegidos = $env:JARVIS_PROTEGIDOS.Split(',')
+$cerrar = if ($env:JARVIS_CERRAR) { $env:JARVIS_CERRAR.ToLower().Split(',') } else { @() }
+$titulo = $env:JARVIS_TITULO
+$salida = @()
+foreach ($v in [VentanasJarvis]::Lista()) {
+  $p = Get-Process -Id $v[1] -ErrorAction SilentlyContinue
+  if (-not $p) { continue }
+  $nombre = $p.ProcessName.ToLower()
+  $t = [string]$v[2]
+  if ($protegidos -contains $nombre -or $t -like '*J.A.R.V.I.S*' -or $t -eq 'Program Manager') { continue }
+  if ($cerrar.Count -gt 0) {
+    $toca = ($cerrar -contains '*') -or ($cerrar -contains $nombre) -or ($titulo -and $nombre -eq 'applicationframehost' -and $t -like ('*' + $titulo + '*'))
+    if (-not $toca) { continue }
+    [void][VentanasJarvis]::PostMessage($v[0], 0x0010, [IntPtr]::Zero, [IntPtr]::Zero)
+  }
+  $salida += @{ programa = $p.ProcessName; ventana = $t }
+}
+ConvertTo-Json -InputObject @($salida) -Compress`;
+
+/** Las ventanas abiertas ahora (sin Jarvis ni piezas de Windows). */
+export async function ventanasAbiertas(): Promise<VentanaAbierta[]> {
+  const salida = await powershell(SCRIPT_VENTANAS, { JARVIS_PROTEGIDOS: PROTEGIDOS.join(","), JARVIS_CERRAR: "", JARVIS_TITULO: "" });
+  return JSON.parse(salida.trim() || "[]");
+}
+
+/** Cierra (como el botón X) las ventanas de esos programas, o de todos con "*". Devuelve las que cerró. */
+export async function cerrarVentanas(procesos: string[], titulo = ""): Promise<VentanaAbierta[]> {
+  const limpios = procesos.map((p) => p.toLowerCase().replace(/[^a-z0-9.*_-]/g, "")).filter((p) => p && !PROTEGIDOS.includes(p));
+  if (!limpios.length && !titulo) return [];
+  const salida = await powershell(SCRIPT_VENTANAS, {
+    JARVIS_PROTEGIDOS: PROTEGIDOS.join(","),
+    JARVIS_CERRAR: limpios.join(",") || "-",
+    JARVIS_TITULO: titulo.replace(/[*?\[\]`]/g, "").slice(0, 60),
+  });
+  return JSON.parse(salida.trim() || "[]");
+}
+
 // ------------------------------------------------------------------ volumen y sistema
 
 // Teclas especiales de Windows: 173 silenciar, 174 bajar, 175 subir (cada toque = 2 %)

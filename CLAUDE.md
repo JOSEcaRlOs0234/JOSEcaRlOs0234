@@ -47,7 +47,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.18.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.19.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -406,6 +406,15 @@
 - PEDIDO "PARA CLAUDE" (desde Jarvis 2.16.0, el usuario no había instalado 2.17): "pausa el video" → no tenía herramienta.
   Ya existía `controlar_musica` (2.17, teclas multimedia sirven para cualquier video). v2.18.1: descripción y PERSONALIDAD
   ahora dicen que también es para VIDEOS ("pausa el video", "ponle play").
+- v2.19 CERRAR PROGRAMAS (pedido "Para Claude" desde Jarvis 2.18.1: "cierra el Chrome / cierra aplicaciones"):
+  windows.ts `SCRIPT_VENTANAS` (C# EnumWindows: ventanas visibles con título, sin dueñas) → `ventanasAbiertas()` y
+  `cerrarVentanas(procesos, titulo)` = PostMessage WM_CLOSE (como la X; NUNCA se fuerza, si hay algo sin guardar el
+  programa pregunta). Nunca toca: título "J.A.R.V.I.S." (su ventana Edge), "Program Manager", ni `PROTEGIDOS` (node,
+  powershell, cmd, conhost, terminal, wscript, dwm, servicios de Windows...). Apps de la Tienda viven en
+  ApplicationFrameHost → se buscan por título. herramientas.ts: `ver_programas_abiertos` (libre) y `cerrar_programa`
+  {nombre | todos} (normal, tipo recordable "cerrar_programas"; todos=true = DELICADA); `PROCESOS` traduce nombres
+  (chrome, edge→msedge, word→winword, powerpoint→powerpnt, bloc de notas→notepad, whatsapp, teams...); si no encuentra,
+  el error lista lo abierto. PERSONALIDAD "CERRAR PROGRAMAS". Probado `revisar`; el PowerShell NO se pudo ejecutar aquí.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

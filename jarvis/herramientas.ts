@@ -230,6 +230,25 @@ export const DECLARACIONES = [
     },
   },
   {
+    name: "ver_programas_abiertos",
+    description: "Dice qué programas y ventanas están abiertos ahora en la laptop (sin contar a Jarvis).",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "cerrar_programa",
+    description:
+      "Cierra un programa abierto (Chrome, Word, Spotify, WhatsApp, bloc de notas...) igual que el botón X: si hay algo " +
+      "sin guardar, el programa pregunta. Con todos=true cierra todos los programas abiertos (menos Jarvis). Si no sabes " +
+      "cómo se llama el programa, usa antes ver_programas_abiertos.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        nombre: { type: "string", description: "El programa, por ejemplo 'Chrome', 'Word', 'Calculadora'" },
+        todos: { type: "boolean", description: "true = cerrar todos los programas abiertos" },
+      },
+    },
+  },
+  {
     name: "poner_musica",
     description:
       "Pone música en YouTube: busca la canción, artista o tipo de música y la abre en el navegador. Con mix=true usa la " +
@@ -1059,6 +1078,47 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             .slice(0, 40)
             .map((t) => ({ tarea: t.titulo, materia: t.materia, entrega: entregaLegible(t) }));
           return lista.length ? { tareas: lista } : { resultado: `No hay tareas con entrega en los próximos ${dias} días.` };
+        },
+      };
+    }
+
+    case "ver_programas_abiertos": {
+      return {
+        nivel: "libre",
+        tipo: "programas",
+        descripcion: "Ver los programas abiertos",
+        ejecutar: async () => {
+          const lista = await win.ventanasAbiertas();
+          return lista.length
+            ? { abiertos: lista.slice(0, 40).map((v) => `${v.programa}: ${v.ventana.slice(0, 80)}`) }
+            : { resultado: "No hay programas abiertos (aparte de Jarvis)." };
+        },
+      };
+    }
+
+    case "cerrar_programa": {
+      const todos = args.todos === true;
+      const pedido = todos ? "" : texto(args.nombre, "nombre", 80);
+      const procesos = todos ? ["*"] : procesosDe(pedido);
+      return {
+        // Cerrar todo de golpe siempre se confirma; un programa se puede dejar recordado
+        nivel: todos ? "delicada" : "normal",
+        tipo: "cerrar_programas",
+        descripcion: todos ? "Cerrar TODOS los programas abiertos (menos Jarvis)" : `Cerrar ${pedido}`,
+        ejecutar: async () => {
+          const cerradas = await win.cerrarVentanas(procesos, todos ? "" : pedido);
+          if (!cerradas.length) {
+            const abiertos = await win.ventanasAbiertas().catch(() => []);
+            throw new ErrorHerramienta(
+              `No encontré "${pedido || "programas"}" abierto. Abiertos ahora: ${
+                [...new Set(abiertos.map((v) => v.programa))].slice(0, 20).join(", ") || "ninguno"
+              }.`
+            );
+          }
+          return {
+            resultado: `Cerré ${cerradas.length} ventana(s): ${[...new Set(cerradas.map((v) => v.programa))].join(", ")}.`,
+            nota: "Si algún programa tenía algo sin guardar, se queda abierto preguntando si guardar.",
+          };
         },
       };
     }
@@ -1964,6 +2024,7 @@ async function revisarCanva(nombre: string, args: Record<string, unknown>): Prom
 
 // Nombres legibles de los permisos que se pueden recordar
 export const NOMBRES_PERMISOS: Record<string, string> = {
+  cerrar_programas: "Cerrar programas",
   musica: "Poner música en YouTube",
   abrir_programa: "Abrir programas",
   abrir_web: "Abrir páginas web y búsquedas",
@@ -1980,3 +2041,22 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   clase: "Escuchar clases (modo clase)",
   documentos: "Crear documentos de Word, Excel y PowerPoint",
 };
+
+// ------------------------------------------------------------------ cerrar programas
+
+// Nombre que dice el usuario → nombre del proceso en Windows
+const PROCESOS: Record<string, string[]> = {
+  chrome: ["chrome"], "google chrome": ["chrome"], google: ["chrome"],
+  edge: ["msedge"], "microsoft edge": ["msedge"], navegador: ["chrome", "msedge", "firefox", "opera", "brave"],
+  firefox: ["firefox"], opera: ["opera"], brave: ["brave"],
+  word: ["winword"], excel: ["excel"], powerpoint: ["powerpnt"], "power point": ["powerpnt"], outlook: ["outlook", "olk"],
+  onenote: ["onenote"], teams: ["ms-teams", "teams"], "bloc de notas": ["notepad"], notepad: ["notepad"],
+  spotify: ["spotify"], whatsapp: ["whatsapp", "whatsapp.root"], discord: ["discord"], zoom: ["zoom"],
+  steam: ["steam"], vlc: ["vlc"], "visual studio code": ["code"], "vs code": ["code"], canva: ["canva"],
+  "explorador de archivos": ["explorer"], carpetas: ["explorer"], "archivos": ["explorer"], acrobat: ["acrobat", "acrord32"],
+};
+
+function procesosDe(pedido: string): string[] {
+  const n = normalizar(pedido).replace(/^(el|la|los|las)\s+/, "");
+  return PROCESOS[n] ?? [n.replace(/\s+/g, "")];
+}
