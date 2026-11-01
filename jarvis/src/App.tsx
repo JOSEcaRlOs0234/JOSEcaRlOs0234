@@ -1,8 +1,8 @@
 /**
- * Pantalla principal de J.A.R.V.I.S.
+ * Pantalla principal de A.R.E.S.
  * Columna izquierda: reloj, clima y detector de aplausos.
  * Centro: el reactor animado.
- * Columna derecha: la conversación con Jarvis y el registro de actividad.
+ * Columna derecha: la conversación con Ares y el registro de actividad.
  */
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -129,7 +129,7 @@ const guardarPreferencia = (clave: string, valor: string) => {
   }
 };
 
-/** Elige la voz en español más parecida a Jarvis que tenga la computadora. */
+/** Elige la voz en español más parecida a Ares que tenga la computadora. */
 function elegirVoz(): SpeechSynthesisVoice | undefined {
   const voces = window.speechSynthesis.getVoices().filter((v) => v.lang.toLowerCase().startsWith("es"));
   const preferidas = ["jorge", "raul", "raúl", "pablo", "alvaro", "álvaro", "diego", "jarvis"];
@@ -150,7 +150,7 @@ const normalizar = (t: string) => t.toLowerCase().normalize("NFD").replace(/[\u0
 // Frases con las que el usuario termina la conversación por voz
 const DESPEDIDA = /^(muchas gracias|gracias|eso es todo|es todo|adios|nada mas|hasta luego|ya no|ya esta|descansa|duermete|duerme)\b/;
 
-// Sonido de entrada: se toca una vez cada vez que se abre la ventana de Jarvis
+// Sonido de entrada: se toca una vez cada vez que se abre la ventana de Ares
 let intro: HTMLAudioElement | null = null;
 let introEnWindows = false;
 
@@ -178,7 +178,7 @@ function tocarIntro(): void {
   });
 }
 
-/** Baja el sonido de entrada poco a poco (cuando Jarvis va a hablar o a escuchar). */
+/** Baja el sonido de entrada poco a poco (cuando Ares va a hablar o a escuchar). */
 function callarIntro(): void {
   if (introEnWindows) {
     introEnWindows = false;
@@ -322,10 +322,10 @@ class GrabadoraClase {
   }
 }
 
-/** ¿Lo que se oyó es la orden de terminar la clase? ("Jarvis, termina la clase", "Jarvis, ya puedes hablar"...) */
+/** ¿Lo que se oyó es la orden de terminar la clase? ("Ares, termina la clase", "Ares, ya puedes hablar"...) */
 const ORDEN_TERMINAR = /\b(jarvis|yarvis|jarbis|ares|aress)\b.*\b(termina|terminar|termino|terminamos|fin de la clase|acabo|se acabo|deja de escuchar|ya puedes hablar|despierta)\b/;
 
-/** Tono corto "bip-bip" de que Jarvis te está escuchando. */
+/** Tono corto "bip-bip" de que Ares te está escuchando. */
 function tono(): void {
   try {
     const ctx = new AudioContext();
@@ -350,9 +350,9 @@ function saludoCorto(): string {
   return `${h < 12 ? "Buenos días" : h < 19 ? "Buenas tardes" : "Buenas noches"}, señor. ¿En qué le ayudo?`;
 }
 
-// Pedido automático (no se muestra) la primera vez que se despierta a Jarvis cada día
+// Pedido automático (no se muestra) la primera vez que se despierta a Ares cada día
 const PEDIDO_RESUMEN =
-  "(Mensaje automático: el usuario acaba de despertar a Jarvis por primera vez hoy.) Salúdalo según la hora y dale un " +
+  "(Mensaje automático: el usuario acaba de despertar a Ares por primera vez hoy.) Salúdalo según la hora y dale un " +
   "resumen hablado y breve del día: el clima de hoy (consultar_clima con su ciudad si la conoces, si no Monterrey), " +
   "2 o 3 titulares importantes (consultar_noticias) y sus recordatorios de hoy si hay. Termina preguntando en qué le ayudas.";
 
@@ -399,7 +399,7 @@ export default function App() {
   const enviandoRef = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Voz de Jarvis (hablar) y dictado (escucharte)
+  // Voz de Ares (hablar) y dictado (escucharte)
   const [vozActiva, setVozActiva] = useState(() => leerPreferencia("jarvis_voz", "si") === "si");
   const vozActivaRef = useRef(vozActiva);
   const [dictando, setDictando] = useState(false);
@@ -416,7 +416,7 @@ export default function App() {
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [permisos, setPermisos] = useState<{ tipo: string; nombre: string }[]>([]);
 
-  // Memoria permanente de Jarvis
+  // Memoria permanente de Ares
   const [recuerdos, setRecuerdos] = useState<{ id: string; texto: string; fecha: string }[]>([]);
   const [nuevoRecuerdo, setNuevoRecuerdo] = useState("");
 
@@ -479,7 +479,7 @@ export default function App() {
   const [notas, setNotas] = useState<Nota[]>([]);
   const [notasAbiertas, setNotasAbiertas] = useState(false);
   const [redAbierta, setRedAbierta] = useState(false);
-  // Panel "Página web" (las páginas que hizo Jarvis, sin código)
+  // Panel "Página web" (las páginas que hizo Ares, sin código)
   const [codigoAbierto, setCodigoAbierto] = useState(false);
   const [codigoCambio, setCodigoCambio] = useState(0);
   const codigoVistoRef = useRef<number | null>(null);
@@ -514,7 +514,7 @@ export default function App() {
   const oyenteClaseRef = useRef<any>(null);
   const claseAvisadaRef = useRef("");
 
-  // Cámara: última foto pedida por Jarvis y la miniatura que se muestra un momento
+  // Cámara: última foto pedida por Ares y la miniatura que se muestra un momento
   const ultimaFotoRef = useRef(0);
   const [fotoReciente, setFotoReciente] = useState<string | null>(null);
   // Si la ventana se abrió sola por un recordatorio (?aviso=N): mostrarlo (Windows ya lo dijo en voz alta)
@@ -625,7 +625,7 @@ export default function App() {
     cargarRegistro();
   };
 
-  /** Lee la pizarra; si Jarvis escribió algo nuevo, la abre. */
+  /** Lee la pizarra; si Ares escribió algo nuevo, la abre. */
   const cargarPizarra = useCallback(async (abrirSiCambio: boolean) => {
     try {
       const r = await fetch("/api/pizarra");
@@ -656,7 +656,7 @@ export default function App() {
     }
   };
 
-  /** Si Jarvis hizo o cambió una página, la muestra sola. */
+  /** Si Ares hizo o cambió una página, la muestra sola. */
   const cargarCodigo = useCallback(async (abrirSiCambio: boolean) => {
     try {
       const r = await fetch("/api/paginas");
@@ -676,7 +676,7 @@ export default function App() {
     }
   }, []);
 
-  /** Lee las notas; si Jarvis anotó algo nuevo, abre el panel de notas. */
+  /** Lee las notas; si Ares anotó algo nuevo, abre el panel de notas. */
   const cargarNotas = useCallback(async (abrirSiCambio: boolean) => {
     try {
       const r = await fetch("/api/notas");
@@ -798,7 +798,7 @@ export default function App() {
   };
 
   const desconectarCanva = async () => {
-    if (!window.confirm("¿Desconectar tu cuenta de Canva de Jarvis?")) return;
+    if (!window.confirm("¿Desconectar tu cuenta de Canva de Ares?")) return;
     try {
       const r = await fetch("/api/canva", { method: "DELETE" });
       if (r.ok) setCanva(await r.json());
@@ -939,7 +939,7 @@ export default function App() {
     }
   };
 
-  // "Para Claude": lo que le falta a Jarvis
+  // "Para Claude": lo que le falta a Ares
   const [paraClaude, setParaClaude] = useState<{
     faltas: { id: string; tipo: "falta" | "error"; pedido: string; queFalta: string; veces: number; ultima: number; enviada?: number }[];
     reporte: string;
@@ -998,7 +998,7 @@ export default function App() {
     }
   };
 
-  /** Guarda en Documentos\Jarvis\Dibujos lo que dibujaste a mano en la pizarra. */
+  /** Guarda en Documentos\Ares\Dibujos lo que dibujaste a mano en la pizarra. */
   const guardarDibujo = async (png: string) => {
     try {
       const r = await fetch("/api/dibujos", {
@@ -1025,7 +1025,7 @@ export default function App() {
 
   const nuevaConversacion = () => {
     if (enviandoRef.current) return;
-    if (!window.confirm("¿Empezar una conversación nueva? Jarvis conserva su memoria, solo se borra este chat.")) return;
+    if (!window.confirm("¿Empezar una conversación nueva? Ares conserva su memoria, solo se borra este chat.")) return;
     messagesRef.current = [{ ...MENSAJE_INICIAL, timestamp: horaActual() }];
     setMessages(messagesRef.current);
   };
@@ -1065,7 +1065,7 @@ export default function App() {
       setServidor(datos);
       if (datos.version !== paquete.version) {
         showNotification(
-          "Sigue encendida una versión vieja de Jarvis. Cierra esta ventana y vuelve a abrirlo con su icono (el icono apaga la versión vieja solo).",
+          "Sigue encendida una versión vieja de Ares. Cierra esta ventana y vuelve a abrirlo con su icono (el icono apaga la versión vieja solo).",
           "warning"
         );
       }
@@ -1074,11 +1074,11 @@ export default function App() {
     }
   }, [showNotification]);
 
-  // ---------------------------------------------------------------- voz de Jarvis
+  // ---------------------------------------------------------------- voz de Ares
 
   /** Dice un texto en voz alta. `alTerminar` se llama cuando termina de hablar (para seguir escuchando). */
   const hablar = useCallback((texto: string, alTerminar?: () => void) => {
-    // En modo clase Jarvis se queda callado
+    // En modo clase Ares se queda callado
     if (claseEscuchandoRef.current) {
       setEstado("reposo");
       return;
@@ -1140,9 +1140,9 @@ export default function App() {
 
   /**
    * Manda algo al servidor (un mensaje nuevo o una respuesta de permiso) y procesa lo que conteste:
-   * una respuesta de Jarvis, o una nueva pregunta de permiso.
+   * una respuesta de Ares, o una nueva pregunta de permiso.
    */
-  // Modo conversación: después de cada respuesta Jarvis vuelve a escuchar, hasta que el usuario se despide o calla
+  // Modo conversación: después de cada respuesta Ares vuelve a escuchar, hasta que el usuario se despide o calla
   const conversacionRef = useRef(false);
   const [conversando, setConversando] = useState(false);
   const fijarConversacion = (activa: boolean) => {
@@ -1179,7 +1179,7 @@ export default function App() {
       } catch (err: any) {
         const aviso =
           err instanceof TypeError
-            ? "No puedo comunicarme con mi servidor. Vuelve a abrir Jarvis desde su icono."
+            ? "No puedo comunicarme con mi servidor. Vuelve a abrir Ares desde su icono."
             : err?.message || "Ocurrió un error inesperado.";
         addMensaje("jarvis", aviso, true);
         showNotification(aviso, "error");
@@ -1247,7 +1247,7 @@ export default function App() {
     enviarMensaje(texto);
   };
 
-  // ---------------------------------------------------------------- dictado (hablarle a Jarvis)
+  // ---------------------------------------------------------------- dictado (hablarle a Ares)
 
   const detenerDictado = useCallback(() => {
     try {
@@ -1399,7 +1399,7 @@ export default function App() {
     }
   }, [detenerDictado, showNotification]);
 
-  /** Lo que el usuario dijo en la conversación: si se despide, Jarvis contesta y deja de escuchar. */
+  /** Lo que el usuario dijo en la conversación: si se despide, Ares contesta y deja de escuchar. */
   const porVoz = useCallback(
     (texto: string) => {
       if (DESPEDIDA.test(normalizar(texto))) fijarConversacion(false);
@@ -1439,13 +1439,13 @@ export default function App() {
   );
   pedirPermisoPorVozRef.current = pedirPermisoPorVoz;
 
-  /** Botón "Hablar con Jarvis": empieza una conversación. */
+  /** Botón "Hablar con Ares": empieza una conversación. */
   const iniciarDictado = useCallback(() => {
     fijarConversacion(true);
     escuchar(porVoz, () => fijarConversacion(false));
   }, [escuchar, porVoz]);
 
-  /** Despertar a Jarvis (por la palabra "Jarvis", aplausos o al abrirse solo). */
+  /** Despertar a Ares (por la palabra "Jarvis", aplausos o al abrirse solo). */
   const despertar = useCallback(
     (alAbrirse: boolean) => {
       if ("speechSynthesis" in window) window.speechSynthesis.cancel();
@@ -1501,7 +1501,7 @@ export default function App() {
       const r = await fetch("/api/diagnostico");
       if (r.ok) setConexiones((await r.json()).pruebas);
     } catch {
-      showNotification("No pude hacer la revisión (¿Jarvis está encendido?).", "error");
+      showNotification("No pude hacer la revisión (¿Ares está encendido?).", "error");
     } finally {
       setRevisandoConexiones(false);
     }
@@ -1589,7 +1589,7 @@ export default function App() {
       const datos = await r.json();
       if (!r.ok) throw new Error(datos.error);
       setAplausos((prev) => (prev ? { ...prev, arranqueConWindows: datos.arranqueConWindows } : prev));
-      showNotification(activo ? "Jarvis se encenderá solo al prender la laptop." : "Jarvis ya no se encenderá solo.", "info");
+      showNotification(activo ? "Ares se encenderá solo al prender la laptop." : "Ares ya no se encenderá solo.", "info");
     } catch (err: any) {
       showNotification(err?.message || "No pude cambiar el arranque con Windows.", "error");
     }
@@ -1646,7 +1646,7 @@ export default function App() {
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
   }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas, cargarCodigo]);
 
-  // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
+  // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Ares
   useEffect(() => {
     try {
       localStorage.setItem(CLAVE_CONVERSACION, JSON.stringify(messages.slice(-60)));
@@ -1673,7 +1673,7 @@ export default function App() {
   }, [detenerDictado]);
 
   // Preguntar al servidor por el detector de aplausos (y avisarle si esta ventana está a la vista).
-  // Si hubo un doble aplauso con la ventana abierta, Jarvis se pone a escuchar.
+  // Si hubo un doble aplauso con la ventana abierta, Ares se pone a escuchar.
   useEffect(() => {
     let vivo = true;
     const preguntar = async () => {
@@ -1691,7 +1691,7 @@ export default function App() {
         }
         ultimaActivacionRef.current = datos.activacion;
 
-        // Jarvis pidió mirar con la cámara: tomar la foto y mandársela
+        // Ares pidió mirar con la cámara: tomar la foto y mandársela
         if (datos.pedirFoto && datos.pedirFoto !== ultimaFotoRef.current) {
           const id = datos.pedirFoto;
           ultimaFotoRef.current = id;
@@ -1709,7 +1709,7 @@ export default function App() {
             .catch((err) => {
               const motivo =
                 err?.name === "NotAllowedError"
-                  ? "No hay permiso para usar la cámara. Hay que permitirla en la ventana de Jarvis (icono de la cámara arriba) y en Configuración de Windows → Privacidad → Cámara."
+                  ? "No hay permiso para usar la cámara. Hay que permitirla en la ventana de Ares (icono de la cámara arriba) y en Configuración de Windows → Privacidad → Cámara."
                   : err?.name === "NotFoundError"
                   ? "No encontré ninguna cámara en la laptop."
                   : err?.name === "NotReadableError"
@@ -1759,7 +1759,7 @@ export default function App() {
 
   const clase = aplausos?.clase ?? null;
 
-  /** Escucha (sin contestar) solo la orden "Jarvis, termina la clase". Se reinicia sola si el navegador la corta. */
+  /** Escucha (sin contestar) solo la orden "Ares, termina la clase". Se reinicia sola si el navegador la corta. */
   const escucharOrdenDeTerminar = useCallback(() => {
     const Reconocimiento = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!Reconocimiento || oyenteClaseRef.current) return;
@@ -1806,7 +1806,7 @@ export default function App() {
           grabadoraRef.current = null;
           showNotification(
             err?.name === "NotAllowedError"
-              ? "No hay permiso para usar el micrófono en la ventana de Jarvis."
+              ? "No hay permiso para usar el micrófono en la ventana de Ares."
               : "No pude usar el micrófono para escuchar la clase.",
             "error"
           );
@@ -1825,9 +1825,9 @@ export default function App() {
     if (clase && (clase.estado === "listo" || clase.estado === "error") && claseAvisadaRef.current !== clase.id) {
       claseAvisadaRef.current = clase.id;
       if (clase.estado === "listo") {
-        const t = "Listo, señor. Su resumen de la clase ya está en Word, en Documentos, Jarvis, Clases. Se lo abrí.";
+        const t = "Listo, señor. Su resumen de la clase ya está en Word, en Documentos, Ares, Clases. Se lo abrí.";
         addMensaje("jarvis", `🎓 ${t}`, true);
-        showNotification("Resumen de la clase listo (Documentos\\Jarvis\\Clases).", "info");
+        showNotification("Resumen de la clase listo (Documentos\\Ares\\Clases).", "info");
         hablar(t);
       } else {
         const t = `No pude hacer el resumen de la clase: ${clase.error ?? "error desconocido"}`;
@@ -1847,7 +1847,7 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ materia }),
       });
-      showNotification("🎓 Modo clase: escuchando. Para terminar di \"Jarvis, termina la clase\".", "info");
+      showNotification("🎓 Modo clase: escuchando. Para terminar di \"Ares, termina la clase\".", "info");
     } catch {
       showNotification("No pude iniciar el modo clase.", "error");
     }
@@ -1940,7 +1940,7 @@ export default function App() {
                   onChange={(e) => cambiarModelo(e.target.value)}
                   onFocus={() => modelos.length === 0 && cargarModelos()}
                   className="max-w-[220px] bg-[#05162e] border border-[#00e5ff]/40 px-1.5 py-0.5 text-[11px] text-[#e2f8ff] focus:outline-none focus:border-[#00e5ff] cursor-pointer"
-                  title="Elige qué modelo de Gemini usa Jarvis"
+                  title="Elige qué modelo de Gemini usa Ares"
                 >
                   {!modelos.some((m) => m.id === servidor.modelo) && (
                     <option value={servidor.modelo}>{servidor.modelo}</option>
@@ -1990,7 +1990,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <Wifi className="w-4 h-4 text-[#00e5ff]" />
                     <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                      Despertar a Jarvis
+                      Despertar a Ares
                     </h2>
                   </div>
                   <span
@@ -2270,7 +2270,7 @@ export default function App() {
                     onChange={(e) => cambiarArranque(e.target.checked)}
                     className="accent-[#00e5ff] cursor-pointer"
                   />
-                  Encender Jarvis solo al prender la laptop
+                  Encender Ares solo al prender la laptop
                 </label>
 
                 {aplausos && aplausos.eventos.length > 0 && (
@@ -2303,7 +2303,7 @@ export default function App() {
                 </div>
                 {permisos.length === 0 ? (
                   <p className="text-[11px] font-hud-mono text-[#68a8d8] leading-snug">
-                    Jarvis te pide permiso antes de cada acción en tu laptop.
+                    Ares te pide permiso antes de cada acción en tu laptop.
                   </p>
                 ) : (
                   permisos.map((p) => (
@@ -2334,7 +2334,7 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <Brain className="w-4 h-4 text-[#00e5ff]" />
                     <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">
-                      Memoria de Jarvis
+                      Memoria de Ares
                     </h2>
                   </div>
                   <span className="font-hud-mono text-[10px] text-[#00e5ff]">{recuerdos.length}</span>
@@ -2464,7 +2464,7 @@ export default function App() {
                 </p>
               </div>
 
-              {/* PARA CLAUDE (lo que le falta a Jarvis) */}
+              {/* PARA CLAUDE (lo que le falta a Ares) */}
               <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
                 <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
                   <div className="flex items-center gap-2">
@@ -2793,7 +2793,7 @@ export default function App() {
         <div className="flex items-center gap-3 min-w-0">
           <Radio className="w-4 h-4 text-[#00e5ff] shrink-0" />
           <span className="font-hud-display font-bold tracking-[0.22em] text-sm sm:text-base text-[#e2f8ff] whitespace-nowrap">
-            J.A.R.V.I.S.
+            A.R.E.S.
           </span>
         </div>
         <div className="flex items-center gap-2 shrink-0 font-hud-mono text-xs">
@@ -2984,7 +2984,7 @@ export default function App() {
                     type="button"
                     onClick={terminarClaseManual}
                     className="ml-1 px-2 py-0.5 border border-[#ff5c7a] text-[#ff5c7a] hover:bg-[#ff5c7a]/20 cursor-pointer"
-                    title='También puedes decir "Jarvis, termina la clase"'
+                    title='También puedes decir "Ares, termina la clase"'
                   >
                     Terminar clase
                   </button>
@@ -3003,7 +3003,7 @@ export default function App() {
                   setCodigoAbierto(true);
                 }}
                 className="px-2.5 py-1 rounded-md text-[11px] font-hud-mono text-[#8fc4e8] hover:text-[#e2f8ff] hover:bg-[#00e5ff]/10 cursor-pointer flex items-center gap-1.5"
-                title="Ver las páginas web que hizo Jarvis"
+                title="Ver las páginas web que hizo Ares"
               >
                 <Globe className="w-3.5 h-3.5" /> Páginas
               </button>

@@ -1,5 +1,5 @@
 /**
- * Reconocer la voz del usuario: cuando Jarvis oye ESA voz (y no la de otra persona), se abre.
+ * Reconocer la voz del usuario: cuando Ares oye ESA voz (y no la de otra persona), se abre.
  *
  * Usa Picovoice Eagle (reconocimiento de quién habla, todo dentro de la laptop, sin mandar audio a internet) con la
  * MISMA clave gratuita de Picovoice que la palabra "Jarvis". Primero se crea la "huella de voz" (perfil):

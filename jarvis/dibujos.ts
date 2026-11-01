@@ -1,7 +1,7 @@
 /**
  * Dibujos:
- *  - Jarvis dibuja diagramas y esquemas como SVG (un formato de dibujo hecho con figuras), que se muestra en la pizarra.
- *  - Lo que tú dibujas con el ratón en la pizarra se guarda como imagen PNG en Documentos\Jarvis\Dibujos.
+ *  - Ares dibuja diagramas y esquemas como SVG (un formato de dibujo hecho con figuras), que se muestra en la pizarra.
+ *  - Lo que tú dibujas con el ratón en la pizarra se guarda como imagen PNG en Documentos\Ares\Dibujos.
  */
 
 import { mkdir, readdir, readFile, writeFile } from "fs/promises";
@@ -126,7 +126,7 @@ export function problemasDeTexto(svg: string): string[] {
   return problemas;
 }
 
-/** Convierte un dibujo SVG de Jarvis en imagen PNG (para subirlo a Canva). */
+/** Convierte un dibujo SVG de Ares en imagen PNG (para subirlo a Canva). */
 export async function svgAPng(svg: string, ancho = 2400): Promise<Buffer> {
   const { Resvg } = await import("@resvg/resvg-js");
   const imagen = new Resvg(svg, {
@@ -136,7 +136,7 @@ export async function svgAPng(svg: string, ancho = 2400): Promise<Buffer> {
   return imagen.asPng();
 }
 
-/** El dibujo hecho a mano más reciente (Documentos\Jarvis\Dibujos), o null si no hay. */
+/** El dibujo hecho a mano más reciente (Documentos\Ares\Dibujos), o null si no hay. */
 export async function ultimoDibujoAMano(): Promise<{ nombre: string; datos: Buffer } | null> {
   const carpeta = path.join((await carpetasUsuario()).jarvis, "Dibujos");
   let nombres: string[] = [];
@@ -149,7 +149,7 @@ export async function ultimoDibujoAMano(): Promise<{ nombre: string; datos: Buff
   return nombre ? { nombre, datos: await readFile(path.join(carpeta, nombre)) } : null;
 }
 
-/** Guarda en Documentos\Jarvis\Dibujos un dibujo hecho a mano (imagen PNG en formato data URL). */
+/** Guarda en Documentos\Ares\Dibujos un dibujo hecho a mano (imagen PNG en formato data URL). */
 export async function guardarDibujoPng(dataUrl: string): Promise<string> {
   const prefijo = "data:image/png;base64,";
   if (typeof dataUrl !== "string" || !dataUrl.startsWith(prefijo)) throw new Error("No es una imagen PNG.");
@@ -167,5 +167,5 @@ export async function guardarDibujoPng(dataUrl: string): Promise<string> {
   const dos = (n: number) => String(n).padStart(2, "0");
   const nombre = `dibujo-${d.getFullYear()}${dos(d.getMonth() + 1)}${dos(d.getDate())}-${dos(d.getHours())}${dos(d.getMinutes())}${dos(d.getSeconds())}.png`;
   await writeFile(path.join(carpeta, nombre), datos);
-  return `Documentos\\Jarvis\\Dibujos\\${nombre}`;
+  return `Documentos\\Ares\\Dibujos\\${nombre}`;
 }

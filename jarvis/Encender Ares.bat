@@ -1,10 +1,10 @@
 @echo off
 chcp 65001 >nul
-title J.A.R.V.I.S.
+title A.R.E.S.
 cd /d "%~dp0"
 
 echo.
-echo   Encendiendo J.A.R.V.I.S. ...
+echo   Encendiendo A.R.E.S. ...
 echo.
 
 where node >nul 2>nul
@@ -16,7 +16,7 @@ if errorlevel 1 (
   exit /b 1
 )
 
-rem Si quedó encendido otro Jarvis (por ejemplo una versión vieja), se apaga para usar este
+rem Si quedó encendido otro Ares (por ejemplo una versión vieja), se apaga para usar este
 powershell -NoProfile -Command "try { Invoke-RestMethod -Method Post -Uri http://127.0.0.1:3000/api/apagar -TimeoutSec 2 | Out-Null; Start-Sleep -Seconds 2 } catch {}" >nul 2>nul
 
 set INSTALAR=0
@@ -26,7 +26,7 @@ if "%INSTALAR%"=="0" (
   if errorlevel 1 set INSTALAR=1
 )
 if "%INSTALAR%"=="1" (
-  echo   Instalando las piezas de Jarvis. Puede tardar unos minutos...
+  echo   Instalando las piezas de Ares. Puede tardar unos minutos...
   echo.
   call npm install --no-audit --no-fund
   if errorlevel 1 (
@@ -50,5 +50,5 @@ set ABRIR_NAVEGADOR=1
 call node_modules\.bin\tsx.cmd server.ts
 
 echo.
-echo   Jarvis se apagó.
+echo   Ares se apagó.
 pause

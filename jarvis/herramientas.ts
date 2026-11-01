@@ -1,5 +1,5 @@
 /**
- * La LISTA PERMITIDA de cosas que Jarvis puede hacer en la laptop.
+ * La LISTA PERMITIDA de cosas que Ares puede hacer en la laptop.
  * Gemini solo puede pedir estas acciones; cada una revisa sus datos antes de ejecutarse
  * y tiene su propio nivel de permiso. Nada fuera de esta lista se puede hacer.
  */
@@ -86,7 +86,7 @@ const VERSION_JARVIS: string = (() => {
     return "?";
   }
 })();
-// Chat de Claude (Claude Code) donde se programa a Jarvis; CLAUDE_URL en el .env lo cambia
+// Chat de Claude (Claude Code) donde se programa a Ares; CLAUDE_URL en el .env lo cambia
 const URL_CLAUDE = /^https:\/\/claude\.ai\//.test(process.env.CLAUDE_URL?.trim() ?? "")
   ? process.env.CLAUDE_URL!.trim()
   : "https://claude.ai/code/session_01SJFk4BbA4DNCz54WYBQ6Ct";
@@ -158,7 +158,7 @@ export const DECLARACIONES = [
   },
   {
     name: "abrir_configuracion",
-    description: "Abre una sección de la Configuración de Windows (para que el usuario la vea o cambie algo que Jarvis no puede).",
+    description: "Abre una sección de la Configuración de Windows (para que el usuario la vea o cambie algo que Ares no puede).",
     parametersJsonSchema: {
       type: "object",
       properties: { seccion: { type: "string", enum: Object.keys(win.SECCIONES_CONFIGURACION) } },
@@ -204,7 +204,7 @@ export const DECLARACIONES = [
     description:
       "Crea un archivo de Word (documento, trabajo, reporte, ensayo), Excel (tablas, datos, comparativas) o PowerPoint " +
       "(presentación) sobre un tema. Primero investiga en internet en FUENTES CONFIABLES y cita las fuentes dentro del " +
-      "archivo. Se guarda en Documentos\\Jarvis\\Creados y se abre solo.",
+      "archivo. Se guarda en Documentos\\Ares\\Creados y se abre solo.",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -222,7 +222,7 @@ export const DECLARACIONES = [
     name: "crear_pagina_web",
     description:
       "Crea (o cambia) una PÁGINA WEB completa con HTML, CSS y JavaScript: portafolio, página de un negocio, juego, " +
-      "calculadora, invitación, formulario, etc. Se guarda en Documentos\\Jarvis\\Páginas web y se le MUESTRA al " +
+      "calculadora, invitación, formulario, etc. Se guarda en Documentos\\Ares\\Páginas web y se le MUESTRA al " +
       "usuario terminada, en grande (sin código). Para cambiar la página anterior (\"ponle otro color\", \"agrégale una sección\") usa cambiar=\"ultimo\".",
     parametersJsonSchema: {
       type: "object",
@@ -251,14 +251,14 @@ export const DECLARACIONES = [
   },
   {
     name: "ver_programas_abiertos",
-    description: "Dice qué programas y ventanas están abiertos ahora en la laptop (sin contar a Jarvis).",
+    description: "Dice qué programas y ventanas están abiertos ahora en la laptop (sin contar a Ares).",
     parametersJsonSchema: { type: "object", properties: {} },
   },
   {
     name: "cerrar_programa",
     description:
       "Cierra un programa abierto (Chrome, Word, Spotify, WhatsApp, bloc de notas...) igual que el botón X: si hay algo " +
-      "sin guardar, el programa pregunta. Con todos=true cierra todos los programas abiertos (menos Jarvis). Si no sabes " +
+      "sin guardar, el programa pregunta. Con todos=true cierra todos los programas abiertos (menos Ares). Si no sabes " +
       "cómo se llama el programa, usa antes ver_programas_abiertos.",
     parametersJsonSchema: {
       type: "object",
@@ -311,7 +311,7 @@ export const DECLARACIONES = [
   {
     name: "modo_clase",
     description:
-      "Modo clase: 'iniciar' = Jarvis escucha y transcribe la clase en silencio (sin contestar) hasta que el usuario diga " +
+      "Modo clase: 'iniciar' = Ares escucha y transcribe la clase en silencio (sin contestar) hasta que el usuario diga " +
       "que terminó; 'terminar' = deja de escuchar y hace un documento de Word con el resumen y la transcripción.",
     parametersJsonSchema: {
       type: "object",
@@ -332,7 +332,7 @@ export const DECLARACIONES = [
       type: "object",
       properties: {
         pregunta: { type: "string", description: "Qué quiere saber el usuario de lo que se ve" },
-        guardar: { type: "boolean", description: "Guardar la foto en Documentos\\Jarvis\\Fotos" },
+        guardar: { type: "boolean", description: "Guardar la foto en Documentos\\Ares\\Fotos" },
       },
       required: ["pregunta"],
     },
@@ -340,7 +340,7 @@ export const DECLARACIONES = [
   {
     name: "listar_archivos",
     description:
-      "Muestra los archivos de una carpeta del usuario. La ruta empieza con una de estas carpetas: Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis. Ejemplo: 'Documentos/Tareas'.",
+      "Muestra los archivos de una carpeta del usuario. La ruta empieza con una de estas carpetas: Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Ares. Ejemplo: 'Documentos/Tareas'.",
     parametersJsonSchema: {
       type: "object",
       properties: { carpeta: { type: "string" } },
@@ -359,7 +359,7 @@ export const DECLARACIONES = [
   {
     name: "crear_archivo",
     description:
-      "Crea un archivo de texto dentro de la carpeta Documentos/Jarvis (la única carpeta donde Jarvis puede escribir).",
+      "Crea un archivo de texto dentro de la carpeta Documentos/Ares (la única carpeta donde Ares puede escribir).",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -381,7 +381,7 @@ export const DECLARACIONES = [
   },
   {
     name: "borrar_archivo",
-    description: "Manda a la Papelera de reciclaje un archivo de la carpeta Documentos/Jarvis.",
+    description: "Manda a la Papelera de reciclaje un archivo de la carpeta Documentos/Ares.",
     parametersJsonSchema: {
       type: "object",
       properties: { nombre: { type: "string" } },
@@ -490,7 +490,7 @@ export const DECLARACIONES = [
   {
     name: "recordar_en_red",
     description:
-      "Busca en la red neuronal de memoria todo lo que Jarvis sabe del usuario relacionado con un tema (por significado, " +
+      "Busca en la red neuronal de memoria todo lo que Ares sabe del usuario relacionado con un tema (por significado, " +
       "no solo palabras exactas). Úsalo para '¿qué recuerdas de...?', '¿qué sabes de mí?', '¿qué te dije sobre...?'.",
     parametersJsonSchema: { type: "object", properties: { tema: { type: "string" } }, required: ["tema"] },
   },
@@ -582,7 +582,7 @@ export const DECLARACIONES = [
     name: "canva_crear_diseno",
     description:
       "Crea un diseño nuevo en la cuenta de Canva del usuario (presentación, documento o pizarra) y lo abre en el " +
-      "navegador para editarlo. Puede llevar adentro el dibujo de la pizarra de Jarvis o el último dibujo hecho a mano. " +
+      "navegador para editarlo. Puede llevar adentro el dibujo de la pizarra de Ares o el último dibujo hecho a mano. " +
       "Esta herramienta crea el diseño VACÍO (solo título y dibujo). Para escribir, generar o cambiar el CONTENIDO de un " +
       "diseño usa las herramientas que empiezan con canva_ed_ (si no las tienes, dile al usuario que active " +
       "'Editar dentro de los diseños' en Ajustes → Canva; nunca le digas que él tiene que editarlo).",
@@ -598,7 +598,7 @@ export const DECLARACIONES = [
   },
   {
     name: "canva_subir_dibujo",
-    description: "Sube a 'Subidos' de Canva el dibujo de la pizarra de Jarvis o el último dibujo hecho a mano.",
+    description: "Sube a 'Subidos' de Canva el dibujo de la pizarra de Ares o el último dibujo hecho a mano.",
     parametersJsonSchema: {
       type: "object",
       properties: { cual: { type: "string", enum: ["jarvis", "mio"] }, nombre: { type: "string" } },
@@ -617,7 +617,7 @@ export const DECLARACIONES = [
   },
   {
     name: "canva_descargar_diseno",
-    description: "Descarga un diseño de Canva como PDF o PNG a Documentos\\Jarvis\\Canva.",
+    description: "Descarga un diseño de Canva como PDF o PNG a Documentos\\Ares\\Canva.",
     parametersJsonSchema: {
       type: "object",
       properties: { id: { type: "string" }, formato: { type: "string", enum: ["pdf", "png"] } },
@@ -627,7 +627,7 @@ export const DECLARACIONES = [
   {
     name: "programar_recordatorio",
     description:
-      "Programa un recordatorio o alarma: Jarvis lo dirá en voz alta a la hora indicada. Usa 'minutos' para 'en X minutos/horas', o 'fecha_hora' (hora local, formato AAAA-MM-DDTHH:MM) para una hora exacta.",
+      "Programa un recordatorio o alarma: Ares lo dirá en voz alta a la hora indicada. Usa 'minutos' para 'en X minutos/horas', o 'fecha_hora' (hora local, formato AAAA-MM-DDTHH:MM) para una hora exacta.",
     parametersJsonSchema: {
       type: "object",
       properties: {
@@ -753,7 +753,7 @@ const EXTENSIONES_TEXTO = new Set([
   ".txt", ".md", ".csv", ".json", ".log", ".html", ".htm", ".css", ".xml", ".yaml", ".yml", ".ini", ".srt",
 ]);
 
-// Archivos que podrían ejecutar código: Jarvis nunca los abre ni los crea
+// Archivos que podrían ejecutar código: Ares nunca los abre ni los crea
 const EXTENSIONES_PELIGROSAS = new Set([
   ".exe", ".bat", ".cmd", ".com", ".ps1", ".psm1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".msi", ".msp",
   ".scr", ".lnk", ".hta", ".cpl", ".reg", ".jar", ".pif", ".url", ".appref-ms", ".inf", ".dll", ".sys",
@@ -774,6 +774,7 @@ const NOMBRES_CARPETAS: Record<string, string> = {
   music: "musica",
   videos: "videos",
   jarvis: "jarvis",
+  ares: "jarvis",
 };
 
 /**
@@ -806,7 +807,7 @@ export async function resolverRuta(
     }
     if (!raiz) {
       throw new ErrorHerramienta(
-        "La ruta debe empezar con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis."
+        "La ruta debe empezar con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Ares."
       );
     }
     resto = partes.join(path.sep);
@@ -822,12 +823,12 @@ export async function resolverRuta(
     if (!estaDentro(real, raizReal)) throw new ErrorHerramienta("Esa ruta apunta fuera de las carpetas permitidas.");
   }
   if (estaDentro(ruta, CARPETA_JARVIS_APP)) {
-    throw new ErrorHerramienta("No puedo tocar los archivos del propio Jarvis.");
+    throw new ErrorHerramienta("No puedo tocar los archivos del propio Ares.");
   }
 
   const nombreRaiz = Object.entries(carpetas).find(([, v]) => v === raiz)?.[0] ?? "";
   const nombreVisible =
-    nombreRaiz === "jarvis" ? "Documentos\\Jarvis" : nombreRaiz.charAt(0).toUpperCase() + nombreRaiz.slice(1);
+    nombreRaiz === "jarvis" ? "Documentos\\Ares" : nombreRaiz.charAt(0).toUpperCase() + nombreRaiz.slice(1);
   const bonita = [nombreVisible, resto].filter(Boolean).join("\\");
   return { ruta, raiz, bonita };
 }
@@ -837,14 +838,14 @@ function estaDentro(ruta: string, carpeta: string): boolean {
   return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
 }
 
-/** Ruta dentro de Documentos\\Jarvis (la única carpeta donde Jarvis puede escribir o borrar). */
+/** Ruta dentro de Documentos\\Ares (la única carpeta donde Ares puede escribir o borrar). */
 async function rutaEnJarvis(nombre: string, carpetas: Record<string, string>) {
   if (/[<>:"|?*\x00-\x1f]/.test(nombre) || /(^|[\\/])\.\.([\\/]|$)/.test(nombre)) {
     throw new ErrorHerramienta("Ese nombre de archivo tiene caracteres no permitidos.");
   }
   const r = await resolverRuta(path.join("Jarvis", nombre), carpetas);
   if (!estaDentro(r.ruta, carpetas.jarvis) || r.ruta === carpetas.jarvis) {
-    throw new ErrorHerramienta("Solo puedo escribir o borrar dentro de Documentos\\Jarvis.");
+    throw new ErrorHerramienta("Solo puedo escribir o borrar dentro de Documentos\\Ares.");
   }
   return r;
 }
@@ -1022,13 +1023,13 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       if (!dispositivo) throw new ErrorHerramienta("Solo puedo encender o apagar el Wi-Fi o el Bluetooth.");
       const encender = args.encender === true;
       const nombre = dispositivo === "WiFi" ? "Wi-Fi" : "Bluetooth";
-      // Apagar el Wi-Fi deja a Jarvis sin internet (ya no podría contestar): siempre se confirma
+      // Apagar el Wi-Fi deja a Ares sin internet (ya no podría contestar): siempre se confirma
       const apagaWifi = dispositivo === "WiFi" && !encender;
       return {
         nivel: apagaWifi ? "delicada" : "normal",
         tipo: "configuracion",
         descripcion: apagaWifi
-          ? "Apagar el Wi-Fi (Jarvis se quedará sin internet hasta que lo vuelvas a prender desde la barra de tareas)"
+          ? "Apagar el Wi-Fi (Ares se quedará sin internet hasta que lo vuelvas a prender desde la barra de tareas)"
           : `${encender ? "Encender" : "Apagar"} el ${nombre}`,
         ejecutar: async () => {
           necesitaWindows();
@@ -1062,13 +1063,13 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       return {
         nivel: "normal",
         tipo: "documentos",
-        descripcion: `Investigar y crear ${nombre} sobre "${tema.slice(0, 120)}" (en Documentos\\Jarvis\\Creados)`,
+        descripcion: `Investigar y crear ${nombre} sobre "${tema.slice(0, 120)}" (en Documentos\\Ares\\Creados)`,
         ejecutar: async () => {
           if (!ia?.crearDocumento) throw new ErrorHerramienta("Crear documentos no está disponible.");
           try {
             const r = await ia.crearDocumento(tipo, tema, indicaciones);
             return {
-              resultado: `Listo: "${r.titulo}" está en Documentos\\Jarvis\\Creados y se abrió.`,
+              resultado: `Listo: "${r.titulo}" está en Documentos\\Ares\\Creados y se abrió.`,
               fuentes_usadas: r.fuentes,
               fuentes_confiables: r.confiables,
               ...(r.sinBusqueda
@@ -1103,7 +1104,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         tipo: "programar",
         descripcion:
           (anterior ? `Cambiar la página "${anterior.nombre}"` : "Crear una página web") +
-          `: "${descripcion.slice(0, 140)}" (en Documentos\\Jarvis\\Páginas web)`,
+          `: "${descripcion.slice(0, 140)}" (en Documentos\\Ares\\Páginas web)`,
         ejecutar: async () => {
           if (!ia?.hacerPagina) throw new ErrorHerramienta("Crear páginas no está disponible.");
           let hecha;
@@ -1117,7 +1118,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           if (abrir) await win.abrirRuta(path.join(p.carpeta, p.archivo)).catch(() => {});
           // Al usuario solo le interesa la página: el código no se le pasa a Gemini (así no lo pega en el chat)
           return {
-            resultado: `Listo: la página "${p.nombre}" ya se ve en la pantalla de Jarvis${abrir ? " y se abrió en el navegador" : ""}.`,
+            resultado: `Listo: la página "${p.nombre}" ya se ve en la pantalla de Ares${abrir ? " y se abrió en el navegador" : ""}.`,
             que_tiene: hecha.explicacion,
             nota: "NO muestres, pegues ni menciones el código. Di en 1 o 2 frases qué tiene la página.",
           };
@@ -1164,7 +1165,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           const lista = await win.ventanasAbiertas();
           return lista.length
             ? { abiertos: lista.slice(0, 40).map((v) => `${v.programa}: ${v.ventana.slice(0, 80)}`) }
-            : { resultado: "No hay programas abiertos (aparte de Jarvis)." };
+            : { resultado: "No hay programas abiertos (aparte de Ares)." };
         },
       };
     }
@@ -1177,7 +1178,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         // Cerrar todo de golpe siempre se confirma; un programa se puede dejar recordado
         nivel: todos ? "delicada" : "normal",
         tipo: "cerrar_programas",
-        descripcion: todos ? "Cerrar TODOS los programas abiertos (menos Jarvis)" : `Cerrar ${pedido}`,
+        descripcion: todos ? "Cerrar TODOS los programas abiertos (menos Ares)" : `Cerrar ${pedido}`,
         ejecutar: async () => {
           const cerradas = await win.cerrarVentanas(procesos, todos ? "" : pedido);
           if (!cerradas.length) {
@@ -1317,7 +1318,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             const m = err instanceof Error ? err.message : "";
             throw new ErrorHerramienta(
               m === "SIN_VENTANA"
-                ? "Para usar la cámara la ventana de Jarvis tiene que estar abierta."
+                ? "Para usar la cámara la ventana de Ares tiene que estar abierta."
                 : m || "No pude usar la cámara."
             );
           }
@@ -2008,7 +2009,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
     case "guardar_recuerdo": {
       const recuerdo = texto(args.texto, "texto", MAX_LARGO_RECUERDO);
       return {
-        // Solo cambia la memoria de Jarvis (no la laptop) y se puede borrar en el panel "Memoria"
+        // Solo cambia la memoria de Ares (no la laptop) y se puede borrar en el panel "Memoria"
         nivel: "libre",
         tipo: "memoria",
         descripcion: `Recordar: "${recuerdo}"`,
@@ -2073,9 +2074,9 @@ async function dibujoComoPng(cual: unknown): Promise<{ nombre: string; png: Buff
     return { nombre: d.nombre.replace(/\.png$/, ""), png: d.datos };
   }
   const p = leerPizarra();
-  if (!p.dibujo) throw new ErrorHerramienta("La pizarra no tiene un dibujo de Jarvis. Pídele primero que dibuje algo.");
+  if (!p.dibujo) throw new ErrorHerramienta("La pizarra no tiene un dibujo de Ares. Pídele primero que dibuje algo.");
   try {
-    return { nombre: p.titulo || "Dibujo de Jarvis", png: await svgAPng(p.dibujo) };
+    return { nombre: p.titulo || "Dibujo de Ares", png: await svgAPng(p.dibujo) };
   } catch {
     throw new ErrorHerramienta("No pude convertir el dibujo en imagen.");
   }
@@ -2168,7 +2169,7 @@ async function revisarCanva(nombre: string, args: Record<string, unknown>): Prom
   const formato = args.formato === "png" ? "png" : "pdf";
   return {
     ...base,
-    descripcion: `Descargar un diseño de Canva como ${formato.toUpperCase()} a Documentos\\Jarvis\\Canva`,
+    descripcion: `Descargar un diseño de Canva como ${formato.toUpperCase()} a Documentos\\Ares\\Canva`,
     ejecutar: () =>
       conErrores(async () => {
         const d = await obtenerDiseno(id);
@@ -2183,14 +2184,14 @@ async function revisarCanva(nombre: string, args: Record<string, unknown>): Prom
           await writeFile(path.join(carpeta, nombreArchivo), Buffer.from(await r.arrayBuffer()));
           guardados.push(nombreArchivo);
         }
-        return { resultado: `Guardé en Documentos\\Jarvis\\Canva: ${guardados.join(", ")}` };
+        return { resultado: `Guardé en Documentos\\Ares\\Canva: ${guardados.join(", ")}` };
       }),
   };
 }
 
 // Nombres legibles de los permisos que se pueden recordar
 export const NOMBRES_PERMISOS: Record<string, string> = {
-  programar: "Crear páginas web (en Documentos\\Jarvis\\Páginas web)",
+  programar: "Crear páginas web (en Documentos\\Ares\\Páginas web)",
   whatsapp_leer: "Leer tus mensajes de WhatsApp",
   cerrar_programas: "Cerrar programas",
   musica: "Poner música en YouTube",
@@ -2199,7 +2200,7 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   volumen: "Cambiar el volumen",
   ver_archivos: "Ver qué archivos hay en tus carpetas",
   leer_archivos: "Leer archivos de texto",
-  crear_archivos: "Crear archivos en Documentos\\Jarvis",
+  crear_archivos: "Crear archivos en Documentos\\Ares",
   abrir_archivos: "Abrir documentos, fotos y carpetas",
   consultar_claude: "Consultar a Claude (cuesta unos centavos)",
   correo_leer: "Revisar y leer tu correo",
@@ -2231,7 +2232,7 @@ function procesosDe(pedido: string): string[] {
 
 // ------------------------------------------------------------------ fallas de la IA
 
-/** Error claro cuando Gemini no pudo (límite gratuito, etc.), para que Jarvis no diga "no tengo permiso". */
+/** Error claro cuando Gemini no pudo (límite gratuito, etc.), para que Ares no diga "no tengo permiso". */
 function errorDeIA(err: unknown, que: string): ErrorHerramienta {
   const mensaje = err instanceof Error ? err.message : "";
   if (/429|quota|RESOURCE_EXHAUSTED|rate limit|overloaded|UNAVAILABLE|503/i.test(mensaje)) {
@@ -2245,7 +2246,7 @@ function errorDeIA(err: unknown, que: string): ErrorHerramienta {
 
 // ------------------------------------------------------------------ fallas de búsqueda
 
-/** Explica en palabras sencillas por qué falló una búsqueda (para que Jarvis no diga "no hay internet" sin razón). */
+/** Explica en palabras sencillas por qué falló una búsqueda (para que Ares no diga "no hay internet" sin razón). */
 function fallaDeBusqueda(err: unknown): string {
   const e = err as any;
   const texto = String(e?.message || e || "");

@@ -248,7 +248,7 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
         </div>
       </div>
 
-      {/* Botones principales: hablar con Jarvis y probar su voz */}
+      {/* Botones principales: hablar con Ares y probar su voz */}
       <div className="mt-3 flex flex-wrap items-center justify-center gap-2 z-10 px-2">
         <button
           type="button"

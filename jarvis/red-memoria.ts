@@ -1,10 +1,10 @@
 /**
- * Red neuronal de memoria de Jarvis.
+ * Red neuronal de memoria de Ares.
  *
- * Cada cosa que Jarvis aprende del usuario es un NODO ("neurona"). Una red neuronal de Google (embeddings de Gemini,
+ * Cada cosa que Ares aprende del usuario es un NODO ("neurona"). Una red neuronal de Google (embeddings de Gemini,
  * gratis con la misma clave) convierte cada recuerdo en un vector que representa su SIGNIFICADO; los nodos con
  * significado parecido quedan CONECTADOS. Para recordar, se activan los nodos más parecidos a lo que se habla y la
- * activación se "propaga" a sus vecinos (como en el cerebro): así Jarvis recuerda cosas relacionadas aunque no se
+ * activación se "propaga" a sus vecinos (como en el cerebro): así Ares recuerda cosas relacionadas aunque no se
  * usen las mismas palabras.
  *
  * Aprende solo: después de platicar, revisa lo hablado y guarda los datos útiles sobre el usuario (nunca contraseñas,
@@ -200,7 +200,7 @@ export function olvidarTodo(): void {
   guardar({ nodos: [], sembrado: true });
 }
 
-/** La primera vez, los recuerdos que Jarvis ya tenía pasan a ser neuronas de la red. */
+/** La primera vez, los recuerdos que Ares ya tenía pasan a ser neuronas de la red. */
 export async function sembrar(recuerdos: string[]): Promise<void> {
   const g = leer();
   if (g.sembrado) return;
@@ -282,7 +282,7 @@ let temporizador: ReturnType<typeof setTimeout> | undefined;
 let aprendiendo = false;
 
 /**
- * Después de cada respuesta se anota el intercambio. Cada 4 intercambios (o tras 2 minutos sin hablar) Jarvis revisa lo
+ * Después de cada respuesta se anota el intercambio. Cada 4 intercambios (o tras 2 minutos sin hablar) Ares revisa lo
  * platicado y guarda lo importante. Se hace por tandas para no gastar el límite gratuito de Gemini.
  */
 export function anotarIntercambio(usuario: string, jarvis: string): void {

@@ -3,7 +3,7 @@
  *
  * Usa el "calendario" de Canvas (Calendario → "Fuente del calendario" / "Calendar Feed"): una dirección privada .ics con
  * las tareas y fechas de entrega de todas las materias del alumno. No necesita contraseña ni llaves especiales y solo se
- * puede LEER (Jarvis no puede entregar ni cambiar nada en Canvas). La dirección se guarda en el .env (CANVAS_ICS_URL)
+ * puede LEER (Ares no puede entregar ni cambiar nada en Canvas). La dirección se guarda en el .env (CANVAS_ICS_URL)
  * porque es privada. Las tareas ya vistas se guardan en datos/canvas-tareas.json para avisar solo de las nuevas.
  */
 

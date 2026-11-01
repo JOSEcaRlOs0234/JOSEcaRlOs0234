@@ -1,6 +1,6 @@
 /**
- * Escucha el micrófono en segundo plano (mientras Jarvis está encendido) y, al oír la palabra "Jarvis"
- * (con Porcupine, sin internet) o dos aplausos, saluda en voz alta y abre la ventana de Jarvis.
+ * Escucha el micrófono en segundo plano (mientras Ares está encendido) y, al oír la palabra "Jarvis"
+ * (con Porcupine, sin internet) o dos aplausos, saluda en voz alta y abre la ventana de Ares.
  * También maneja el "arranque con Windows" (un acceso directo en la carpeta Inicio de Windows).
  */
 
@@ -19,7 +19,7 @@ const esWindows = process.platform === "win32";
 export interface ConfigAplausos {
   activo: boolean;
   sensibilidad: number;
-  // Formas de despertar a Jarvis
+  // Formas de despertar a Ares
   usarPalabra: boolean; // decir "Jarvis" (necesita la clave gratuita de Picovoice)
   usarAplausos: boolean; // doble aplauso
   sensibilidadPalabra: number; // 1 a 10
@@ -29,7 +29,7 @@ export interface ConfigAplausos {
   dispositivo: number;
   // Nombre de ese micrófono (los números pueden cambiar si conectas audífonos)
   nombreDispositivo: string;
-  // true si el usuario lo eligió a mano (entonces Jarvis no lo cambia solo)
+  // true si el usuario lo eligió a mano (entonces Ares no lo cambia solo)
   microfonoManual: boolean;
   // Cómo suenan los aplausos del usuario (botón "Enseñarle mis aplausos")
   calibracion: Calibracion;
@@ -148,8 +148,8 @@ export class OidoDeJarvis {
       this.registrar("APLAUSOS", `Aprendí los aplausos del usuario (hasta ${e.maxLargo} ms, agudos ≥ ${e.minAgudos}).`);
     } else {
       this.activaciones++;
-      this.anotar("¡Doble aplauso! Jarvis activado");
-      this.registrar("APLAUSOS", "Doble aplauso detectado: Jarvis activado.");
+      this.anotar("¡Doble aplauso! Ares activado");
+      this.registrar("APLAUSOS", "Doble aplauso detectado: Ares activado.");
       this.alActivarse();
     }
   }
@@ -226,7 +226,7 @@ export class OidoDeJarvis {
           this.detector.pausar(8000, ahora);
           this.activaciones++;
           this.anotar('¡Escuché "Jarvis"! Activado');
-          this.registrar("APLAUSOS", 'Palabra "Jarvis" detectada: Jarvis activado.');
+          this.registrar("APLAUSOS", 'Palabra "Jarvis" detectada: Ares activado.');
           this.alActivarse();
         }
         // Enseñándole la voz: todo lo que se oye va al aprendiz (hasta 100 % o 45 segundos)
@@ -238,7 +238,7 @@ export class OidoDeJarvis {
           this.pausaVozHasta = ahora + 3 * 60 * 1000;
           this.activaciones++;
           this.anotar(`¡Reconocí tu voz! (parecido ${this.voz.ultimoPuntaje})`);
-          this.registrar("APLAUSOS", `Voz del usuario reconocida (parecido ${this.voz.ultimoPuntaje}): Jarvis se abre.`);
+          this.registrar("APLAUSOS", `Voz del usuario reconocida (parecido ${this.voz.ultimoPuntaje}): Ares se abre.`);
           this.alReconocerVoz?.();
         }
         // Aplausos: el detector trabaja con pedacitos de 256 muestras
@@ -465,7 +465,7 @@ export class OidoDeJarvis {
     await this.iniciar();
   }
 
-  /** Pausa la detección unos segundos (mientras Jarvis habla por las bocinas). */
+  /** Pausa la detección unos segundos (mientras Ares habla por las bocinas). */
   pausar(ms: number): void {
     this.detector.pausar(ms, performance.now());
   }
@@ -572,23 +572,25 @@ export class OidoDeJarvis {
 
   // ---------------------------------------------------------------- arranque con Windows
 
-  private rutaAccesoInicio(): string {
+  private rutaAccesoInicio(viejo = false): string {
     const appdata = process.env.APPDATA ?? "";
-    return path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", "Jarvis (aplausos).lnk");
+    // Hasta la 2.33 se llamaba "Jarvis (aplausos).lnk"; desde la 2.34 "Ares.lnk" (el viejo se borra al rehacerlo)
+    return path.join(appdata, "Microsoft", "Windows", "Start Menu", "Programs", "Startup", viejo ? "Jarvis (aplausos).lnk" : "Ares.lnk");
   }
 
   arranqueConWindows(): boolean {
-    return esWindows && existsSync(this.rutaAccesoInicio());
+    return esWindows && (existsSync(this.rutaAccesoInicio()) || existsSync(this.rutaAccesoInicio(true)));
   }
 
-  /** Crea o quita el acceso directo que enciende a Jarvis (en segundo plano) al prender la laptop. */
+  /** Crea o quita el acceso directo que enciende a Ares (en segundo plano) al prender la laptop. */
   async cambiarArranque(activar: boolean, silencioso = false): Promise<void> {
     if (!esWindows) throw new Error("Solo funciona en Windows.");
     const datos = {
       JARVIS_ACCESO: this.rutaAccesoInicio(),
+      JARVIS_ACCESO_VIEJO: this.rutaAccesoInicio(true),
       JARVIS_VBS: path.join(CARPETA_APP, "Jarvis.vbs"),
       JARVIS_CARPETA: CARPETA_APP,
-      JARVIS_ICONO: path.join(CARPETA_APP, "jarvis.ico"),
+      JARVIS_ICONO: path.join(CARPETA_APP, "ares.ico"),
     };
     if (activar) {
       await powershell(
@@ -596,23 +598,28 @@ export class OidoDeJarvis {
           "$s.TargetPath=(Join-Path $env:WINDIR 'System32\\wscript.exe');" +
           "$s.Arguments='\"' + $env:JARVIS_VBS + '\" fondo';" +
           "$s.WorkingDirectory=$env:JARVIS_CARPETA; $s.IconLocation=$env:JARVIS_ICONO;" +
-          "$s.Description='Enciende J.A.R.V.I.S. en segundo plano para escuchar aplausos'; $s.Save()",
+          "$s.Description='Enciende A.R.E.S. en segundo plano'; $s.Save();" +
+          "Remove-Item -LiteralPath $env:JARVIS_ACCESO_VIEJO -ErrorAction SilentlyContinue",
         datos
       );
     } else {
-      await powershell("Remove-Item -LiteralPath $env:JARVIS_ACCESO -ErrorAction SilentlyContinue", datos);
+      await powershell(
+        "Remove-Item -LiteralPath $env:JARVIS_ACCESO -ErrorAction SilentlyContinue;" +
+          "Remove-Item -LiteralPath $env:JARVIS_ACCESO_VIEJO -ErrorAction SilentlyContinue",
+        datos
+      );
     }
     this.config.arranqueConfigurado = true;
     this.guardarConfig();
     if (!silencioso) {
-      this.registrar("APLAUSOS", activar ? "Jarvis arrancará solo al prender la laptop." : "Jarvis ya no arrancará solo.");
+      this.registrar("APLAUSOS", activar ? "Ares arrancará solo al prender la laptop." : "Ares ya no arrancará solo.");
     }
   }
 
   /** La primera vez deja activado el arranque con Windows (lo pidió el usuario); después lo mantiene al día. */
   async configurarArranqueInicial(): Promise<void> {
     if (!esWindows) return;
-    // Si ya existe, rehacerlo para que apunte a ESTA carpeta (por si Jarvis se actualizó en otra carpeta)
+    // Si ya existe, rehacerlo para que apunte a ESTA carpeta (por si Ares se actualizó en otra carpeta)
     if (this.config.arranqueConfigurado) {
       if (this.arranqueConWindows()) await this.cambiarArranque(true, true).catch(() => undefined);
       return;

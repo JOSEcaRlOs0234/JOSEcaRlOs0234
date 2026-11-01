@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.33.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.34.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -620,6 +620,19 @@
   "Inteligencia artificial: ARES". ORDEN_TERMINAR del modo clase acepta "Jarvis" o "Ares". La PALABRA PARA DESPERTAR
   sigue siendo "Jarvis" (Porcupine BuiltinKeyword.JARVIS); "Ares" necesitaría un .ppn propio hecho en
   console.picovoice.ai con su clave (que aún no tiene).
+- v2.34 TODO SE LLAMA "ARES" (pedido: "mantén todo, pero ahora que se llame Ares por completo"): reemplazo de
+  "Jarvis"/"J.A.R.V.I.S." → "Ares"/"A.R.E.S." en todo texto visible, voz, registro, comentarios y LEEME (script con
+  máscaras). SE CONSERVÓ A PROPÓSITO: %LOCALAPPDATA%\Jarvis (claves, memoria; ubicacion.mjs no se tocó), la palabra para
+  despertar "Jarvis" (Porcupine; textos entre comillas "Jarvis"), `Jarvis.vbs` (lo usan accesos directos, arranque y la
+  tarea), la carpeta jarvis/ del repo, identificadores (OidoDeJarvis, JARVIS_*, rol "jarvis", localStorage jarvis_*).
+  CAMBIOS CON MIGRACIÓN: Documentos\Jarvis → Documentos\Ares (`carpetasUsuario` hace renameSync la 1.ª vez; si falla
+  sigue con la vieja; server llama carpetasUsuario() al encender; paginas.ts `carpetaActual` corrige rutas guardadas);
+  acceso directo "Ares.lnk" con `ares.ico` nuevo (portal de luz, generado con PIL; jarvis.ico borrado; favicon.png nuevo)
+  y la ps1 borra "Jarvis.lnk"; arranque con Windows "Ares.lnk" (borra "Jarvis (aplausos).lnk"); tarea "Ares -
+  recordatorio" (borra "Jarvis - recordatorio"); "Encender Jarvis.bat" → "Encender Ares.bat"; título de ventana
+  A.R.E.S. (cerrar_programa protege *J.A.R.V.I.S* y *A.R.E.S*); alias de carpeta "ares"; canva-mcp client_name "Ares".
+  PERSONALIDAD: "Te llamas ARES... por ahora la palabra para despertarte es Jarvis". Probado: migración de carpeta con
+  una página guardada, capturas (barra, portal, chat, arranque "A.R.E.S.", título de ventana).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

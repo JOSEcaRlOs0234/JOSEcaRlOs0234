@@ -44,7 +44,7 @@ function guardar(g: Guardado): void {
   writeFileSync(ARCHIVO, JSON.stringify(g, null, 2), "utf8");
 }
 
-/** Le dice al SDK de MCP quién es Jarvis (las llaves de la app de Canva) y dónde guardar el permiso. */
+/** Le dice al SDK de MCP quién es Ares (las llaves de la app de Canva) y dónde guardar el permiso. */
 class Proveedor implements OAuthClientProvider {
   urlParaAutorizar: URL | null = null;
   estado = "";
@@ -58,7 +58,7 @@ class Proveedor implements OAuthClientProvider {
 
   get clientMetadata() {
     return {
-      client_name: "Jarvis",
+      client_name: "Ares",
       redirect_uris: [this.redireccion],
       grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
@@ -87,7 +87,7 @@ class Proveedor implements OAuthClientProvider {
 
   // No abre nada por su cuenta: la dirección se le da a la interfaz para que la abra el usuario.
   // Canva MCP pide TODOS sus permisos (incluye brandkit y help:answers, que una app normal no tiene y hacen que
-  // Canva marque "Internal Server Error"); se piden solo los que la app de Jarvis tiene activados.
+  // Canva marque "Internal Server Error"); se piden solo los que la app de Ares tiene activados.
   redirectToAuthorization(url: URL) {
     const pedidos = (url.searchParams.get("scope") ?? "").split(/\s+/).filter(Boolean);
     const permitidos = pedidos.length ? pedidos.filter((p) => PERMISOS_APP.includes(p)) : PERMISOS_APP;
@@ -191,7 +191,7 @@ export async function terminarCanvaMcp(codigo: string, redireccion: string): Pro
   if (!("conectado" in r)) throw new Error("Canva no guardó el permiso; vuelve a intentarlo.");
 }
 
-/** Al encender Jarvis: si ya había permiso, se reconecta solo (sin abrir nada). */
+/** Al encender Ares: si ya había permiso, se reconecta solo (sin abrir nada). */
 export async function reconectarCanvaMcp(redireccion: string): Promise<void> {
   if (!leer().tokens) return;
   try {
@@ -208,7 +208,7 @@ export function desconectarCanvaMcp(): void {
   guardar({});
 }
 
-/** Declaraciones para Gemini (se agregan a la lista permitida de Jarvis). */
+/** Declaraciones para Gemini (se agregan a la lista permitida de Ares). */
 export function declaracionesCanvaMcp() {
   return herramientas.map((h) => ({
     name: nombreParaGemini(h.nombre),

@@ -1,5 +1,5 @@
 /**
- * Panel "Red neuronal de memoria": muestra los recuerdos de Jarvis como neuronas (puntos que brillan) conectadas por
+ * Panel "Red neuronal de memoria": muestra los recuerdos de Ares como neuronas (puntos que brillan) conectadas por
  * significado. Se acomodan solas con una física sencilla (se repelen y las conexiones las atraen). Al buscar algo, se
  * encienden las neuronas activadas. Clic en una neurona = ver el recuerdo y poder olvidarlo.
  */
@@ -296,7 +296,7 @@ export const RedMemoriaPanel: React.FC<{ onCerrar: () => void; avisar: (t: strin
         />
         {!nodos.length && (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center font-hud-mono text-[11px] text-[#68a8d8]">
-            Aún no hay neuronas. Platica con Jarvis: aprenderá solo lo importante sobre ti y aquí verás cómo crece su red.
+            Aún no hay neuronas. Platica con Ares: aprenderá solo lo importante sobre ti y aquí verás cómo crece su red.
           </div>
         )}
         {elegido && (

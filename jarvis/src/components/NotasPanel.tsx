@@ -19,7 +19,7 @@ interface Props {
 
 const sinAcentos = (t: string) => t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
-/** Las notas de Jarvis: aparecen sobre el reactor cuando Jarvis anota algo. */
+/** Las notas de Ares: aparecen sobre el reactor cuando Ares anota algo. */
 export const NotasPanel: React.FC<Props> = ({ notas, onCerrar, onAgregar, onBorrar, onCopiar }) => {
   const [buscar, setBuscar] = useState("");
   const [titulo, setTitulo] = useState("");
@@ -110,7 +110,7 @@ export const NotasPanel: React.FC<Props> = ({ notas, onCerrar, onAgregar, onBorr
       <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
         {notas.length === 0 ? (
           <p className="text-[#68a8d8] font-hud-mono text-sm">
-            Aún no hay notas. Dile a Jarvis: &ldquo;anota que mañana tengo junta a las 10&rdquo; o usa &ldquo;Nueva
+            Aún no hay notas. Dile a Ares: &ldquo;anota que mañana tengo junta a las 10&rdquo; o usa &ldquo;Nueva
             nota&rdquo;.
           </p>
         ) : visibles.length === 0 ? (

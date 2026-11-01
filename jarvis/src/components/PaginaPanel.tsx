@@ -1,6 +1,6 @@
 /**
- * Panel "Página web": muestra la página terminada que hizo Jarvis, en grande, SIN código.
- * La página va en un marco AISLADO (sandbox sin "allow-same-origin"): no puede leer ni tocar nada de Jarvis ni hablar
+ * Panel "Página web": muestra la página terminada que hizo Ares, en grande, SIN código.
+ * La página va en un marco AISLADO (sandbox sin "allow-same-origin"): no puede leer ni tocar nada de Ares ni hablar
  * con su servidor. Botones: abrir en el navegador, abrir la carpeta, hacer pequeño/grande, elegir otra página.
  */
 
@@ -28,7 +28,7 @@ export const PaginaPanel: React.FC<{
   const avisarRef = useRef(avisar);
   avisarRef.current = avisar;
 
-  // Lista de páginas; al cambiar algo (Jarvis hizo o cambió una), se muestra la más reciente
+  // Lista de páginas; al cambiar algo (Ares hizo o cambió una), se muestra la más reciente
   useEffect(() => {
     let vivo = true;
     fetch("/api/paginas")
@@ -84,7 +84,7 @@ export const PaginaPanel: React.FC<{
               value={elegida ?? ""}
               onChange={(e) => setElegida(e.target.value)}
               className="min-w-0 max-w-[18rem] bg-[#05162e] border border-[#ffb347]/40 px-1.5 py-0.5 font-hud-mono text-[11px] text-[#e2f8ff] focus:outline-none"
-              title="Páginas hechas por Jarvis"
+              title="Páginas hechas por Ares"
             >
               {lista.map((x) => (
                 <option key={x.id} value={x.id}>
@@ -118,7 +118,7 @@ export const PaginaPanel: React.FC<{
 
       {!actual ? (
         <div className="flex-1 flex items-center justify-center p-6 text-center font-hud-mono text-[11px] text-[#68a8d8]">
-          Aún no hay páginas. Pídele a Jarvis, por ejemplo: "hazme una página web de mi portafolio".
+          Aún no hay páginas. Pídele a Ares, por ejemplo: "hazme una página web de mi portafolio".
         </div>
       ) : (
         <div className="relative flex-1 min-h-0 m-2 border border-[#ffb347]/20 bg-white overflow-hidden">

@@ -1,5 +1,5 @@
 /**
- * Modelos de Gemini: Jarvis le pregunta a Google cuáles existen (con la misma clave sirven todos),
+ * Modelos de Gemini: Ares le pregunta a Google cuáles existen (con la misma clave sirven todos),
  * recuerda el que elegiste y, si uno falla o llega a su límite, prueba con otro.
  */
 

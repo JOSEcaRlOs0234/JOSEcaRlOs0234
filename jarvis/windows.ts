@@ -5,6 +5,7 @@
  */
 
 import { execFile, spawn } from "child_process";
+import { existsSync, renameSync } from "fs";
 import os from "os";
 import path from "path";
 
@@ -158,7 +159,18 @@ export async function carpetasUsuario(): Promise<CarpetasUsuario> {
       // Se usan las ubicaciones normales
     }
   }
-  base.jarvis = path.join(base.documentos, "Jarvis");
+  // La carpeta de trabajo es Documentos\Ares (hasta la 2.33 era Documentos\Jarvis: la primera vez se renombra,
+  // con todo lo que tenga adentro; si Windows no deja porque algo está abierto, se sigue usando la vieja)
+  const nueva = path.join(base.documentos, "Ares");
+  const vieja = path.join(base.documentos, "Jarvis");
+  base.jarvis = nueva;
+  if (existsSync(vieja) && !existsSync(nueva)) {
+    try {
+      renameSync(vieja, nueva);
+    } catch {
+      base.jarvis = vieja;
+    }
+  }
   carpetasCache = base;
   return base;
 }
@@ -166,7 +178,7 @@ export async function carpetasUsuario(): Promise<CarpetasUsuario> {
 // ------------------------------------------------------------------ sonido
 
 /**
- * Toca un sonido (mp3) con el reproductor de Windows, sin ventanas. Se usa si la ventana de Jarvis no puede
+ * Toca un sonido (mp3) con el reproductor de Windows, sin ventanas. Se usa si la ventana de Ares no puede
  * sonar sola (el navegador a veces bloquea el sonido hasta que haces clic). Devuelve una función para callarlo.
  */
 export function tocarSonido(ruta: string): () => void {
@@ -190,12 +202,14 @@ export function tocarSonido(ruta: string): () => void {
   };
 }
 
-// ------------------------------------------------------------------ encender Jarvis para un recordatorio
+// ------------------------------------------------------------------ encender Ares para un recordatorio
 
-const TAREA_RECORDATORIO = "Jarvis - recordatorio";
+const TAREA_RECORDATORIO = "Ares - recordatorio";
+// Nombre hasta la 2.33: se borra para que no queden dos tareas
+const TAREA_VIEJA = "Jarvis - recordatorio";
 
 /**
- * Deja una tarea en el Programador de tareas de Windows que enciende Jarvis (escondido) a la hora indicada,
+ * Deja una tarea en el Programador de tareas de Windows que enciende Ares (escondido) a la hora indicada,
  * aunque esté apagado. Con `cuando` = null quita la tarea. Es una tarea del propio usuario: no pide administrador.
  * Si la laptop estaba suspendida a esa hora, Windows la corre en cuanto vuelve.
  */
@@ -203,25 +217,32 @@ export async function programarEncendido(cuando: number | null, lanzador: string
   if (!esWindows) return;
   if (cuando === null) {
     await powershell(
-      "Unregister-ScheduledTask -TaskName $env:JARVIS_TAREA -Confirm:$false -ErrorAction SilentlyContinue",
-      { JARVIS_TAREA: TAREA_RECORDATORIO }
+      "Unregister-ScheduledTask -TaskName $env:JARVIS_TAREA -Confirm:$false -ErrorAction SilentlyContinue;" +
+        "Unregister-ScheduledTask -TaskName $env:JARVIS_TAREA_VIEJA -Confirm:$false -ErrorAction SilentlyContinue",
+      { JARVIS_TAREA: TAREA_RECORDATORIO, JARVIS_TAREA_VIEJA: TAREA_VIEJA }
     );
     return;
   }
   await powershell(
-    "$a=New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('\"' + $env:JARVIS_LANZADOR + '\" recordatorio');" +
+    "Unregister-ScheduledTask -TaskName $env:JARVIS_TAREA_VIEJA -Confirm:$false -ErrorAction SilentlyContinue;" +
+      "$a=New-ScheduledTaskAction -Execute 'wscript.exe' -Argument ('\"' + $env:JARVIS_LANZADOR + '\" recordatorio');" +
       "$t=New-ScheduledTaskTrigger -Once -At ([DateTimeOffset]::FromUnixTimeMilliseconds([long]$env:JARVIS_CUANDO).LocalDateTime);" +
       "$s=New-ScheduledTaskSettingsSet -StartWhenAvailable -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries " +
       "-ExecutionTimeLimit ([TimeSpan]::Zero);" +
       "Register-ScheduledTask -TaskName $env:JARVIS_TAREA -Action $a -Trigger $t -Settings $s " +
-      "-Description 'Enciende J.A.R.V.I.S. para avisar un recordatorio' -Force | Out-Null",
-    { JARVIS_TAREA: TAREA_RECORDATORIO, JARVIS_LANZADOR: lanzador, JARVIS_CUANDO: String(Math.round(cuando)) }
+      "-Description 'Enciende A.R.E.S. para avisar un recordatorio' -Force | Out-Null",
+    {
+      JARVIS_TAREA: TAREA_RECORDATORIO,
+      JARVIS_TAREA_VIEJA: TAREA_VIEJA,
+      JARVIS_LANZADOR: lanzador,
+      JARVIS_CUANDO: String(Math.round(cuando)),
+    }
   );
 }
 
 // ------------------------------------------------------------------ configuración de Windows
 
-/** Secciones de Configuración que Jarvis puede abrir (direcciones fijas "ms-settings:"). */
+/** Secciones de Configuración que Ares puede abrir (direcciones fijas "ms-settings:"). */
 export const SECCIONES_CONFIGURACION: Record<string, string> = {
   inicio: "ms-settings:",
   wifi: "ms-settings:network-wifi",
@@ -319,7 +340,7 @@ export interface VentanaAbierta {
   ventana: string; // título de la ventana
 }
 
-// Lo que NUNCA se cierra: Jarvis (su servidor y lanzadores) y piezas de Windows
+// Lo que NUNCA se cierra: Ares (su servidor y lanzadores) y piezas de Windows
 const PROTEGIDOS = [
   "node", "powershell", "pwsh", "wscript", "cscript", "cmd", "conhost", "windowsterminal", "openconsole", "dwm",
   "csrss", "winlogon", "lsass", "services", "svchost", "searchhost", "startmenuexperiencehost", "shellexperiencehost",
@@ -363,7 +384,7 @@ foreach ($v in [VentanasJarvis]::Lista()) {
   if (-not $p) { continue }
   $nombre = $p.ProcessName.ToLower()
   $t = [string]$v[2]
-  if ($protegidos -contains $nombre -or $t -like '*J.A.R.V.I.S*' -or $t -eq 'Program Manager') { continue }
+  if ($protegidos -contains $nombre -or $t -like '*J.A.R.V.I.S*' -or $t -like '*A.R.E.S*' -or $t -eq 'Program Manager') { continue }
   if ($cerrar.Count -gt 0) {
     $toca = ($cerrar -contains '*') -or ($cerrar -contains $nombre) -or ($titulo -and $nombre -eq 'applicationframehost' -and $t -like ('*' + $titulo + '*'))
     if (-not $toca) { continue }
@@ -373,7 +394,7 @@ foreach ($v in [VentanasJarvis]::Lista()) {
 }
 ConvertTo-Json -InputObject @($salida) -Compress`;
 
-/** Las ventanas abiertas ahora (sin Jarvis ni piezas de Windows). */
+/** Las ventanas abiertas ahora (sin Ares ni piezas de Windows). */
 export async function ventanasAbiertas(): Promise<VentanaAbierta[]> {
   const salida = await powershell(SCRIPT_VENTANAS, { JARVIS_PROTEGIDOS: PROTEGIDOS.join(","), JARVIS_CERRAR: "", JARVIS_TITULO: "" });
   return JSON.parse(salida.trim() || "[]");

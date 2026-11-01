@@ -1,10 +1,10 @@
 /**
- * Modo clase: Jarvis escucha la clase en silencio y al final hace un documento de Word con el resumen.
+ * Modo clase: Ares escucha la clase en silencio y al final hace un documento de Word con el resumen.
  *
  * - La VENTANA graba el micrófono (16 kHz, mono) y cada 3 minutos manda un pedazo de audio (WAV) al servidor.
  * - El servidor convierte cada pedazo en texto con Gemini mientras la clase sigue (así al final no tarda tanto).
- * - Al terminar ("Jarvis, termina la clase" o el botón), se pide a Gemini un resumen ordenado y se arma el Word en
- *   Documentos\Jarvis\Clases. El audio NO se guarda: solo el texto (si un pedazo no se pudo pasar a texto, se guarda
+ * - Al terminar ("Ares, termina la clase" o el botón), se pide a Gemini un resumen ordenado y se arma el Word en
+ *   Documentos\Ares\Clases. El audio NO se guarda: solo el texto (si un pedazo no se pudo pasar a texto, se guarda
  *   un momento en la carpeta de datos para reintentarlo y luego se borra).
  */
 
@@ -245,7 +245,7 @@ async function crearWord(c: Clase, r: Resumen, transcripcion: string): Promise<s
   partes.push(...transcripcion.split(/\n+/).filter(Boolean).map((t) => new Paragraph({ children: [new TextRun({ text: t, size: 20 })], spacing: { after: 80 } })));
 
   const doc = new Document({
-    creator: "J.A.R.V.I.S.",
+    creator: "A.R.E.S.",
     title: r.titulo || c.materia,
     styles: { default: { document: { run: { font: "Calibri", size: 24 } } } },
     sections: [{ children: partes }],

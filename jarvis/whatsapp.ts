@@ -1,7 +1,7 @@
 /**
- * WhatsApp: Jarvis avisa quién escribió y, SOLO cuando el usuario se lo pide, le lee los mensajes.
+ * WhatsApp: Ares avisa quién escribió y, SOLO cuando el usuario se lo pide, le lee los mensajes.
  *
- * Jarvis NO se conecta a WhatsApp (ningún programa "no oficial", así no hay riesgo de que bloqueen el número). Solo lee
+ * Ares NO se conecta a WhatsApp (ningún programa "no oficial", así no hay riesgo de que bloqueen el número). Solo lee
  * las notificaciones de Windows que deja la app de WhatsApp (o WhatsApp Web) en la base de notificaciones del usuario
  * (%LOCALAPPDATA%\Microsoft\Windows\Notifications\wpndatabase.db): de cada una toma quién escribe y el texto que mostró
  * la notificación. Por eso solo ve los mensajes que llegaron como notificación con la laptop prendida (no el historial

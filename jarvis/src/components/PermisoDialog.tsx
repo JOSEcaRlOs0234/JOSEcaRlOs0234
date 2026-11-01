@@ -15,7 +15,7 @@ interface Props {
   onResponder: (aprobado: boolean, recordar: boolean) => void;
 }
 
-/** Ventana que aparece cuando Jarvis quiere hacer algo en la laptop. */
+/** Ventana que aparece cuando Ares quiere hacer algo en la laptop. */
 export const PermisoDialog: React.FC<Props> = ({ confirmacion, onResponder }) => {
   const [recordar, setRecordar] = useState(false);
   const { delicada } = confirmacion;
@@ -33,7 +33,7 @@ export const PermisoDialog: React.FC<Props> = ({ confirmacion, onResponder }) =>
         <div className="flex items-center gap-2.5" style={{ color }}>
           <Icono className="w-6 h-6 shrink-0" />
           <h2 className="font-hud-display text-sm font-bold tracking-widest uppercase">
-            {delicada ? "Acción delicada" : "Jarvis pide permiso"}
+            {delicada ? "Acción delicada" : "Ares pide permiso"}
           </h2>
         </div>
 

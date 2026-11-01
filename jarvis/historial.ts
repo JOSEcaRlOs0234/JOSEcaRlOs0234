@@ -1,6 +1,6 @@
 /**
- * Historial permanente: TODO lo que se platica con Jarvis se guarda, mes por mes,
- * en datos/historial/AAAA-MM.jsonl (archivos de texto en la laptop). Jarvis puede buscar ahí
+ * Historial permanente: TODO lo que se platica con Ares se guarda, mes por mes,
+ * en datos/historial/AAAA-MM.jsonl (archivos de texto en la laptop). Ares puede buscar ahí
  * cuando le preguntas "¿qué te dije la semana pasada sobre...?".
  */
 

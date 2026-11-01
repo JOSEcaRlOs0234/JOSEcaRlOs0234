@@ -6,7 +6,7 @@ export interface PizarraDatos {
   titulo: string;
   contenido: string;
   actualizada: number;
-  // Dibujo de Jarvis (SVG ya limpiado por el servidor)
+  // Dibujo de Ares (SVG ya limpiado por el servidor)
   dibujo?: string;
 }
 
@@ -216,7 +216,7 @@ function Lienzo({ fondoSvg, onGuardar }: { fondoSvg?: string; onGuardar: (png: s
     img.onload = () => {
       guardarPaso();
       pintarFondo();
-      // El dibujo de Jarvis es de 800×600: se centra sin deformarlo
+      // El dibujo de Ares es de 800×600: se centra sin deformarlo
       const escala = Math.min(ANCHO / (img.width || 800), ALTO / (img.height || 600));
       const w = (img.width || 800) * escala;
       const h = (img.height || 600) * escala;
@@ -290,8 +290,8 @@ function Lienzo({ fondoSvg, onGuardar }: { fondoSvg?: string; onGuardar: (png: s
           <Trash2 className="w-3.5 h-3.5" /> Limpiar
         </button>
         {fondoSvg && (
-          <button type="button" onClick={usarDibujoDeJarvis} className={boton} title="Pintar encima del dibujo de Jarvis">
-            <ImageIcon className="w-3.5 h-3.5" /> Usar dibujo de Jarvis
+          <button type="button" onClick={usarDibujoDeJarvis} className={boton} title="Pintar encima del dibujo de Ares">
+            <ImageIcon className="w-3.5 h-3.5" /> Usar dibujo de Ares
           </button>
         )}
         <button
@@ -299,7 +299,7 @@ function Lienzo({ fondoSvg, onGuardar }: { fondoSvg?: string; onGuardar: (png: s
           onClick={guardar}
           disabled={guardando}
           className="px-2 py-1 border border-[#00f5a0] text-[#00f5a0] bg-[#00f5a0]/10 hover:bg-[#00f5a0]/25 cursor-pointer flex items-center gap-1 disabled:opacity-40"
-          title="Guardar como imagen en Documentos\Jarvis\Dibujos"
+          title="Guardar como imagen en Documentos\Ares\Dibujos"
         >
           <Save className="w-3.5 h-3.5" /> {guardando ? "Guardando..." : "Guardar imagen"}
         </button>
@@ -324,7 +324,7 @@ function Lienzo({ fondoSvg, onGuardar }: { fondoSvg?: string; onGuardar: (png: s
 
 // ------------------------------------------------------------------ panel
 
-/** La pizarra de Jarvis: aparece sobre el reactor cuando Jarvis escribe o dibuja algo. También puedes dibujar tú. */
+/** La pizarra de Ares: aparece sobre el reactor cuando Ares escribe o dibuja algo. También puedes dibujar tú. */
 export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onCopiar, onGuardarDibujo }) => {
   const [aMano, setAMano] = useState(false);
   const [grande, setGrande] = useState(false);
@@ -348,7 +348,7 @@ export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onC
                 ? "border-[#00f5a0] text-[#00f5a0] bg-[#00f5a0]/10 hover:bg-[#00f5a0]/20"
                 : "border-[#00e5ff]/40 text-[#b8f4ff] hover:bg-[#00e5ff]/15"
             }`}
-            title={aMano ? "Volver a lo que escribió Jarvis" : "Dibujar tú con el ratón o el dedo"}
+            title={aMano ? "Volver a lo que escribió Ares" : "Dibujar tú con el ratón o el dedo"}
           >
             <Brush className="w-3.5 h-3.5" /> {aMano ? "Ver pizarra" : "Dibujar yo"}
           </button>
@@ -391,7 +391,7 @@ export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onC
         >
           <img
             src={enlaceSvg(pizarra.dibujo)}
-            alt={pizarra.titulo || "Dibujo de Jarvis"}
+            alt={pizarra.titulo || "Dibujo de Ares"}
             className="w-full h-full object-contain"
           />
         </div>
@@ -405,7 +405,7 @@ export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onC
           {pizarra.dibujo && (
             <img
               src={enlaceSvg(pizarra.dibujo)}
-              alt={pizarra.titulo || "Dibujo de Jarvis"}
+              alt={pizarra.titulo || "Dibujo de Ares"}
               onClick={() => setGrande(true)}
               title="Clic para verlo en grande"
               className="w-full max-h-[70vh] object-contain mb-3 border border-[#00e5ff]/20 cursor-zoom-in"
@@ -414,7 +414,7 @@ export const PizarraPanel: React.FC<Props> = ({ pizarra, onCerrar, onBorrar, onC
           {pizarra.contenido && <Contenido texto={pizarra.contenido} />}
           {vacia && (
             <p className="text-[#68a8d8] font-hud-mono text-sm">
-              La pizarra está vacía. Pídele a Jarvis: &ldquo;escribe en la pizarra...&rdquo;, &ldquo;dibújame un
+              La pizarra está vacía. Pídele a Ares: &ldquo;escribe en la pizarra...&rdquo;, &ldquo;dibújame un
               diagrama de...&rdquo; o &ldquo;investiga a fondo sobre...&rdquo;. También puedes dibujar tú con &ldquo;Dibujar
               yo&rdquo;.
             </p>

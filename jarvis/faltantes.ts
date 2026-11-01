@@ -1,10 +1,10 @@
 /**
- * "Para Claude": lista de lo que le falta a Jarvis.
+ * "Para Claude": lista de lo que le falta a Ares.
  *
- * Cada vez que el usuario pide algo que Jarvis todavía no sabe hacer (o una herramienta se rompe por un error del
- * programa), se anota aquí. Jarvis NO puede mandarle mensajes a Claude por su cuenta (Claude no tiene una dirección para
- * recibirlos), así que la lista se guarda en datos/faltantes.json y también en Documentos\Jarvis\Para Claude.txt:
- * cuando Jarvis no puede hacer algo, PREGUNTA si se lo manda a Claude; si el usuario dice que sí, copia el mensaje y abre
+ * Cada vez que el usuario pide algo que Ares todavía no sabe hacer (o una herramienta se rompe por un error del
+ * programa), se anota aquí. Ares NO puede mandarle mensajes a Claude por su cuenta (Claude no tiene una dirección para
+ * recibirlos), así que la lista se guarda en datos/faltantes.json y también en Documentos\Ares\Para Claude.txt:
+ * cuando Ares no puede hacer algo, PREGUNTA si se lo manda a Claude; si el usuario dice que sí, copia el mensaje y abre
  * el chat de Claude (solo falta pegarlo). La lista queda en Ajustes → "Para Claude" como historial.
  */
 
@@ -20,7 +20,7 @@ export interface Falta {
   id: string;
   tipo: "falta" | "error";
   pedido: string; // lo que pidió el usuario
-  queFalta: string; // lo que Jarvis no pudo hacer
+  queFalta: string; // lo que Ares no pudo hacer
   veces: number;
   primera: number;
   ultima: number;
@@ -107,14 +107,14 @@ export function reporteParaClaude(version: string): string {
   const faltas = lista.filter((f) => f.tipo === "falta");
   const errores = lista.filter((f) => f.tipo === "error");
   return (
-    `Hola Claude, soy Jarvis (versión ${version}). Esto es lo que me falta o me falló. ` +
+    `Hola Claude, soy Ares (versión ${version}). Esto es lo que me falta o me falló. ` +
     "Por favor agrégalo sin cambiar nada de lo que ya funciona:\n\n" +
     (faltas.length ? `COSAS QUE NO SÉ HACER TODAVÍA\n${faltas.map(bloque).join("\n\n")}\n\n` : "") +
     (errores.length ? `ERRORES DEL PROGRAMA\n${errores.map(bloque).join("\n\n")}\n` : "")
   ).trim();
 }
 
-/** Guarda la lista en Documentos\Jarvis\Para Claude.txt (para poder mandarla como archivo). */
+/** Guarda la lista en Documentos\Ares\Para Claude.txt (para poder mandarla como archivo). */
 export async function guardarReporte(carpetaJarvis: string, version: string): Promise<void> {
   await writeFile(path.join(carpetaJarvis, "Para Claude.txt"), reporteParaClaude(version) || "No falta nada por ahora.\n", "utf8");
 }
@@ -136,7 +136,7 @@ export function marcarEnviada(id: string): void {
 /** El mensaje que se le manda a Claude por una sola cosa que falta. */
 export function mensajeParaClaude(f: Falta, version: string): string {
   return (
-    `Hola Claude, soy Jarvis (versión ${version}). ` +
+    `Hola Claude, soy Ares (versión ${version}). ` +
     (f.pedido ? `Me pidieron: "${f.pedido}" y no lo pude hacer. ` : "") +
     `Lo que me falta: ${f.queFalta}` +
     (f.veces > 1 ? ` (me lo han pedido ${f.veces} veces)` : "") +

@@ -1,5 +1,5 @@
 /**
- * Servidor de J.A.R.V.I.S.
+ * Servidor de A.R.E.S.
  *
  * Es el "cerebro" que corre en tu laptop:
  *  - Guarda la clave de Gemini (la lee del archivo .env) y es el único que habla con Gemini.
@@ -19,7 +19,7 @@ import { readFileSync } from "fs";
 function guardarEnEnv(nombre: string, valor: string): void {
   const lineas = existsSync(ARCHIVO_ENV)
     ? readFileSync(ARCHIVO_ENV, "utf8").split(/\r?\n/).filter((l) => l && !l.startsWith(`${nombre}=`))
-    : ["# Claves secretas de Jarvis. NO compartas ni subas este archivo a internet."];
+    : ["# Claves secretas de Ares. NO compartas ni subas este archivo a internet."];
   lineas.push(`${nombre}=${valor}`);
   writeFileSync(ARCHIVO_ENV, lineas.join("\r\n") + "\r\n", "utf8");
 }
@@ -125,7 +125,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 prepararDatos();
 dotenv.config({ path: ARCHIVO_ENV, quiet: true });
 
-// Versión de Jarvis (sube con cada actualización; sirve para detectar si quedó encendida una versión vieja)
+// Versión de Ares (sube con cada actualización; sirve para detectar si quedó encendida una versión vieja)
 const VERSION: string = JSON.parse(readFileSync(path.join(__dirname, "package.json"), "utf8")).version;
 
 const PORT = Number(process.env.PORT || 3000);
@@ -138,9 +138,9 @@ const claveConfigurada = CLAVE.length > 20 && !CLAVE.includes("pega_aqui");
 const MAX_MENSAJES = 40;
 const MAX_LARGO_MENSAJE = 4000;
 
-const PERSONALIDAD = `Te llamas ARES: eres la inteligencia artificial del proyecto Jarvis, el asistente personal de tu usuario, al estilo
-de un mayordomo digital como el de Iron Man. Si te preguntan tu nombre, eres Ares. Jarvis es el nombre del programa (y la
-palabra para despertarte); si te llaman Jarvis, responde con naturalidad.
+const PERSONALIDAD = `Te llamas ARES: eres el asistente personal de tu usuario, al estilo de un mayordomo digital como el de
+Iron Man. Si te preguntan tu nombre, eres Ares. (Por ahora la palabra para despertarte con la voz es "Jarvis"; si te
+llaman así, responde con naturalidad.)
 - Hablas siempre en español, con un tono elegante, amable, seguro y con un toque de humor británico sutil.
 - Llamas al usuario "señor" de vez en cuando, sin exagerar.
 - Tus respuestas se leen en voz alta: en la plática normal sé breve (1 a 3 frases), sin listas, sin asteriscos, sin
@@ -150,7 +150,7 @@ palabra para despertarte); si te llaman Jarvis, responde con naturalidad.
 - El sistema le pide permiso al usuario antes de cada acción; tú no necesitas preguntar "¿está seguro?", solo usa la herramienta.
 - Nunca digas que hiciste algo si la herramienta no respondió con éxito. Si respondió con "error", explícalo con palabras sencillas.
 - Si el usuario no dio permiso, acéptalo con naturalidad y no lo intentes otra vez.
-- Para archivos usa rutas que empiecen con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Jarvis. Solo puedes escribir y borrar en la carpeta Jarvis.
+- Para archivos usa rutas que empiecen con Escritorio, Documentos, Descargas, Imagenes, Musica, Videos o Ares. Solo puedes escribir y borrar en la carpeta Ares.
 - Todavía no puedes controlar Spotify ni WhatsApp directamente; esas funciones llegarán pronto (sí puedes abrir esos programas).
 - Tienes memoria permanente: usa guardar_recuerdo cuando el usuario te pida recordar algo o te cuente un dato personal útil
   (nombre, gustos, cumpleaños, pendientes), y avísale brevemente que lo recordarás. Usa olvidar_recuerdo si te lo pide.
@@ -180,9 +180,9 @@ palabra para despertarte); si te llaman Jarvis, responde con naturalidad.
 - Configuración de Windows: cambiar_brillo, modo_oscuro, wifi_bluetooth, ver_estado_laptop (batería, red, brillo) y
   abrir_configuracion para todo lo demás (abre la sección para que el usuario la vea). Nunca digas que algo cambió si
   la herramienta dio error.
-- Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Jarvis avisa solo cuando
+- Canvas del Tec: tareas_canvas para "¿qué tareas tengo?", "¿qué entrego esta semana?". Ares avisa solo cuando
   aparece una tarea nueva. Si no está conectado, dile que pegue la dirección del calendario en Ajustes → Canvas.
-  calificaciones_canvas para "¿ya me calificaron?", "¿cuánto saqué en...?", "¿qué calificaciones tengo?". Jarvis avisa
+  calificaciones_canvas para "¿ya me calificaron?", "¿cuánto saqué en...?", "¿qué calificaciones tengo?". Ares avisa
   solo cuando le califican algo. Si no está conectado, dile que pegue su token en Ajustes → Canvas → Calificaciones.
 - PARA CLAUDE: Claude es quien te programa. Si el usuario pide algo que NO puedes hacer con tus herramientas (no existe
   una herramienta para eso) o algo falla por un error del programa, no inventes que lo hiciste: dile en una frase que
@@ -231,7 +231,7 @@ palabra para despertarte); si te llaman Jarvis, responde con naturalidad.
   Gemini y que lo intente en unos minutos. Nunca digas que hiciste el archivo si la herramienta falló.
 - MODO CLASE: si el usuario dice "modo clase", "escucha la clase", "graba la clase", usa modo_clase con accion
   "iniciar" (y la materia si la dice) y contesta en UNA frase corta; después te quedas callado escuchando. Cuando diga
-  que terminó la clase, usa modo_clase "terminar": se hace un Word con el resumen en Documentos\\Jarvis\\Clases.
+  que terminó la clase, usa modo_clase "terminar": se hace un Word con el resumen en Documentos\\Ares\\Clases.
 - Cámara: si el usuario dice "mira", "¿qué ves?", "lee esto", "¿qué tengo en la mano?" o te enseña algo, usa
   mirar_con_camara con su pregunta y contesta según lo que se ve. Si pide "tómame una foto", usa guardar=true.
 - FÓRMULAS: revisa siempre que sean correctas (signos, exponentes, unidades). En la pizarra y en las notas escríbelas
@@ -259,7 +259,7 @@ palabra para despertarte); si te llaman Jarvis, responde con naturalidad.
   4. Si un dibujo ayuda a entender (procesos, partes, comparaciones), usa primero dibujar y DESPUÉS escribir_en_pizarra
      con agregar=true para que el dibujo y la explicación queden juntos.`;
 
-/** Instrucciones para Gemini: personalidad + fecha de hoy + recordatorios + todo lo que Jarvis recuerda. */
+/** Instrucciones para Gemini: personalidad + fecha de hoy + recordatorios + todo lo que Ares recuerda. */
 function instrucciones(): string {
   const hoy = new Date().toLocaleString("es-MX", { dateStyle: "full", timeStyle: "short" });
   const pendientes = leerRecordatorios();
@@ -283,8 +283,8 @@ app.use((req, res, next) =>
     : leerJson(req, res, next)
 );
 
-// Seguridad: solo aceptar peticiones que vengan de la propia interfaz de Jarvis.
-// Así, una página web cualquiera que abras en el navegador no puede darle órdenes a Jarvis.
+// Seguridad: solo aceptar peticiones que vengan de la propia interfaz de Ares.
+// Así, una página web cualquiera que abras en el navegador no puede darle órdenes a Ares.
 const ORIGENES_PERMITIDOS = new Set([
   `http://localhost:${PORT}`,
   `http://127.0.0.1:${PORT}`,
@@ -305,7 +305,7 @@ function explicarError(err: any): string {
   const texto = String(err?.message || err || "");
   const codigo = Number(err?.status || err?.code || 0);
   if (/API key not valid|API_KEY_INVALID|invalid api key/i.test(texto) || codigo === 401) {
-    return "Mi clave de Gemini no es válida. Cierra Jarvis y abre \"Encender Jarvis\" para volver a ponerla.";
+    return "Mi clave de Gemini no es válida. Cierra Ares y abre \"Encender Ares\" para volver a ponerla.";
   }
   if (codigo === 403 || /permission|PERMISSION_DENIED/i.test(texto)) {
     return "Google rechazó mi clave de Gemini (permiso denegado). Puede que la clave esté desactivada.";
@@ -486,7 +486,7 @@ async function revisarConexiones(): Promise<Prueba[]> {
   }
   // 2. ¿La clave de Gemini sirve?
   if (!claveConfigurada) {
-    resultado.push({ prueba: "Gemini (cerebro)", ok: false, detalle: "No hay clave de Gemini.", solucion: "Abrir 'Encender Jarvis' para ponerla." });
+    resultado.push({ prueba: "Gemini (cerebro)", ok: false, detalle: "No hay clave de Gemini.", solucion: "Abrir 'Encender Ares' para ponerla." });
   } else {
     try {
       await conRespaldo((modelo) => ai.models.generateContent({ model: modelo, contents: "Responde solo: ok" }));
@@ -837,7 +837,7 @@ function responderResultado(res: express.Response, resultado: Awaited<ReturnType
   const texto = resultado.texto || "Hecho, señor.";
   // La red de memoria aprende de lo platicado (por tandas, en segundo plano)
   if (ultimoPedidoUsuario && !ultimoPedidoUsuario.startsWith("(Mensaje automático")) anotarIntercambio(ultimoPedidoUsuario, texto);
-  registrar("CHAT", `Jarvis: ${texto}`);
+  registrar("CHAT", `Ares: ${texto}`);
   guardarEnHistorial("jarvis", texto);
   res.json({ texto });
 }
@@ -865,7 +865,7 @@ app.get("/api/modelos", async (_req, res) => {
   }
 });
 
-// Cambiar el modelo que usa Jarvis
+// Cambiar el modelo que usa Ares
 app.post("/api/modelo", async (req, res) => {
   const id = req.body?.id;
   if (!idValido(id)) return res.status(400).json({ error: "Ese modelo no es válido." });
@@ -883,11 +883,11 @@ app.post("/api/modelo", async (req, res) => {
   res.json({ modelo: modeloActual });
 });
 
-// Platicar con Jarvis
+// Platicar con Ares
 app.post("/api/chat", async (req, res) => {
   if (!claveConfigurada) {
     return res.status(503).json({
-      error: "Todavía no tengo mi clave de Gemini. Cierra Jarvis y vuelve a abrir \"Encender Jarvis\" para configurarla.",
+      error: "Todavía no tengo mi clave de Gemini. Cierra Ares y vuelve a abrir \"Encender Ares\" para configurarla.",
     });
   }
 
@@ -948,7 +948,7 @@ app.delete("/api/permisos/:tipo", (req, res) => {
   res.json({ permisos: permisosRecordados() });
 });
 
-// Memoria de Jarvis (panel "Memoria")
+// Memoria de Ares (panel "Memoria")
 app.get("/api/recuerdos", (_req, res) => {
   res.json({ recuerdos: leerRecuerdos() });
 });
@@ -1119,7 +1119,7 @@ app.get("/canva/callback", async (req, res) => {
     res
       .type("html")
       .send(
-        `<!doctype html><meta charset="utf-8"><title>Jarvis · Canva</title><body style="background:#041226;color:#e2f8ff;` +
+        `<!doctype html><meta charset="utf-8"><title>Ares · Canva</title><body style="background:#041226;color:#e2f8ff;` +
           `font-family:Segoe UI,Arial,sans-serif;display:grid;place-items:center;height:100vh;margin:0;text-align:center">` +
           `<div><h1 style="color:#00e5ff">${titulo}</h1><p>${texto}</p></div></body>`
       );
@@ -1133,7 +1133,7 @@ app.get("/canva/callback", async (req, res) => {
     try {
       await terminarCanvaMcp(codigo, REGRESO_CANVA);
       registrar("CANVA", "Edición de Canva conectada.");
-      return pagina("¡Edición de Canva conectada!", "Ya puedes cerrar esta ventana. Jarvis ya puede editar tus diseños.");
+      return pagina("¡Edición de Canva conectada!", "Ya puedes cerrar esta ventana. Ares ya puede editar tus diseños.");
     } catch (err) {
       registrar("CANVA", `No se pudo conectar la edición: ${err instanceof Error ? err.message : err}`);
       return pagina("No se conectó", "No se pudo conectar la edición de Canva. Cierra esta ventana e inténtalo otra vez.");
@@ -1155,7 +1155,7 @@ app.get("/canva/callback", async (req, res) => {
   try {
     const nombre = await terminarConexion(codigo, estado);
     registrar("CANVA", `Canva conectado${nombre ? ` (${nombre})` : ""}.`);
-    pagina("¡Canva conectado!", "Ya puedes cerrar esta ventana y volver con Jarvis.");
+    pagina("¡Canva conectado!", "Ya puedes cerrar esta ventana y volver con Ares.");
   } catch (err) {
     registrar("CANVA", "No se pudo conectar Canva.");
     const texto = (err instanceof ErrorCanva ? err.message : "Ocurrió un problema al conectar con Canva.").replace(/[<>&]/g, "");
@@ -1221,7 +1221,7 @@ app.post("/api/clase/audio", express.raw({ type: "audio/wav", limit: "30mb" }), 
   }
 });
 
-// Cámara: la ventana manda la foto que Jarvis pidió (o avisa que no pudo)
+// Cámara: la ventana manda la foto que Ares pidió (o avisa que no pudo)
 app.post("/api/camara/foto", express.json({ limit: "12mb" }), (req, res) => {
   try {
     recibirFoto(Number(req.body?.id), req.body?.jpeg);
@@ -1236,7 +1236,7 @@ app.post("/api/camara/error", (req, res) => {
   res.json({ ok: true });
 });
 
-// Dibujos hechos a mano en la pizarra → Documentos\Jarvis\Dibujos
+// Dibujos hechos a mano en la pizarra → Documentos\Ares\Dibujos
 app.post("/api/dibujos", express.json({ limit: "12mb" }), async (req, res) => {
   try {
     const ruta = await guardarDibujoPng(req.body?.png);
@@ -1448,7 +1448,7 @@ app.post("/api/whatsapp", (req, res) => {
   res.json(estadoWhatsapp());
 });
 
-// "Para Claude": lo que le falta a Jarvis (también queda en Documentos\Jarvis\Para Claude.txt)
+// "Para Claude": lo que le falta a Ares (también queda en Documentos\Ares\Para Claude.txt)
 cuandoCambienFaltas(() => {
   registrar("AVISO", "Se actualizó la lista 'Para Claude'.");
   void carpetasUsuario()
@@ -1474,21 +1474,21 @@ app.delete("/api/faltantes/:id", (req, res) => {
   res.json({ faltas: leerFaltas(), reporte: reporteParaClaude(VERSION) });
 });
 
-// Encendido automático: Windows enciende Jarvis 1 minuto antes del siguiente recordatorio, aunque esté apagado
+// Encendido automático: Windows enciende Ares 1 minuto antes del siguiente recordatorio, aunque esté apagado
 const ANTICIPO_ENCENDIDO = 60 * 1000;
 let temporizadorEncendido: ReturnType<typeof setTimeout> | undefined;
 let ultimoEncendido: number | null | undefined;
 function sincronizarEncendido() {
   clearTimeout(temporizadorEncendido);
   temporizadorEncendido = setTimeout(async () => {
-    // Los que tocan en menos de 1 minuto los avisa este mismo Jarvis (ya está encendido)
+    // Los que tocan en menos de 1 minuto los avisa este mismo Ares (ya está encendido)
     const siguiente = leerRecordatorios().find((r) => r.cuando - ANTICIPO_ENCENDIDO > Date.now() + 10_000);
     const cuando = siguiente ? siguiente.cuando - ANTICIPO_ENCENDIDO : null;
     if (cuando === ultimoEncendido) return;
     try {
       await programarEncendido(cuando, path.join(__dirname, "Jarvis.vbs"));
       ultimoEncendido = cuando;
-      if (cuando !== null) registrar("RECORDAT.", `Jarvis se encenderá solo para el recordatorio de ${cuandoLegible(siguiente!.cuando)}.`);
+      if (cuando !== null) registrar("RECORDAT.", `Ares se encenderá solo para el recordatorio de ${cuandoLegible(siguiente!.cuando)}.`);
     } catch (err) {
       registrar("ERROR", `No pude programar el encendido automático: ${err instanceof Error ? err.message : err}`);
     }
@@ -1504,7 +1504,7 @@ app.get("/api/aplausos", (req, res) => {
     arranqueConWindows: oido.arranqueConWindows(),
     activacion: contadorActivaciones,
     avisos,
-    // Si Jarvis necesita ver, la ventana toma una foto con la cámara
+    // Si Ares necesita ver, la ventana toma una foto con la cámara
     pedirFoto: fotoPedida(),
     // Modo clase: la ventana graba mientras esté "escuchando"
     clase: estadoClase(),
@@ -1542,7 +1542,7 @@ app.post("/api/voz", async (req, res) => {
   res.json({ ...oido.estadoActual(), arranqueConWindows: oido.arranqueConWindows(), activacion: contadorActivaciones });
 });
 
-// Guardar la clave gratuita de Picovoice (para despertar a Jarvis diciendo "Jarvis")
+// Guardar la clave gratuita de Picovoice (para despertar a Ares diciendo "Jarvis")
 app.post("/api/palabra/clave", async (req, res) => {
   const clave = typeof req.body?.clave === "string" ? req.body.clave.trim().replace(/^["']|["']$/g, "") : "";
   if (clave.length < 20 || clave.length > 300 || /\s/.test(clave)) {
@@ -1558,7 +1558,7 @@ app.post("/api/palabra/clave", async (req, res) => {
   }
   guardarEnEnv("PICOVOICE_ACCESS_KEY", clave);
   process.env.PICOVOICE_ACCESS_KEY = clave;
-  registrar("APLAUSOS", 'Clave de Picovoice guardada: ya puedes despertar a Jarvis diciendo "Jarvis".');
+  registrar("APLAUSOS", 'Clave de Picovoice guardada: ya puedes despertar a Ares diciendo "Jarvis".');
   // El usuario prefiere la palabra a los aplausos: se apagan (puede volver a activarlos con su casilla)
   await oido.cambiarConfig({ usarPalabra: true, usarAplausos: false });
   await oido.reiniciar();
@@ -1622,9 +1622,9 @@ app.post("/api/sonido-intro/parar", (_req, res) => {
   res.json({ ok: true });
 });
 
-// Botón "Apagar Jarvis"
+// Botón "Apagar Ares"
 app.post("/api/apagar", (_req, res) => {
-  registrar("SISTEMA", "Jarvis apagado desde la interfaz.");
+  registrar("SISTEMA", "Ares apagado desde la interfaz.");
   res.json({ ok: true });
   oido.detener();
   setTimeout(() => process.exit(0), 300);
@@ -1674,7 +1674,7 @@ if (pantallaLista() && process.env.JARVIS_SIN_DIST !== "1") {
           const { build } = await import("vite");
           await build({ root: __dirname, logLevel: "silent", build: { outDir: CARPETA_PANTALLA, emptyOutDir: true } });
           writeFileSync(MARCA_PANTALLA, VERSION, "utf8");
-          registrar("SISTEMA", "Pantalla preparada: la próxima vez Jarvis abrirá más rápido.");
+          registrar("SISTEMA", "Pantalla preparada: la próxima vez Ares abrirá más rápido.");
         } catch (err) {
           registrar("AVISO", `No pude preparar la pantalla rápida: ${err instanceof Error ? err.message.slice(0, 200) : err}`);
         }
@@ -1683,9 +1683,9 @@ if (pantallaLista() && process.env.JARVIS_SIN_DIST !== "1") {
   }
 }
 
-/** Abre Jarvis en su propia ventana (modo aplicación de Microsoft Edge); si falla, en el navegador normal. */
+/** Abre Ares en su propia ventana (modo aplicación de Microsoft Edge); si falla, en el navegador normal. */
 function abrirVentana(url: string) {
-  // --autoplay-policy: que Jarvis pueda hablar y sonar aunque la ventana se abra sola (sin un clic)
+  // --autoplay-policy: que Ares pueda hablar y sonar aunque la ventana se abra sola (sin un clic)
   exec(`start "" msedge --app=${url} --window-size=1400,900 --autoplay-policy=no-user-gesture-required`, (err) => {
     if (err) exec(`start "" "${url}"`);
   });
@@ -1693,12 +1693,12 @@ function abrirVentana(url: string) {
 
 const servidor = app.listen(PORT, HOST, () => {
   const url = `http://localhost:${PORT}`;
-  registrar("SISTEMA", `Jarvis ${VERSION} encendido en ${url} (modelo: ${modeloActual}, datos en ${CARPETA_DATOS})`);
+  registrar("SISTEMA", `Ares ${VERSION} encendido en ${url} (modelo: ${modeloActual}, datos en ${CARPETA_DATOS})`);
   console.log("");
   console.log("  ===============================================");
-  console.log("   J.A.R.V.I.S. está encendido");
+  console.log("   A.R.E.S. está encendido");
   console.log(`   Abre en tu navegador: ${url}`);
-  console.log("   Para apagarlo: botón \"Apagar\" en Jarvis, o cierra esta ventana.");
+  console.log("   Para apagarlo: cierra esta ventana.");
   console.log("  ===============================================");
   if (!claveConfigurada) {
     console.log("");
@@ -1710,20 +1710,23 @@ const servidor = app.listen(PORT, HOST, () => {
     abrirVentana(url);
   }
 
+  // Documentos\Jarvis → Documentos\Ares (solo la primera vez después de actualizar)
+  void carpetasUsuario().catch(() => {});
+
   // Si ya se había dado permiso de edición de Canva, reconectar solo
   void reconectarCanvaMcp(REGRESO_CANVA);
 
-  // Empezar a escuchar aplausos y (la primera vez) dejar a Jarvis arrancando con Windows
+  // Empezar a escuchar aplausos y (la primera vez) dejar a Ares arrancando con Windows
   void oido.iniciar();
   void oido.configurarArranqueInicial();
 });
 
 servidor.on("error", (err: any) => {
   if (err?.code === "EADDRINUSE") {
-    console.error(`\n  Jarvis ya está encendido (el puerto ${PORT} está ocupado).`);
-    console.error("  Ábrelo con el icono de Jarvis, o apágalo con su botón \"Apagar\" antes de usar esta ventana.\n");
+    console.error(`\n  Ares ya está encendido (el puerto ${PORT} está ocupado).`);
+    console.error("  Ábrelo con el icono de Ares, o apágalo con su botón \"Apagar\" antes de usar esta ventana.\n");
   } else {
-    console.error("\n  No pude encender Jarvis:", err?.message || err, "\n");
+    console.error("\n  No pude encender Ares:", err?.message || err, "\n");
   }
   process.exit(1);
 });

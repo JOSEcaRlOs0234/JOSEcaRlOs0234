@@ -5,7 +5,7 @@
  * la apruebe) y pega su Client ID y Client secret en Ajustes. Luego aprieta "Conectar con Canva", entra a su cuenta
  * y da permiso (OAuth con PKCE). Las llaves de acceso se guardan solo en la laptop (datos/canva.json).
  *
- * Lo que Jarvis puede hacer: crear diseños (presentación, documento, pizarra) con el dibujo de la pizarra adentro,
+ * Lo que Ares puede hacer: crear diseños (presentación, documento, pizarra) con el dibujo de la pizarra adentro,
  * subir dibujos a "Subidos" de Canva, buscar tus diseños y abrirlos, y descargar un diseño como PDF o PNG.
  * La API de Canva no deja escribir textos dentro de un diseño (eso es solo para cuentas Enterprise).
  */
@@ -119,10 +119,10 @@ async function pedirToken(datos: Record<string, string>): Promise<Guardado> {
   };
 }
 
-/** Termina la conexión cuando Canva regresa al usuario a Jarvis con el código. */
+/** Termina la conexión cuando Canva regresa al usuario a Ares con el código. */
 export async function terminarConexion(codigo: string, estado: string): Promise<string> {
   if (!pendiente || pendiente.estado !== estado || Date.now() > pendiente.vence) {
-    throw new ErrorCanva("La conexión con Canva caducó o no la pidió Jarvis. Vuelve a apretar \"Conectar con Canva\".");
+    throw new ErrorCanva("La conexión con Canva caducó o no la pidió Ares. Vuelve a apretar \"Conectar con Canva\".");
   }
   const { verificador, redireccion } = pendiente;
   pendiente = null;

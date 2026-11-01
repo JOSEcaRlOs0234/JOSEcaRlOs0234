@@ -1,5 +1,5 @@
 /**
- * Música en YouTube: Jarvis busca la canción, la abre en el navegador y la controla con las "teclas multimedia"
+ * Música en YouTube: Ares busca la canción, la abre en el navegador y la controla con las "teclas multimedia"
  * de Windows (las mismas de play/pausa del teclado), así funciona aunque la ventana de YouTube no esté enfrente.
  *
  * No necesita cuenta ni clave: la búsqueda lee la página pública de resultados de YouTube y toma el primer video.

@@ -1,5 +1,5 @@
 /**
- * El "oído" de Jarvis: analiza el sonido del micrófono, pedacito por pedacito,
+ * El "oído" de Ares: analiza el sonido del micrófono, pedacito por pedacito,
  * y avisa cuando escucha DOS aplausos seguidos.
  *
  * Cómo distingue un aplauso de otros ruidos:
@@ -86,7 +86,7 @@ export class DetectorAplausos {
     this.avisar({ tipo: "calibrado", maxLargo, minAgudos, sensibilidad });
   }
 
-  /** Pausa la detección (por ejemplo mientras Jarvis habla). */
+  /** Pausa la detección (por ejemplo mientras Ares habla). */
   pausar(ms: number, ahora: number): void {
     this.pausaHasta = Math.max(this.pausaHasta, ahora + ms);
     this.evento = null;

@@ -1,5 +1,5 @@
 /**
- * Guarda la clave de Claude (Anthropic) en el archivo .env para que Jarvis pueda consultarle
+ * Guarda la clave de Claude (Anthropic) en el archivo .env para que Ares pueda consultarle
  * cuando no sepa algo. Lo abre "Configurar Claude.bat".
  */
 
@@ -14,7 +14,7 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 
 console.log("");
 console.log("  ===============================================");
-console.log("   Conectar a Jarvis con Claude");
+console.log("   Conectar a Ares con Claude");
 console.log("  ===============================================");
 console.log("  1. Crea tu clave en https://console.anthropic.com/settings/keys");
 console.log("  2. Pégala aquí con clic derecho (o Ctrl+V) y presiona Enter.");
@@ -51,11 +51,11 @@ rl.close();
 
 const lineas = existsSync(archivoEnv)
   ? readFileSync(archivoEnv, "utf8").split(/\r?\n/).filter((l) => l && !l.startsWith("ANTHROPIC_API_KEY="))
-  : ["# Claves secretas de Jarvis. NO compartas ni subas este archivo a internet."];
+  : ["# Claves secretas de Ares. NO compartas ni subas este archivo a internet."];
 lineas.push(`ANTHROPIC_API_KEY=${clave}`);
 writeFileSync(archivoEnv, lineas.join("\r\n") + "\r\n", "utf8");
 
 console.log("");
 console.log("  Clave de Claude guardada en el archivo .env (solo vive en tu laptop).");
-console.log("  Vuelve a abrir Jarvis para que la use.");
+console.log("  Vuelve a abrir Ares para que la use.");
 console.log("");

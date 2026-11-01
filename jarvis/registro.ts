@@ -1,7 +1,7 @@
 /**
- * Registro de actividad de Jarvis.
- * Cada cosa que hace Jarvis se anota con fecha y hora en registro/jarvis.log
- * (un archivo de texto normal que puedes abrir con el Bloc de notas), dentro de la carpeta de datos de Jarvis.
+ * Registro de actividad de Ares.
+ * Cada cosa que hace Ares se anota con fecha y hora en registro/jarvis.log
+ * (un archivo de texto normal que puedes abrir con el Bloc de notas), dentro de la carpeta de datos de Ares.
  */
 
 import { appendFileSync, mkdirSync } from "fs";

@@ -3,12 +3,12 @@
  *
  * El calendario (.ics) no trae calificaciones, así que esto usa la API de Canvas con un "token de acceso" que el usuario
  * crea en Canvas (Cuenta → Configuración → "+ Nuevo token de acceso"). Se guarda solo en el .env (CANVAS_TOKEN).
- * Jarvis SOLO LEE: este archivo únicamente hace peticiones GET a tres direcciones fijas de la API (su perfil, sus
+ * Ares SOLO LEE: este archivo únicamente hace peticiones GET a tres direcciones fijas de la API (su perfil, sus
  * materias y sus entregas calificadas). Nunca entrega, cambia ni borra nada en Canvas.
  * Las calificaciones ya vistas se guardan en datos/canvas-calificaciones.json para avisar solo de las nuevas.
  *
  * Si el Tec no deja crear tokens (botón gris), se usa el plan B: Canvas manda sus avisos de calificación al Gmail
- * personal del usuario y Jarvis busca SOLO esos correos (de instructure.com con "calificad..." en el asunto).
+ * personal del usuario y Ares busca SOLO esos correos (de instructure.com con "calificad..." en el asunto).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";

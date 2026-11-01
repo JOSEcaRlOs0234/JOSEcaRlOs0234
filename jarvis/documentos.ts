@@ -5,7 +5,7 @@
  *    organismos internacionales, revistas científicas, enciclopedias) y anotar de qué fuente sale cada dato.
  * 2. Estructura: Gemini arma el contenido en un formato fijo (JSON) según el tipo de archivo, citando [1], [2]...
  * 3. Archivo: se arma con docx / exceljs / pptxgenjs, con una sección o diapositiva final de "Fuentes" con enlaces,
- *    y se guarda en Documentos\Jarvis\Creados.
+ *    y se guarda en Documentos\Ares\Creados.
  */
 
 import { mkdir } from "fs/promises";
@@ -181,7 +181,7 @@ async function armarWord(c: any, fuentes: Fuente[], tema: string): Promise<{ arc
     )
   );
   const doc = new Document({
-    creator: "J.A.R.V.I.S.",
+    creator: "A.R.E.S.",
     title: titulo,
     styles: { default: { document: { run: { font: "Calibri", size: 24 } } } },
     sections: [{ children: partes }],
@@ -200,7 +200,7 @@ function comoNumero(v: string): string | number {
 async function armarExcel(c: any, fuentes: Fuente[], tema: string): Promise<{ archivo: string; titulo: string }> {
   const titulo = t(c.titulo, 200) || tema;
   const libro = new ExcelJS.Workbook();
-  libro.creator = "J.A.R.V.I.S.";
+  libro.creator = "A.R.E.S.";
   const usados = new Set<string>();
   for (const h of arr(c.hojas).slice(0, 10)) {
     let nombre = (t(h?.nombre, 28).replace(/[\\/?*[\]:]/g, "") || "Datos").slice(0, 28);

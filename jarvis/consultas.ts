@@ -1,5 +1,5 @@
 /**
- * Cuando Jarvis no sabe algo:
+ * Cuando Ares no sabe algo:
  *  1. buscarEnInternet: Gemini con Búsqueda de Google (gratis, usa la misma clave de Gemini).
  *  2. consultarAClaude: le pregunta a Claude (de Anthropic). Es opcional, necesita su propia clave
  *     (ANTHROPIC_API_KEY en .env) y cada consulta cuesta unos centavos, por eso siempre pide permiso.
@@ -96,7 +96,7 @@ export async function consultarAClaude(pregunta: string, contexto: string): Prom
       fallbacks: "default",
       output_config: { effort: "medium" },
       system:
-        "Eres un experto al que consulta J.A.R.V.I.S., un asistente personal en español. " +
+        "Eres un experto al que consulta A.R.E.S., un asistente personal en español. " +
         "Responde en español, claro y directo, en un máximo de 6 frases, porque tu respuesta se leerá en voz alta. " +
         "Si necesitas información actual, busca en internet. Si no estás seguro, dilo.",
       tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }],

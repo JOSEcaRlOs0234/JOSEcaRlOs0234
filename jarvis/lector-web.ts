@@ -1,12 +1,12 @@
 /**
- * Leer páginas de internet: Jarvis descarga una página (o un PDF) y saca su texto para leerlo y contarle al usuario
+ * Leer páginas de internet: Ares descarga una página (o un PDF) y saca su texto para leerlo y contarle al usuario
  * lo que dice. Solo LEE: no llena formularios, no inicia sesión, no descarga programas.
  *
  * Seguridad:
  *  - Solo direcciones http/https públicas. Nunca la propia laptop (127.0.0.1, localhost) ni la red de la casa
- *    (módem, 192.168.x.x...), para que una página no pueda usar a Jarvis para mirar dentro de tu red.
+ *    (módem, 192.168.x.x...), para que una página no pueda usar a Ares para mirar dentro de tu red.
  *  - Cada redirección se vuelve a revisar. Máximo 4 MB y 20 segundos por página.
- *  - Lo que dice la página se trata como DATOS, nunca como órdenes para Jarvis.
+ *  - Lo que dice la página se trata como DATOS, nunca como órdenes para Ares.
  */
 
 import { lookup } from "dns/promises";

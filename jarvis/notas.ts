@@ -1,5 +1,5 @@
 /**
- * Notas de Jarvis: "anota que mañana tengo examen", "apunta la receta", "¿qué notas tengo?".
+ * Notas de Ares: "anota que mañana tengo examen", "apunta la receta", "¿qué notas tengo?".
  * A diferencia de la memoria (datos cortos sobre ti), las notas pueden ser largas y tienen título.
  * Se guardan en datos/notas.json, en la laptop.
  */

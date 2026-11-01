@@ -1,5 +1,5 @@
 /**
- * Memoria de Jarvis: cosas que el usuario le pidió recordar (su nombre, gustos, pendientes...).
+ * Memoria de Ares: cosas que el usuario le pidió recordar (su nombre, gustos, pendientes...).
  * Se guardan en datos/memoria.json, en la laptop, y se le recuerdan a Gemini en cada conversación.
  */
 
@@ -51,7 +51,7 @@ export function borrarRecuerdo(id: string): Recuerdo | undefined {
   return borrado;
 }
 
-/** Texto que se agrega a las instrucciones de Gemini con todo lo que Jarvis recuerda. */
+/** Texto que se agrega a las instrucciones de Gemini con todo lo que Ares recuerda. */
 export function recuerdosParaGemini(): string {
   const lista = leerRecuerdos();
   if (!lista.length) return "Todavía no tienes recuerdos guardados del usuario.";

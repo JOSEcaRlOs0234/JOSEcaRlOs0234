@@ -1,7 +1,7 @@
 /**
  * Pantalla de arranque: al abrir la ventana se ve una secuencia de "inicializando sistemas" con barra de carga y, al
- * final, cuánto tardó Jarvis en estar listo. La duración se elige en Ajustes (apagada, rápida, normal o cinemática).
- * Un clic la salta. No detiene nada: Jarvis ya funciona por detrás mientras se ve.
+ * final, cuánto tardó Ares en estar listo. La duración se elige en Ajustes (apagada, rápida, normal o cinemática).
+ * Un clic la salta. No detiene nada: Ares ya funciona por detrás mientras se ve.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -60,7 +60,7 @@ export function PantallaArranque({ duracion, alTerminar }: { duracion: number; a
     window.setTimeout(alTerminar, 200);
   };
 
-  // Tiempo de inicio real: desde que se abrió la ventana hasta que el servidor de Jarvis contesta
+  // Tiempo de inicio real: desde que se abrió la ventana hasta que el servidor de Ares contesta
   useEffect(() => {
     let vivo = true;
     fetch("/api/estado")
@@ -92,7 +92,7 @@ export function PantallaArranque({ duracion, alTerminar }: { duracion: number; a
   }, [duracion]);
 
   const color = "#00e5ff";
-  const nombre = "J.A.R.V.I.S.";
+  const nombre = "A.R.E.S.";
   const visibles = Math.floor(avance * SISTEMAS.length);
 
   return (

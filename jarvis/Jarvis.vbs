@@ -1,6 +1,6 @@
-' Abre J.A.R.V.I.S. como aplicacion, sin la ventana negra.
-' Si Jarvis ya esta encendido (y es la version actual), solo abre su ventana.
-' Con el argumento "fondo" (lo usa el arranque de Windows): enciende Jarvis escondido,
+' Abre A.R.E.S. como aplicacion, sin la ventana negra.
+' Si Ares ya esta encendido (y es la version actual), solo abre su ventana.
+' Con el argumento "fondo" (lo usa el arranque de Windows): enciende Ares escondido,
 ' sin abrir ventana, para que escuche los aplausos.
 ' Con "recordatorio" (lo usa el Programador de tareas): igual que "fondo", para avisar un recordatorio.
 Option Explicit
@@ -13,7 +13,7 @@ sh.CurrentDirectory = carpeta
 fondo = False
 If WScript.Arguments.Count > 0 Then fondo = (LCase(WScript.Arguments(0)) = "fondo" Or LCase(WScript.Arguments(0)) = "recordatorio")
 
-' Lo mas rapido primero: si Jarvis ya esta encendido y actualizado, abrir su ventana y listo (menos de 1 segundo).
+' Lo mas rapido primero: si Ares ya esta encendido y actualizado, abrir su ventana y listo (menos de 1 segundo).
 ' Las revisiones de abajo (instalacion, clave, piezas) solo hacen falta si hay que encenderlo.
 estado = Pedir("GET", "http://127.0.0.1:3000/api/estado")
 If estado <> "" And InStr(estado, """version"":""" & VersionInstalada() & """") > 0 Then
@@ -23,16 +23,16 @@ End If
 
 ' Falta instalar, falta la clave o una actualizacion trae piezas nuevas: usar el encendido con ventana visible
 If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Then
-  If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  If Not fondo Then sh.Run """" & carpeta & "\Encender Ares.bat""", 1, False
   WScript.Quit
 End If
 ' La clave vive en AppData\Local\Jarvis; configurar.mjs --comprobar dice si ya esta
 If sh.Run("node configurar.mjs --comprobar", 0, True) <> 0 Then
-  If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  If Not fondo Then sh.Run """" & carpeta & "\Encender Ares.bat""", 1, False
   WScript.Quit
 End If
 If sh.Run("node revisar-piezas.cjs", 0, True) <> 0 Then
-  If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
+  If Not fondo Then sh.Run """" & carpeta & "\Encender Ares.bat""", 1, False
   WScript.Quit
 End If
 
@@ -47,12 +47,12 @@ If Not fondo Then sh.Environment("PROCESS")("ABRIR_NAVEGADOR") = "1"
 ' El servidor corre escondido; sus mensajes quedan en registro\servidor.log
 sh.Run "cmd /c node_modules\.bin\tsx.cmd server.ts > registro\servidor.log 2>&1", 0, False
 
-' Abre la ventana de Jarvis (Edge en modo aplicacion)
+' Abre la ventana de Ares (Edge en modo aplicacion)
 Sub AbrirVentana()
   sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900 --autoplay-policy=no-user-gesture-required", 0, False
 End Sub
 
-' Hace una peticion a Jarvis; devuelve el texto de la respuesta o "" si no responde
+' Hace una peticion a Ares; devuelve el texto de la respuesta o "" si no responde
 Function Pedir(metodo, url)
   Dim http
   Pedir = ""

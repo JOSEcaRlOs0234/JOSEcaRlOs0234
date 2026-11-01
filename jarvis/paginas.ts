@@ -2,8 +2,8 @@
  * PÁGINAS WEB: "hazme una página de mi portafolio", "una página para mi negocio", "ponle color verde".
  *
  * Gemini escribe la página (un solo index.html con su diseño y sus botones) y se guarda en
- * Documentos\Jarvis\Páginas web\<nombre>. Al usuario se le muestra SOLO la página terminada, en grande, dentro de
- * Jarvis (en un marco aislado que no puede tocar a Jarvis), y se puede abrir en el navegador. El código no se muestra.
+ * Documentos\Ares\Páginas web\<nombre>. Al usuario se le muestra SOLO la página terminada, en grande, dentro de
+ * Ares (en un marco aislado que no puede tocar a Ares), y se puede abrir en el navegador. El código no se muestra.
  * (La parte de programar en Python, C++, etc. se quitó en la 2.30 a pedido del usuario.)
  */
 
@@ -49,7 +49,15 @@ function leerIndice(): any[] {
 export function leerPaginas(): Pagina[] {
   return leerIndice()
     .filter((p) => (p.lenguaje ?? "html") === "html")
+    .map((p) => ({ ...p, carpeta: carpetaActual(p.carpeta) }))
     .sort((a, b) => b.actualizado - a.actualizado);
+}
+
+/** En la 2.34 Documentos\Jarvis pasó a llamarse Documentos\Ares: las páginas guardadas antes se buscan ahí. */
+function carpetaActual(carpeta: string): string {
+  if (existsSync(carpeta)) return carpeta;
+  const movida = carpeta.replace(/([\\/])Jarvis([\\/])/, "$1Ares$2");
+  return existsSync(movida) ? movida : carpeta;
 }
 
 function guardarIndice(lista: any[]): void {
@@ -99,6 +107,7 @@ export async function guardarPagina(datos: { nombre: string; html: string; expli
   let p: Pagina;
   const existente = datos.sobre ? lista.find((x) => x.id === datos.sobre!.id) : null;
   if (existente) {
+    existente.carpeta = carpetaActual(existente.carpeta);
     p = existente;
     // La versión anterior se guarda por si el cambio no le gusta al usuario
     const anterior = await leerHtml(p);

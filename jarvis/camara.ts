@@ -1,6 +1,6 @@
 /**
- * Cámara: Jarvis "mira" pidiéndole una foto a su ventana (la ventana usa la cámara de la laptop con permiso del
- * navegador). La foto se analiza con Gemini y, solo si el usuario lo pide, se guarda en Documentos\Jarvis\Fotos.
+ * Cámara: Ares "mira" pidiéndole una foto a su ventana (la ventana usa la cámara de la laptop con permiso del
+ * navegador). La foto se analiza con Gemini y, solo si el usuario lo pide, se guarda en Documentos\Ares\Fotos.
  * Nunca graba video ni mira a escondidas: cada foto pasa por la lista permitida y su permiso.
  */
 
@@ -17,7 +17,7 @@ let siguiente = 1;
 /** Número de la foto que la ventana debe tomar ahora (0 = ninguna). Va en el latido GET /api/aplausos. */
 export const fotoPedida = () => pedido?.id ?? 0;
 
-/** Le pide una foto a la ventana de Jarvis y espera a que llegue. */
+/** Le pide una foto a la ventana de Ares y espera a que llegue. */
 export function pedirFoto(): Promise<Buffer> {
   pedido?.rechazar(new Error("Se pidió otra foto."));
   return new Promise((resolver, rechazar) => {
@@ -63,7 +63,7 @@ export function fallaFoto(id: number, motivo: string): void {
   p.rechazar(new Error(motivo.slice(0, 200) || "No pude usar la cámara."));
 }
 
-/** Guarda una foto en Documentos\Jarvis\Fotos y devuelve dónde quedó. */
+/** Guarda una foto en Documentos\Ares\Fotos y devuelve dónde quedó. */
 export async function guardarFoto(jpeg: Buffer): Promise<string> {
   const carpeta = path.join((await carpetasUsuario()).jarvis, "Fotos");
   await mkdir(carpeta, { recursive: true });
@@ -71,7 +71,7 @@ export async function guardarFoto(jpeg: Buffer): Promise<string> {
   const dos = (n: number) => String(n).padStart(2, "0");
   const nombre = `foto-${d.getFullYear()}${dos(d.getMonth() + 1)}${dos(d.getDate())}-${dos(d.getHours())}${dos(d.getMinutes())}${dos(d.getSeconds())}.jpg`;
   await writeFile(path.join(carpeta, nombre), jpeg);
-  return `Documentos\\Jarvis\\Fotos\\${nombre}`;
+  return `Documentos\\Ares\\Fotos\\${nombre}`;
 }
 
 /** Instrucciones para que Gemini describa la foto. */

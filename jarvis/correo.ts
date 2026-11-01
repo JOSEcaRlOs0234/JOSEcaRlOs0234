@@ -3,7 +3,7 @@
  *
  * Se conecta con una "contraseña de aplicación" de Google (16 letras que el usuario crea en su cuenta).
  * Se guarda solo en el .env de la laptop (GMAIL_USUARIO y GMAIL_CLAVE_APP) y se puede revocar en cualquier
- * momento desde la cuenta de Google. Jarvis NO puede borrar correos (no hay herramienta para eso).
+ * momento desde la cuenta de Google. Ares NO puede borrar correos (no hay herramienta para eso).
  */
 
 import { ImapFlow } from "imapflow";

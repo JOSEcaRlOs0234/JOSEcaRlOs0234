@@ -1,5 +1,5 @@
 /**
- * Pizarra de Jarvis: un tablero donde Jarvis escribe cuando se lo pides
+ * Pizarra de Ares: un tablero donde Ares escribe cuando se lo pides
  * (listas, explicaciones, pasos, resúmenes...). Se guarda en datos/pizarra.json.
  */
 
@@ -11,7 +11,7 @@ export interface Pizarra {
   titulo: string;
   contenido: string;
   actualizada: number;
-  // Dibujo de Jarvis (SVG ya limpio), si lo hay
+  // Dibujo de Ares (SVG ya limpio), si lo hay
   dibujo?: string;
 }
 
@@ -49,7 +49,7 @@ export function escribirPizarra(titulo: string | undefined, contenido: string, a
   return nueva;
 }
 
-/** Pone un dibujo de Jarvis en la pizarra (con un título y, si se quiere, un texto debajo). */
+/** Pone un dibujo de Ares en la pizarra (con un título y, si se quiere, un texto debajo). */
 export function dibujarEnPizarra(titulo: string, svg: string, texto = ""): Pizarra {
   const nueva: Pizarra = { titulo: titulo.slice(0, 120), contenido: texto.slice(0, MAX_PIZARRA), actualizada: Date.now(), dibujo: svg };
   if (!existsSync(CARPETA_DATOS)) mkdirSync(CARPETA_DATOS, { recursive: true });

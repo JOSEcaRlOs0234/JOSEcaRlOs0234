@@ -1,6 +1,6 @@
 /**
  * Recordatorios y alarmas: "recuérdame en 20 minutos sacar la comida", "avísame mañana a las 7".
- * Se guardan en datos/recordatorios.json (sobreviven si se apaga la laptop) y Jarvis los dice en voz alta
+ * Se guardan en datos/recordatorios.json (sobreviven si se apaga la laptop) y Ares los dice en voz alta
  * cuando llega la hora (o en cuanto se vuelve a encender, si la laptop estaba apagada).
  */
 
@@ -18,7 +18,7 @@ export interface Recordatorio {
 const ARCHIVO = path.join(CARPETA_DATOS, "recordatorios.json");
 const MAX_RECORDATORIOS = 100;
 
-// Se llama cada vez que cambia la lista (el servidor lo usa para programar el encendido automático de Jarvis)
+// Se llama cada vez que cambia la lista (el servidor lo usa para programar el encendido automático de Ares)
 let alCambiar: (() => void) | null = null;
 export function cuandoCambienRecordatorios(f: () => void): void {
   alCambiar = f;
