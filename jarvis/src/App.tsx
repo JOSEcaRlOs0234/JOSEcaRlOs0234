@@ -32,7 +32,7 @@ import {
   Settings,
   Palette,
   Lightbulb,
-  Code2,
+  Globe,
 } from "lucide-react";
 import {
   CONFIG,
@@ -55,7 +55,7 @@ import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { NotasPanel, Nota } from "./components/NotasPanel";
 import { RedMemoriaPanel } from "./components/RedMemoriaPanel";
-import { CodigoPanel } from "./components/CodigoPanel";
+import { PaginaPanel } from "./components/PaginaPanel";
 import {
   DURACIONES,
   guardarDuracionArranque,
@@ -479,7 +479,7 @@ export default function App() {
   const [notas, setNotas] = useState<Nota[]>([]);
   const [notasAbiertas, setNotasAbiertas] = useState(false);
   const [redAbierta, setRedAbierta] = useState(false);
-  // Panel "Código" (páginas web y programas que hizo Jarvis)
+  // Panel "Página web" (las páginas que hizo Jarvis, sin código)
   const [codigoAbierto, setCodigoAbierto] = useState(false);
   const [codigoCambio, setCodigoCambio] = useState(0);
   const codigoVistoRef = useRef<number | null>(null);
@@ -667,10 +667,10 @@ export default function App() {
     }
   };
 
-  /** Si Jarvis programó o corrió algo nuevo, abre el panel de código con lo más reciente. */
+  /** Si Jarvis hizo o cambió una página, la muestra sola. */
   const cargarCodigo = useCallback(async (abrirSiCambio: boolean) => {
     try {
-      const r = await fetch("/api/codigo");
+      const r = await fetch("/api/paginas");
       if (!r.ok) return;
       const datos: { actualizada: number } = await r.json();
       const antes = codigoVistoRef.current;
@@ -2892,7 +2892,7 @@ export default function App() {
             </div>
           )}
           {codigoAbierto && !pizarraAbierta && !notasAbiertas && (
-            <CodigoPanel
+            <PaginaPanel
               refrescar={codigoCambio}
               onCerrar={() => setCodigoAbierto(false)}
               avisar={(t, tipo) => showNotification(t, tipo ?? "info")}
@@ -2946,9 +2946,9 @@ export default function App() {
                   setCodigoAbierto(true);
                 }}
                 className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#ffb347]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#ffb347]/15 cursor-pointer flex items-center gap-1"
-                title="Ver las páginas web y programas que hizo Jarvis"
+                title="Ver las páginas web que hizo Jarvis"
               >
-                <Code2 className="w-3.5 h-3.5" /> Proyectos
+                <Globe className="w-3.5 h-3.5" /> Páginas
               </button>
               <button
                 type="button"

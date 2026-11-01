@@ -6,23 +6,25 @@
 
 import React, { useEffect, useRef, useState } from "react";
 
-export type DuracionArranque = "apagada" | "rapida" | "normal" | "cinematica";
+export type DuracionArranque = "apagada" | "instantanea" | "rapida" | "normal" | "cinematica";
 
 export const DURACIONES: Record<DuracionArranque, { nombre: string; ms: number }> = {
   apagada: { nombre: "Apagada", ms: 0 },
+  instantanea: { nombre: "Instantánea (1 s)", ms: 650 },
   rapida: { nombre: "Rápida (2 s)", ms: 2000 },
   normal: { nombre: "Normal (4 s)", ms: 4000 },
   cinematica: { nombre: "Cinemática (8 s)", ms: 8000 },
 };
 
-const CLAVE = "jarvis_arranque";
+// Clave nueva en la 2.30: así todos empiezan con la pantalla de 1 segundo (antes la normal era de 4 s)
+const CLAVE = "jarvis_arranque2";
 
 export function leerDuracionArranque(): DuracionArranque {
   try {
     const v = localStorage.getItem(CLAVE) as DuracionArranque | null;
-    return v && v in DURACIONES ? v : "normal";
+    return v && v in DURACIONES ? v : "instantanea";
   } catch {
-    return "normal";
+    return "instantanea";
   }
 }
 
@@ -55,7 +57,7 @@ export function PantallaArranque({ duracion, alTerminar }: { duracion: number; a
     if (terminadoRef.current) return;
     terminadoRef.current = true;
     setSaliendo(true);
-    window.setTimeout(alTerminar, 450);
+    window.setTimeout(alTerminar, 200);
   };
 
   // Tiempo de inicio real: desde que se abrió la ventana hasta que el servidor de Jarvis contesta
@@ -81,7 +83,8 @@ export function PantallaArranque({ duracion, alTerminar }: { duracion: number; a
       const p = Math.min(1, (performance.now() - inicio) / duracion);
       setAvance(p);
       if (p < 1) cuadro = requestAnimationFrame(paso);
-      else window.setTimeout(terminar, 900);
+      // Al final se queda un momento mostrando el tiempo de inicio (muy poco en la instantánea)
+      else window.setTimeout(terminar, duracion <= 1000 ? 150 : 900);
     };
     cuadro = requestAnimationFrame(paso);
     return () => cancelAnimationFrame(cuadro);
@@ -96,7 +99,7 @@ export function PantallaArranque({ duracion, alTerminar }: { duracion: number; a
     <div
       onClick={terminar}
       title="Clic para saltar"
-      className="fixed inset-0 z-[60] flex items-center justify-center cursor-pointer select-none transition-opacity duration-500"
+      className="fixed inset-0 z-[60] flex items-center justify-center cursor-pointer select-none transition-opacity duration-200"
       style={{
         opacity: saliendo ? 0 : 1,
         background: "radial-gradient(circle at 50% 45%, rgba(0,70,140,0.55), #02060d 70%), #02060d",

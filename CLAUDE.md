@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.29.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.30.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -57,8 +57,8 @@
 - Lanzadores (Windows):
   - `Encender Jarvis.bat`: visible. Revisa Node.js → `npm install` la primera vez → si no hay clave corre `configurar.mjs`
     → si no existe `datos\acceso-directo.txt` llama `Crear acceso directo.bat` → arranca `server.ts` (abre la ventana).
-  - `Jarvis.vbs`: lo usa el icono. Sin ventana negra. Si falta instalación/clave abre el .bat; si el servidor ya responde
-    en 127.0.0.1:3000 solo abre la ventana; si no, arranca el servidor oculto (salida en `registro\servidor.log`).
+  - `Jarvis.vbs`: lo usa el icono. Sin ventana negra. Si el servidor ya responde en 127.0.0.1:3000 (versión actual)
+    solo abre la ventana (lo primero que revisa, v2.30); si falta instalación/clave abre el .bat; si no, arranca el servidor oculto (salida en `registro\servidor.log`).
   - `Crear acceso directo.bat` + `crear-acceso-directo.ps1`: icono `jarvis.ico` en Escritorio y menú Inicio → wscript Jarvis.vbs.
   - La ventana es Edge en modo app (`msedge --app=http://localhost:3000`); `abrirVentana` en server.ts.
   - .bat/.vbs/.ps1 deben tener fin de línea CRLF (`.gitattributes`).
@@ -568,6 +568,24 @@
   la página (sin pestaña Código ni Copiar, título "Página web") y se abre en grande solo; el resultado de
   crear_pagina_web ya NO le pasa el código a Gemini (solo `que_tiene`) y PERSONALIDAD prohíbe mostrarlo/mencionarlo.
   Botón sobre el reactor renombrado "Proyectos". Los programas (Python, C++...) siguen igual con su código y resultado.
+- v2.30 (pedido: "quitando la parte del código, mantén todo como estaba y mejóralo; que al abrir se abra en 1 segundo";
+  eligió quitar SOLO programar, dejar páginas web): SE QUITÓ PROGRAMAR (codigo.ts, CodigoPanel.tsx, herramientas
+  programar/ejecutar_codigo, correrEnNube, /api/codigo*, win.pathActual; notas v2.29 quedan como historia, commit
+  "Jarvis 2.29.1"). Páginas web ahora en `paginas.ts` (`guardarPagina`, `pedidoDePagina` + `ESQUEMA_PAGINA`
+  {nombre, html, explicacion}, `limpiarHtml`; índice sigue en datos/codigo.json y `leerPaginas` filtra lenguaje html;
+  nuevas en Documentos\Jarvis\Páginas web) + `components/PaginaPanel.tsx` (solo la página en iframe sandbox, en
+  grande, Abrir en el navegador / Carpeta, selector si hay varias). Herramienta `crear_pagina_web` (tipo recordable
+  "programar" se conservó para no perder el permiso recordado) → `ia.hacerPagina` (Pro + respaldos). Rutas
+  `GET /api/paginas`, `GET /api/paginas/:id`, `POST /api/paginas/:id/abrir {que navegador|carpeta}`. Botón "Páginas".
+  VELOCIDAD: (1) Jarvis.vbs pregunta PRIMERO a /api/estado: si ya está encendido y es la versión actual, abre la
+  ventana y sale (antes corría 2 procesos node —configurar --comprobar y revisar-piezas— en cada clic). (2) Pantalla
+  ya compilada: server.ts sirve `dist/` (express.static, /assets immutable, index.html no-cache, fallback SPA salvo
+  /api y /canva) si `dist/version-jarvis.txt` == versión; si no, Vite como antes y a los 20 s hace `vite build` en
+  segundo plano. El zip YA lleva dist (se compila antes de empaquetar: `npx vite build` + escribir la marca;
+  `zip -qr $Z jarvis/dist`) → rápido desde el primer arranque. `JARVIS_SIN_DIST=1` fuerza Vite. (3) Letras locales
+  (@fontsource/chakra-petch y jetbrains-mono en main.tsx) en vez de Google Fonts por internet. (4) Pantalla de inicio
+  "Instantánea (1 s)" por defecto (650 ms + 150 + 200 de salida; clave localStorage nueva `jarvis_arranque2`).
+  Medido en la nube: pantalla usable en ~0.4 s con dist vs ~1.2 s con Vite (en la laptop Vite tarda más).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

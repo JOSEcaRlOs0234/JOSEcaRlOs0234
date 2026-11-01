@@ -13,6 +13,14 @@ sh.CurrentDirectory = carpeta
 fondo = False
 If WScript.Arguments.Count > 0 Then fondo = (LCase(WScript.Arguments(0)) = "fondo" Or LCase(WScript.Arguments(0)) = "recordatorio")
 
+' Lo mas rapido primero: si Jarvis ya esta encendido y actualizado, abrir su ventana y listo (menos de 1 segundo).
+' Las revisiones de abajo (instalacion, clave, piezas) solo hacen falta si hay que encenderlo.
+estado = Pedir("GET", "http://127.0.0.1:3000/api/estado")
+If estado <> "" And InStr(estado, """version"":""" & VersionInstalada() & """") > 0 Then
+  If Not fondo Then AbrirVentana
+  WScript.Quit
+End If
+
 ' Falta instalar, falta la clave o una actualizacion trae piezas nuevas: usar el encendido con ventana visible
 If Not fso.FileExists(carpeta & "\node_modules\.bin\tsx.cmd") Then
   If Not fondo Then sh.Run """" & carpeta & "\Encender Jarvis.bat""", 1, False
@@ -28,22 +36,21 @@ If sh.Run("node revisar-piezas.cjs", 0, True) <> 0 Then
   WScript.Quit
 End If
 
-estado = Pedir("GET", "http://127.0.0.1:3000/api/estado")
-
-If estado <> "" And InStr(estado, """version"":""" & VersionInstalada() & """") > 0 Then
-  ' Ya esta encendido y actualizado: solo abrir la ventana (en modo fondo no hace falta nada)
-  If Not fondo Then sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900 --autoplay-policy=no-user-gesture-required", 0, False
-Else
-  If estado <> "" Then
-    ' Esta encendida una version vieja: apagarla primero
-    Pedir "POST", "http://127.0.0.1:3000/api/apagar"
-    WScript.Sleep 2000
-  End If
-  If Not fso.FolderExists(carpeta & "\registro") Then fso.CreateFolder(carpeta & "\registro")
-  If Not fondo Then sh.Environment("PROCESS")("ABRIR_NAVEGADOR") = "1"
-  ' El servidor corre escondido; sus mensajes quedan en registro\servidor.log
-  sh.Run "cmd /c node_modules\.bin\tsx.cmd server.ts > registro\servidor.log 2>&1", 0, False
+' Hay que encenderlo
+If estado <> "" Then
+  ' Esta encendida una version vieja: apagarla primero
+  Pedir "POST", "http://127.0.0.1:3000/api/apagar"
+  WScript.Sleep 2000
 End If
+If Not fso.FolderExists(carpeta & "\registro") Then fso.CreateFolder(carpeta & "\registro")
+If Not fondo Then sh.Environment("PROCESS")("ABRIR_NAVEGADOR") = "1"
+' El servidor corre escondido; sus mensajes quedan en registro\servidor.log
+sh.Run "cmd /c node_modules\.bin\tsx.cmd server.ts > registro\servidor.log 2>&1", 0, False
+
+' Abre la ventana de Jarvis (Edge en modo aplicacion)
+Sub AbrirVentana()
+  sh.Run "cmd /c start """" msedge --app=http://localhost:3000 --window-size=1400,900 --autoplay-policy=no-user-gesture-required", 0, False
+End Sub
 
 ' Hace una peticion a Jarvis; devuelve el texto de la respuesta o "" si no responde
 Function Pedir(metodo, url)

@@ -81,23 +81,7 @@ import {
   pedidoDeEstructura,
   type Fuente,
 } from "./documentos.ts";
-import {
-  codigoActualizado,
-  correrEnLaptop,
-  ESQUEMA_CODIGO,
-  FaltaPrograma,
-  guardarImagen,
-  guardarResultado,
-  leerCodigo,
-  leerProyectos,
-  limpiarCodigo,
-  LENGUAJES,
-  pedidoDeCodigo,
-  sePuedeCorrer,
-  tieneVentana,
-  type Proyecto,
-  type Resultado,
-} from "./codigo.ts";
+import { ESQUEMA_PAGINA, leerHtml, leerPaginas, limpiarHtml, paginasActualizadas, pedidoDePagina } from "./paginas.ts";
 import { busquedasDeDatos, INSTRUCCION_BUSQUEDA_DATOS, pedidoDeEstadisticas } from "./estadisticas.ts";
 import { leerPagina, pedidoDeLectura, pedidoDeLecturaVarias, separarResumen, type PaginaLeida } from "./lector-web.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
@@ -222,15 +206,11 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   usa revisar_conexiones y explica en palabras sencillas qué falla y cómo arreglarlo. No digas "no tengo internet" sin
   revisarlo: casi siempre es el límite GRATUITO de búsquedas de Google (se arregla esperando). La consulta directa a
   Claude es opcional y de pago; "mandar a Claude" (copiar y pegar) funciona sin clave.
-- PROGRAMAR: si piden una página web ("hazme una página de...", "un sitio para mi negocio", "un portafolio") usa
-  crear_pagina_web; si piden un programa o código en cualquier lenguaje (Python, C++, Java, C#, JavaScript...) usa
-  programar con el lenguaje que digan (si no dicen, Python). Si quieren VER qué hace o el resultado, pon
-  mostrar_resultado=true: Python se corre al momento en la nube; para otros lenguajes llama después a ejecutar_codigo
-  (pide permiso y lo corre en la laptop). Para cambiar lo último que hiciste ("ponle color azul", "agrégale un botón",
-  "pásalo a C++", "corrige el error") usa cambiar="ultimo". En las PÁGINAS WEB nunca muestres ni menciones el código: el
-  usuario solo quiere ver la página (se le muestra sola en grande); di en 1 o 2 frases qué tiene. El código se ve completo en el panel Código de la pantalla:
-  NO lo pegues en el chat ni lo leas en voz; di en 2 o 3 frases qué hace y, si se corrió, qué salió. Si falta el
-  compilador en la laptop, di cómo instalarlo (la herramienta lo dice) y, si es Python, que igual se corrió en la nube.
+- PÁGINAS WEB: si piden una página web ("hazme una página de...", "un sitio para mi negocio", "un portafolio", "una
+  invitación") usa crear_pagina_web con TODOS los detalles. Para cambiar la última ("ponle color azul", "agrégale un
+  botón") usa cambiar="ultimo". La página se le muestra sola, terminada y en grande: NUNCA muestres, pegues ni menciones
+  el código; di en 1 o 2 frases qué tiene. Si pide abrirla en el navegador, abrir_en_navegador=true. Ya NO programas en
+  Python, C++ ni otros lenguajes (el usuario pidió quitarlo): si lo piden, dilo con amabilidad.
 - ESTADÍSTICAS: SÍ tienes internet. Si piden cifras, porcentajes, cantidades o datos por sector/región/año ("¿qué
   porcentaje...?", "estadísticas de...", "¿cuánto se usa X por sector en México?"), usa buscar_estadisticas. Di en voz
   las cifras principales; el informe con cada dato, su año y su fuente queda en la pizarra. Nunca inventes números: si
@@ -443,52 +423,6 @@ async function conPaciencia<T>(pedir: () => Promise<T>): Promise<T> {
     await new Promise((listo) => setTimeout(listo, 25_000));
     return await pedir();
   }
-}
-
-/**
- * Corre un programa de Python en la NUBE de Google (herramienta de ejecución de código de Gemini): no toca la laptop.
- * Si el programa lee del teclado, se le da `entrada` ya escrita. Las gráficas (matplotlib) se guardan como imágenes.
- */
-async function correrEnNube(p: Proyecto, codigo: string, entrada: string): Promise<Resultado> {
-  const inicio = Date.now();
-  const prefacio = entrada.trim() ? `import sys, io\nsys.stdin = io.StringIO(${JSON.stringify(entrada.endsWith("\n") ? entrada : entrada + "\n")})\n` : "";
-  const r: any = await conPaciencia(() =>
-    conRespaldo((modelo) =>
-      ai.models.generateContent({
-        model: modelo,
-        contents:
-          "Ejecuta EXACTAMENTE este programa de Python con la herramienta de ejecución de código, UNA sola vez, sin " +
-          "cambiarlo, corregirlo ni completarlo (si falla, el error también es el resultado). Después responde solo: listo.\n\n" +
-          "```python\n" + prefacio + codigo + "\n```",
-        config: { tools: [{ codeExecution: {} }] },
-      })
-    )
-  );
-  const partes: any[] = r?.candidates?.[0]?.content?.parts ?? [];
-  const salidas: string[] = [];
-  let ok = true;
-  let corrio = false;
-  const imagenes: string[] = [];
-  for (const parte of partes) {
-    if (parte?.codeExecutionResult) {
-      corrio = true;
-      if (parte.codeExecutionResult.output) salidas.push(String(parte.codeExecutionResult.output));
-      ok = parte.codeExecutionResult.outcome === "OUTCOME_OK";
-    } else if (parte?.inlineData?.data && /^image\/(png|jpeg)$/.test(parte.inlineData.mimeType ?? "") && imagenes.length < 6) {
-      imagenes.push(await guardarImagen(p, imagenes.length + 1, Buffer.from(parte.inlineData.data, "base64"), parte.inlineData.mimeType));
-    }
-  }
-  if (!corrio) throw new Error("La nube no ejecutó el programa.");
-  registrar("CODIGO", `Corrido en la nube: ${p.nombre} (${ok ? "bien" : "con error"})`);
-  return {
-    donde: "nube",
-    ok,
-    salida: salidas.join("\n").trim().slice(0, 30_000) || (imagenes.length ? "(Hizo gráficas)" : "(El programa no mostró nada)"),
-    comando: "python (nube de Google)",
-    segundos: Math.round((Date.now() - inicio) / 100) / 10,
-    imagenes,
-    fecha: Date.now(),
-  };
 }
 
 // Para dibujar se prefiere el modelo más listo (Pro); si llegó a su límite gratuito, se deja descansar 30 min
@@ -712,18 +646,18 @@ conectarIA({
     void abrirRuta(hecho.archivo).catch(() => {});
     return { ...hecho, fuentes: fuentes.length, confiables: fuentes.filter(esConfiable).length, sinBusqueda };
   },
-  // Programar: Gemini escribe el código (prefiere el modelo Pro; si llegó a su límite, los de respaldo)
-  escribirCodigo: async (lenguaje, descripcion, anterior) => {
+  // Páginas web: Gemini hace la página (prefiere el modelo Pro; si llegó a su límite, los de respaldo)
+  hacerPagina: async (descripcion, anterior) => {
     const r = await conPaciencia(() =>
       conRespaldo(
         (modelo) =>
           ai.models.generateContent({
             model: modelo,
-            contents: pedidoDeCodigo(lenguaje, descripcion, anterior),
+            contents: pedidoDePagina(descripcion, anterior),
             config: {
-              systemInstruction: "Eres un programador experto y buen maestro. Escribes código correcto, limpio y comentado en español.",
+              systemInstruction: "Eres un diseñador y programador web experto. Haces páginas bonitas, modernas y que funcionan.",
               responseMimeType: "application/json",
-              responseJsonSchema: ESQUEMA_CODIGO,
+              responseJsonSchema: ESQUEMA_PAGINA,
             },
           }),
         MODELO_DIBUJO,
@@ -731,17 +665,11 @@ conectarIA({
       )
     );
     const datos = JSON.parse(r.text ?? "{}");
-    const codigo = typeof datos.codigo === "string" ? limpiarCodigo(datos.codigo) : "";
-    if (!codigo.trim()) throw new Error("Gemini no devolvió código.");
-    registrar("CODIGO", `${lenguaje.nombre}: ${String(datos.nombre ?? "").slice(0, 80)} (${codigo.length} caracteres)`);
-    return {
-      nombre: String(datos.nombre ?? "").slice(0, 60),
-      codigo,
-      explicacion: String(datos.explicacion ?? "").slice(0, 1500),
-      entrada_ejemplo: typeof datos.entrada_ejemplo === "string" ? datos.entrada_ejemplo.slice(0, 2000) : "",
-    };
+    const html = typeof datos.html === "string" ? limpiarHtml(datos.html) : "";
+    if (!html.trim()) throw new Error("Gemini no devolvió la página.");
+    registrar("PAGINA", `${String(datos.nombre ?? "").slice(0, 80)} (${html.length} caracteres)`);
+    return { nombre: String(datos.nombre ?? "").slice(0, 60), html, explicacion: String(datos.explicacion ?? "").slice(0, 800) };
   },
-  correrEnNube,
   // Leer una página de internet (o un PDF) y contar lo que dice
   leerPaginaWeb: async (url, pregunta) => {
     const pagina = await leerPagina(url);
@@ -1047,69 +975,27 @@ app.delete("/api/pizarra", (_req, res) => {
   res.json(borrarPizarra());
 });
 
-// Código y páginas web (panel "Código")
-const proyectoDe = (id: string) => leerProyectos().find((p) => p.id === id) ?? null;
-
-app.get("/api/codigo", (_req, res) => {
-  const proyectos = leerProyectos()
-    .sort((a, b) => b.actualizado - a.actualizado)
-    .map((p) => ({ id: p.id, nombre: p.nombre, lenguaje: p.lenguaje, actualizado: p.actualizado }));
-  res.json({ proyectos, actualizada: codigoActualizado() });
+// Páginas web (panel "Página web"): solo se manda la página para verla, nunca se corre nada en la laptop
+app.get("/api/paginas", (_req, res) => {
+  const paginas = leerPaginas().map((p) => ({ id: p.id, nombre: p.nombre, explicacion: p.explicacion, actualizado: p.actualizado }));
+  res.json({ paginas, actualizada: paginasActualizadas() });
 });
 
-app.get("/api/codigo/:id", async (req, res) => {
-  const p = proyectoDe(req.params.id);
-  if (!p) return res.status(404).json({ error: "No encontré ese proyecto." });
-  const l = LENGUAJES.find((x) => x.id === p.lenguaje);
-  res.json({
-    proyecto: p,
-    nombreLenguaje: l?.nombre ?? p.lenguaje,
-    web: !!l?.web,
-    sePuedeCorrer: sePuedeCorrer(p.lenguaje),
-    codigo: await leerCodigo(p),
-  });
+app.get("/api/paginas/:id", async (req, res) => {
+  const p = leerPaginas().find((x) => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: "No encontré esa página." });
+  res.json({ pagina: p, html: await leerHtml(p) });
 });
 
-app.get("/api/codigo/:id/imagen/:nombre", (req, res) => {
-  const p = proyectoDe(req.params.id);
-  // Solo las gráficas que salieron al correr el programa (nada de rutas libres)
-  if (!p || !p.resultado?.imagenes?.includes(req.params.nombre)) return res.status(404).end();
-  res.sendFile(path.join(p.carpeta, req.params.nombre));
-});
-
-// Botón "Correr en mi laptop": el clic del usuario (con confirmación en pantalla) es su permiso
-app.post("/api/codigo/:id/ejecutar", async (req, res) => {
-  const p = proyectoDe(req.params.id);
-  if (!p) return res.status(404).json({ error: "No encontré ese proyecto." });
-  if (!sePuedeCorrer(p.lenguaje)) return res.status(400).json({ error: "Este lenguaje no se puede correr desde Jarvis." });
-  const entrada = typeof req.body?.entrada === "string" ? req.body.entrada.slice(0, 5000) : p.entradaEjemplo;
-  registrar("ACCION", `Correr programa (botón): ${p.nombre}`);
-  try {
-    let r: Resultado;
-    try {
-      r = await correrEnLaptop(p, entrada);
-    } catch (err) {
-      const codigo = await leerCodigo(p);
-      if (!(err instanceof FaltaPrograma && p.lenguaje === "python" && !tieneVentana(codigo, "python"))) throw err;
-      r = await correrEnNube(p, codigo, entrada);
-    }
-    res.json({ proyecto: guardarResultado(p.id, r) });
-  } catch (err) {
-    res.status(400).json({ error: err instanceof Error ? err.message : "No pude correr el programa." });
-  }
-});
-
-app.post("/api/codigo/:id/abrir", async (req, res) => {
-  const p = proyectoDe(req.params.id);
-  if (!p) return res.status(404).json({ error: "No encontré ese proyecto." });
-  const web = LENGUAJES.find((x) => x.id === p.lenguaje)?.web;
-  // Solo se abre la carpeta, o la página si es web (nunca un programa: se abriría o correría solo)
-  const destino = req.body?.que === "navegador" && web ? path.join(p.carpeta, p.archivo) : p.carpeta;
+app.post("/api/paginas/:id/abrir", async (req, res) => {
+  const p = leerPaginas().find((x) => x.id === req.params.id);
+  if (!p) return res.status(404).json({ error: "No encontré esa página." });
+  const destino = req.body?.que === "carpeta" ? p.carpeta : path.join(p.carpeta, p.archivo);
   try {
     await abrirRuta(destino);
     res.json({ ok: true });
   } catch {
-    res.status(400).json({ error: "No pude abrirlo." });
+    res.status(400).json({ error: "No pude abrirla." });
   }
 });
 
@@ -1747,15 +1633,53 @@ app.get("/api/registro", async (_req, res) => {
   res.json({ lineas: await leerRegistro(60) });
 });
 
-// La interfaz (pantalla) se sirve con Vite
-const { createServer: createViteServer } = await import("vite");
-const vite = await createViteServer({
-  root: __dirname,
-  server: { middlewareMode: true, hmr: false },
-  appType: "spa",
-  logLevel: "warn",
-});
-app.use(vite.middlewares);
+// La interfaz (pantalla). Para que abra en ~1 segundo se usa una versión YA PREPARADA (carpeta dist, "compilada"):
+// se sirve tal cual, sin armarla en cada arranque. La primera vez después de una actualización todavía no existe:
+// se usa Vite como antes y, mientras, se prepara en segundo plano para la próxima vez.
+const CARPETA_PANTALLA = path.join(__dirname, "dist");
+const MARCA_PANTALLA = path.join(CARPETA_PANTALLA, "version-jarvis.txt");
+const pantallaLista = () => {
+  try {
+    return readFileSync(MARCA_PANTALLA, "utf8").trim() === VERSION && existsSync(path.join(CARPETA_PANTALLA, "index.html"));
+  } catch {
+    return false;
+  }
+};
+
+if (pantallaLista() && process.env.JARVIS_SIN_DIST !== "1") {
+  // Los archivos de /assets llevan una huella en el nombre: el navegador los guarda y no los vuelve a pedir
+  app.use("/assets", express.static(path.join(CARPETA_PANTALLA, "assets"), { immutable: true, maxAge: "365d" }));
+  app.use(express.static(CARPETA_PANTALLA, { index: false }));
+  const indice = readFileSync(path.join(CARPETA_PANTALLA, "index.html"), "utf8");
+  app.get(/^\/(?!api\/|canva\/).*/, (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.type("html").send(indice);
+  });
+} else {
+  const { createServer: createViteServer } = await import("vite");
+  const vite = await createViteServer({
+    root: __dirname,
+    server: { middlewareMode: true, hmr: false },
+    appType: "spa",
+    logLevel: "warn",
+  });
+  app.use(vite.middlewares);
+  // Preparar la pantalla para el próximo arranque (después de 20 s, para no estorbar ahora)
+  if (process.env.JARVIS_SIN_DIST !== "1") {
+    setTimeout(() => {
+      void (async () => {
+        try {
+          const { build } = await import("vite");
+          await build({ root: __dirname, logLevel: "silent", build: { outDir: CARPETA_PANTALLA, emptyOutDir: true } });
+          writeFileSync(MARCA_PANTALLA, VERSION, "utf8");
+          registrar("SISTEMA", "Pantalla preparada: la próxima vez Jarvis abrirá más rápido.");
+        } catch (err) {
+          registrar("AVISO", `No pude preparar la pantalla rápida: ${err instanceof Error ? err.message.slice(0, 200) : err}`);
+        }
+      })();
+    }, 20_000).unref();
+  }
+}
 
 /** Abre Jarvis en su propia ventana (modo aplicación de Microsoft Edge); si falla, en el navegador normal. */
 function abrirVentana(url: string) {
