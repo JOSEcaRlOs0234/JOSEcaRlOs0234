@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.32.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.32.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -604,6 +604,14 @@
   Modo clase, Notas, Pizarra) sin borde y del mismo color; chat: voz = solo icono, mensajes como burbujas redondeadas sin
   borde, caja de texto y Enviar redondeados. ReactorCore: se quitó la etiqueta "ESTADO ACTIVO" + subtítulo (el estado
   ya se ve dentro del portal); botones redondos y suaves. Todas las funciones siguen igual.
+- v2.32.1 MICRÓFONO QUE NO SE CORTA (usuario: "cuando hablo se apaga a veces, que se mantenga prendido"): `escuchar`
+  (App.tsx) usaba continuous=false → el navegador terminaba en la primera pausa. Ahora continuous=true; la frase termina
+  con NUESTRO reloj: 1.8 s de silencio después de hablar (`PAUSA_FIN_MS`) o 9 s sin decir nada (`ESPERA_INICIAL_MS`).
+  Si el navegador apaga el reconocimiento solo (onend sin pedirlo; Edge con pausas o red), se crea otro "tramo" y se
+  junta lo dicho (`dicho` + tramoFinal + tramoParcial), máx. 8 reinicios. Errores graves (not-allowed, audio-capture)
+  no reinician. `reconocimientoRef` guarda un objeto `control` con abort() (cancelar = no entrega texto). Probado en
+  Playwright con SpeechRecognition falso: corte a media frase → manda "pon música de los Beatles por favor" completo;
+  silencio 9 s → termina; botón cancelar → apaga. El reconocedor del modo clase no se tocó.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

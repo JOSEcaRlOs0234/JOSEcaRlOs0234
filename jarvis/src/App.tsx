@@ -1260,7 +1260,12 @@ export default function App() {
     setTextoParcial("");
   }, []);
 
-  /** Escucha una frase. `alTexto` recibe lo que dijo; `alNada` se llama si no dijo nada. */
+  /**
+   * Escucha una frase. `alTexto` recibe lo que dijo; `alNada` se llama si no dijo nada.
+   * El micrófono se queda PRENDIDO mientras el usuario habla, aunque haga pausas: la frase termina solo cuando se queda
+   * callado ~1.8 s (antes el navegador la cortaba en la primera pausa). Si el navegador apaga el micrófono por su cuenta
+   * (le pasa a Edge con pausas o con fallas de internet), se vuelve a prender sin perder lo que ya se dijo.
+   */
   const escuchar = useCallback((alTexto: (t: string) => void, alNada?: () => void) => {
     if (reconocimientoRef.current) return;
     callarIntro();
@@ -1271,48 +1276,124 @@ export default function App() {
     }
     if ("speechSynthesis" in window) window.speechSynthesis.cancel();
 
-    const rec = new Reconocimiento();
-    rec.lang = "es-MX";
-    rec.interimResults = true;
-    rec.continuous = false;
-    rec.maxAlternatives = 1;
+    const PAUSA_FIN_MS = 1800; // silencio después de hablar para dar la frase por terminada
+    const ESPERA_INICIAL_MS = 9000; // tiempo para empezar a hablar
+    const MAX_REINICIOS = 8;
 
-    let textoFinal = "";
-    rec.onresult = (event: any) => {
-      let parcial = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const t = event.results[i][0].transcript;
-        if (event.results[i].isFinal) textoFinal += t;
-        else parcial += t;
-      }
-      setTextoParcial(parcial || textoFinal);
+    let dicho = ""; // lo ya entendido en tramos anteriores (si el navegador cortó y se volvió a prender)
+    let tramoFinal = "";
+    let tramoParcial = "";
+    let terminado = false;
+    let pararPedido = false;
+    let errorGrave = false;
+    let reinicios = 0;
+    let avisoRed = false;
+    let rec: any = null;
+    let reloj: number | undefined;
+
+    const unir = (...partes: string[]) => partes.map((t) => t.trim()).filter(Boolean).join(" ");
+    const programarFin = (ms: number) => {
+      window.clearTimeout(reloj);
+      reloj = window.setTimeout(() => {
+        pararPedido = true;
+        try {
+          rec?.stop();
+        } catch {
+          terminar(true);
+        }
+      }, ms);
     };
-    rec.onerror = (event: any) => {
-      if (event.error === "not-allowed" || event.error === "service-not-allowed") {
-        showNotification("No tengo permiso para usar el micrófono. Dale \"Permitir\" en el navegador.", "error");
-      } else if (event.error === "no-speech") {
-        // En conversación, quedarse callado es la forma normal de terminar
-        if (!conversacionRef.current) showNotification("No escuché nada. Pulsa el botón e inténtalo otra vez.", "warning");
-      } else if (event.error === "network") {
-        showNotification("El reconocimiento de voz necesita internet.", "error");
-      } else if (event.error !== "aborted") {
-        showNotification(`Problema con el micrófono (${event.error}).`, "warning");
-      }
-    };
-    rec.onend = () => {
-      reconocimientoRef.current = null;
+
+    // `entregar` = false cuando lo cancelan desde fuera (botón, permiso por botones...)
+    const terminar = (entregar: boolean) => {
+      if (terminado) return;
+      terminado = true;
+      window.clearTimeout(reloj);
+      if (reconocimientoRef.current === control) reconocimientoRef.current = null;
       setDictando(false);
       setTextoParcial("");
       setEstado((prev) => (prev === "escuchando" ? "reposo" : prev));
-      if (textoFinal.trim()) alTexto(textoFinal.trim());
+      if (!entregar) return;
+      const texto = unir(dicho, tramoFinal, tramoParcial);
+      if (texto) alTexto(texto);
       else alNada?.();
     };
 
-    reconocimientoRef.current = rec;
+    const control = {
+      abort: () => {
+        pararPedido = true;
+        terminar(false);
+        try {
+          rec?.abort();
+        } catch {
+          // Ya estaba detenido
+        }
+      },
+    };
+
+    const empezarTramo = () => {
+      rec = new Reconocimiento();
+      rec.lang = "es-MX";
+      rec.interimResults = true;
+      rec.continuous = true;
+      rec.maxAlternatives = 1;
+      tramoFinal = "";
+      tramoParcial = "";
+
+      rec.onresult = (event: any) => {
+        let finales = "";
+        let parcial = "";
+        for (let i = 0; i < event.results.length; i++) {
+          const t = event.results[i][0].transcript;
+          if (event.results[i].isFinal) finales += t;
+          else parcial += t;
+        }
+        tramoFinal = finales;
+        tramoParcial = parcial;
+        setTextoParcial(unir(dicho, tramoFinal, tramoParcial));
+        // Mientras siga hablando, el micrófono sigue prendido
+        if (unir(tramoFinal, tramoParcial)) programarFin(PAUSA_FIN_MS);
+      };
+      rec.onerror = (event: any) => {
+        if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+          errorGrave = true;
+          showNotification("No tengo permiso para usar el micrófono. Dale \"Permitir\" en el navegador.", "error");
+        } else if (event.error === "network") {
+          if (!avisoRed) showNotification("El reconocimiento de voz necesita internet; reintento...", "warning");
+          avisoRed = true;
+        } else if (event.error === "audio-capture") {
+          errorGrave = true;
+          showNotification("No encuentro el micrófono. Revisa que esté conectado y encendido.", "error");
+        }
+        // "no-speech" y "aborted": se manejan con el tiempo de espera de arriba
+      };
+      rec.onend = () => {
+        if (terminado) return;
+        // El navegador lo apagó solo: volver a prenderlo sin perder lo que ya se dijo
+        if (!pararPedido && !errorGrave && reinicios < MAX_REINICIOS) {
+          reinicios++;
+          dicho = unir(dicho, tramoFinal, tramoParcial);
+          window.setTimeout(() => {
+            if (terminado) return;
+            try {
+              empezarTramo();
+            } catch {
+              terminar(true);
+            }
+          }, 120);
+          return;
+        }
+        terminar(true);
+      };
+      rec.start();
+    };
+
+    reconocimientoRef.current = control;
     setDictando(true);
     setEstado("escuchando");
     try {
-      rec.start();
+      empezarTramo();
+      programarFin(ESPERA_INICIAL_MS);
     } catch {
       detenerDictado();
     }
