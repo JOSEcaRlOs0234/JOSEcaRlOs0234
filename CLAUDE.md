@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.30.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.31.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -586,6 +586,13 @@
   (@fontsource/chakra-petch y jetbrains-mono en main.tsx) en vez de Google Fonts por internet. (4) Pantalla de inicio
   "Instantánea (1 s)" por defecto (650 ms + 150 + 200 de salida; clave localStorage nueva `jarvis_arranque2`).
   Medido en la nube: pantalla usable en ~0.4 s con dist vs ~1.2 s con Vite (en la laptop Vite tarda más).
+- v2.31 INTERFAZ "PORTAL DE LUZ" (mandó una imagen: centro oscuro con rayos de luz azul/blanca saliendo, tipo
+  hiperespacio; "que esta sea la interfaz, mantén todo lo que hace, solo la interfaz"): en `ReactorCore.tsx` se cambió
+  SOLO el dibujo: se quitó el SVG (MK 6 / A005, arcos, mordazas) y el render de anillos; ahora canvas con 1500 rayos
+  (ángulo, r relativo al borde, velocidad, largo, grosor, 42 % blancos) que salen del borde con compositing "lighter",
+  bruma azul, resplandor suave en el borde (sin línea) y centro oscuro con borde apenas irregular (`bordeEn`, senos
+  pequeños). Estados: reposo lento; escuchando velocidad/latido con el volumen del micrófono; pensando rápido y girando;
+  hablando late con una onda. Etiquetas, botones y props iguales (frequencyData ya no se usa). ~58 fps en Playwright.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
