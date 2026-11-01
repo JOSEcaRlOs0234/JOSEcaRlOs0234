@@ -2948,7 +2948,7 @@ export default function App() {
                 className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#ffb347]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#ffb347]/15 cursor-pointer flex items-center gap-1"
                 title="Ver las páginas web y programas que hizo Jarvis"
               >
-                <Code2 className="w-3.5 h-3.5" /> Código
+                <Code2 className="w-3.5 h-3.5" /> Proyectos
               </button>
               <button
                 type="button"

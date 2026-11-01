@@ -1182,12 +1182,19 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             entradaEjemplo: hecho.entrada_ejemplo ?? "",
             sobre: anterior,
           });
-          const respuesta: Record<string, unknown> = {
-            resultado: `Listo: "${p.nombre}" (${l.nombre}) está en Documentos\\Jarvis\\Programas\\${path.basename(p.carpeta)}\\${p.archivo} y se ve en el panel Código.`,
-            explicacion: hecho.explicacion,
-            codigo: hecho.codigo.length > 6000 ? hecho.codigo.slice(0, 6000) + "\n…(sigue)" : hecho.codigo,
-            nota: "El código completo ya se ve en la pantalla (panel Código): NO lo pegues entero en el chat; explica en pocas frases.",
-          };
+          // Páginas web: al usuario solo le interesa la página, no el código (ni se le manda a Gemini para que no lo pegue)
+          const respuesta: Record<string, unknown> = web
+            ? {
+                resultado: `Listo: la página "${p.nombre}" ya se ve en la pantalla de Jarvis.`,
+                que_tiene: hecho.explicacion,
+                nota: "NO muestres, pegues ni menciones el código: al usuario solo le interesa la página. Di en 1 o 2 frases qué tiene la página.",
+              }
+            : {
+                resultado: `Listo: "${p.nombre}" (${l.nombre}) está en Documentos\\Jarvis\\Programas\\${path.basename(p.carpeta)}\\${p.archivo} y se ve en el panel Código.`,
+                explicacion: hecho.explicacion,
+                codigo: hecho.codigo.length > 6000 ? hecho.codigo.slice(0, 6000) + "\n…(sigue)" : hecho.codigo,
+                nota: "El código completo ya se ve en la pantalla (panel Código): NO lo pegues entero en el chat; explica en pocas frases.",
+              };
           if (web) {
             if (abrir) await win.abrirRuta(path.join(p.carpeta, p.archivo)).catch(() => {});
             respuesta.vista = abrir ? "La página se ve en el panel y se abrió en el navegador." : "La página ya se ve en el panel Código.";

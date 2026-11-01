@@ -139,6 +139,8 @@ export const CodigoPanel: React.FC<{
       setDetalle(d);
       setEntrada(d.proyecto.entradaEjemplo ?? "");
       setPestana(d.web ? "vista" : d.proyecto.resultado ? "resultado" : "codigo");
+      // Las páginas web se muestran en grande de una vez (sin código)
+      if (d.web) setGrande(true);
     } catch (err: any) {
       avisarRef.current(err?.message || "No pude abrir el proyecto.", "error");
     }
@@ -196,9 +198,8 @@ export const CodigoPanel: React.FC<{
   const p = detalle?.proyecto;
   const r = p?.resultado;
   const lineas = detalle ? detalle.codigo.replace(/\n$/, "").split("\n").length : 0;
-  const pestanas: [Pestana, string][] = detalle?.web
-    ? [["vista", "Vista"], ["codigo", "Código"]]
-    : [["codigo", "Código"], ["resultado", "Resultado"]];
+  // En las páginas web solo se ve la página (el usuario no quiere ver el código)
+  const pestanas: [Pestana, string][] = detalle?.web ? [] : [["codigo", "Código"], ["resultado", "Resultado"]];
   const boton =
     "px-2 py-1 border border-[#ffb347]/50 text-[#ffd9a0] text-[11px] hover:bg-[#ffb347]/15 cursor-pointer flex items-center gap-1 disabled:opacity-40";
 
@@ -209,7 +210,9 @@ export const CodigoPanel: React.FC<{
       <div className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[#ffb347]/30">
         <div className="flex items-center gap-2 min-w-0 text-[#ffd9a0]">
           <Code2 className="w-4 h-4 shrink-0" />
-          <span className="font-hud-display text-sm font-bold tracking-widest uppercase shrink-0">Código</span>
+          <span className="font-hud-display text-sm font-bold tracking-widest uppercase shrink-0">
+            {detalle?.web ? "Página web" : "Código"}
+          </span>
           {lista.length > 0 && (
             <select
               value={elegido ?? ""}
@@ -224,7 +227,7 @@ export const CodigoPanel: React.FC<{
               ))}
             </select>
           )}
-          {detalle && <span className="font-hud-mono text-[10px] text-[#68a8d8] truncate">{detalle.nombreLenguaje}</span>}
+          {detalle && !detalle.web && <span className="font-hud-mono text-[10px] text-[#68a8d8] truncate">{detalle.nombreLenguaje}</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button type="button" onClick={() => setGrande((g) => !g)} className="p-1 text-[#68a8d8] hover:text-[#e2f8ff] cursor-pointer" title={grande ? "Hacer pequeño" : "Pantalla grande"}>
@@ -255,9 +258,11 @@ export const CodigoPanel: React.FC<{
               </button>
             ))}
             <span className="flex-1" />
-            <button type="button" onClick={copiar} className={boton} title="Copiar el código">
-              <Copy className="w-3.5 h-3.5" /> Copiar
-            </button>
+            {!detalle.web && (
+              <button type="button" onClick={copiar} className={boton} title="Copiar el código">
+                <Copy className="w-3.5 h-3.5" /> Copiar
+              </button>
+            )}
             <button type="button" onClick={() => abrir("carpeta")} className={boton} title={p?.carpeta}>
               <FolderOpen className="w-3.5 h-3.5" /> Carpeta
             </button>

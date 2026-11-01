@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.29.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.29.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -564,6 +564,10 @@
   Probado: correr Python, C++, C, Java, Go, Rust, PHP, Ruby, JS y TS reales en Linux (error de compilación, ciclo infinito,
   la clave NO llega al programa) y en Playwright con Gemini simulado (página aislada, Python en la "nube" con gráfica,
   C++ con permiso delicado, botón Correr). NO probado en Windows ni con Gemini real (codeExecution).
+- v2.29.1 (usuario: "quiero que haga páginas web, que no me muestre el código"): en proyectos web el panel solo muestra
+  la página (sin pestaña Código ni Copiar, título "Página web") y se abre en grande solo; el resultado de
+  crear_pagina_web ya NO le pasa el código a Gemini (solo `que_tiene`) y PERSONALIDAD prohíbe mostrarlo/mencionarlo.
+  Botón sobre el reactor renombrado "Proyectos". Los programas (Python, C++...) siguen igual con su código y resultado.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
