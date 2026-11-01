@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.34.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.35.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -633,6 +633,23 @@
   A.R.E.S. (cerrar_programa protege *J.A.R.V.I.S* y *A.R.E.S*); alias de carpeta "ares"; canva-mcp client_name "Ares".
   PERSONALIDAD: "Te llamas ARES... por ahora la palabra para despertarte es Jarvis". Probado: migración de carpeta con
   una página guardada, capturas (barra, portal, chat, arranque "A.R.E.S.", título de ventana).
+- v2.35 FINANZAS: BOLSA Y ETFs CON GRÁFICA Y ANÁLISIS (pedido: "cómo va la bolsa de valores y dónde conviene comprar
+  ETFs" + "que me muestre una gráfica y haga un análisis de qué es mejor"): `finanzas.ts`. Precios sin clave: Yahoo
+  Finanzas v8/finance/chart (query1 → query2, User-Agent de navegador) y respaldo Stooq CSV (`aStooq`; no tiene .MX).
+  `historia(simbolo, largo)` = 1 año diario o 5 años semanal. `metricas`: hoy, mes, en el año, 12 meses, 5 años anual
+  (CAGR), volatilidad anual (log-rend.), peor caída. `SIMBOLOS` (nombres → ticker: Apple, dólar=MXN=X, bitcoin, Bimbo,
+  NAFTRAC=NAFTRACISHRS.MX...), `simboloDe`, `PANORAMA` (^GSPC, ^IXIC, ^DJI, ^MXX, MXN=X, BTC-USD), `ETFS` (costo anual,
+  qué tiene, riesgo; datos fijos), `graficaSvg` (líneas normalizadas: "dinero" = $10,000 invertidos o "porcentaje";
+  marcas redondas, años al 1 de enero, leyenda ordenada con `LEYENDA`), `analisisEtfs` (reglas sobre datos reales: más
+  creció, mejor del año, más estable, menor caída, mejor equilibrio = CAGR/volatilidad, más barato con empates; "para
+  qué sirve cada uno"), `AVISO` (no es asesoría), `PREGUNTA_DONDE_COMPRAR` (casas de bolsa CNBV con SIC, comisiones,
+  impuestos 10 %). Herramientas (libres, tipo "finanzas"): `ver_bolsa` {simbolos, panorama} → pizarra con gráfica 12
+  meses (dibujarEnPizarra + limpiarSvg) y lista; símbolo inexistente → error claro. `comparar_etfs` {etfs, monto_pesos,
+  donde_comprar} → 5 años de cada ETF (por defecto ETFS_POPULARES) + dólar + `investigador` (dónde comprar) en paralelo →
+  pizarra: gráfica + Análisis + números + dónde comprar + Importante. PERSONALIDAD "FINANZAS" (no asesor, riesgos, no
+  prometer, preguntar plazo/riesgo si pide "¿cuál me conviene?", nunca inventar precios). Probado con Yahoo y Gemini
+  simulados (cálculos, análisis, gráfica renderizada con resvg, pantalla en Playwright); NO con Yahoo real (la nube no
+  llega).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

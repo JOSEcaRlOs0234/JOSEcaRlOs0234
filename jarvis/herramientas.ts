@@ -13,8 +13,24 @@ import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.t
 import { aprender, recordar } from "./red-memoria.ts";
 import { mensajesRecientes } from "./whatsapp.ts";
 import { buscarPagina, guardarPagina, leerHtml, ultimaPagina, type Pagina } from "./paginas.ts";
+import {
+  analisisEtfs,
+  AVISO,
+  ETFS,
+  graficaSvg,
+  ETFS_POPULARES,
+  historia,
+  metricas,
+  PANORAMA,
+  pct,
+  pctSimple,
+  precioLegible,
+  PREGUNTA_DONDE_COMPRAR,
+  simboloDe,
+  type Serie,
+} from "./finanzas.ts";
 import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
-import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
+import { limpiarSvg, svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
 import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
 import { calificacionesConfiguradas, descargarCalificaciones, fechaLegible } from "./canvas-calificaciones.ts";
@@ -235,6 +251,39 @@ export const DECLARACIONES = [
         abrir_en_navegador: { type: "boolean", description: "true si el usuario pide abrirla en el navegador" },
       },
       required: ["descripcion"],
+    },
+  },
+  {
+    name: "ver_bolsa",
+    description:
+      "Precios REALES de la bolsa de valores: cómo va el mercado hoy (S&P 500, Nasdaq, Dow Jones, IPC de la Bolsa " +
+      "Mexicana, dólar en pesos, bitcoin) y/o el precio de acciones, ETFs, monedas o criptomonedas que pida el usuario " +
+      "(Apple, Tesla, VOO, NAFTRAC, Bimbo, oro...). Da el cambio de hoy, del mes, del año y de 12 meses.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        simbolos: {
+          type: "array",
+          items: { type: "string" },
+          description: "Nombres o símbolos que pidió (ej. ['Apple','VOO','dólar']). Vacío = solo el panorama general.",
+        },
+        panorama: { type: "boolean", description: "true para incluir el panorama general del mercado (por defecto sí si no pide nada específico)" },
+      },
+    },
+  },
+  {
+    name: "comparar_etfs",
+    description:
+      "Compara ETFs con datos REALES de 5 años (rendimiento por año, cuánto sube y baja, peor caída, costo anual y qué " +
+      "tienen adentro) y busca en internet DÓNDE comprarlos desde México (casas de bolsa autorizadas, comisiones, " +
+      "impuestos). Úsala para '¿en qué ETF conviene invertir?', '¿dónde compro ETFs?', 'compara VOO y QQQ'. Todo queda en la pizarra.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        etfs: { type: "array", items: { type: "string" }, description: "ETFs a comparar (vacío = los más populares)" },
+        monto_pesos: { type: "number", description: "Si dijo cuánto quiere invertir, en pesos" },
+        donde_comprar: { type: "boolean", description: "Buscar dónde comprarlos desde México (por defecto sí)" },
+      },
     },
   },
   {
@@ -1121,6 +1170,141 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             resultado: `Listo: la página "${p.nombre}" ya se ve en la pantalla de Ares${abrir ? " y se abrió en el navegador" : ""}.`,
             que_tiene: hecha.explicacion,
             nota: "NO muestres, pegues ni menciones el código. Di en 1 o 2 frases qué tiene la página.",
+          };
+        },
+      };
+    }
+
+    case "ver_bolsa": {
+      const pedidos = Array.isArray(args.simbolos) ? args.simbolos.filter((x): x is string => typeof x === "string").slice(0, 8) : [];
+      const simbolos: string[] = [];
+      const noEntendidos: string[] = [];
+      for (const p of pedidos) {
+        const s = simboloDe(p);
+        if (s) simbolos.push(s);
+        else noEntendidos.push(p);
+      }
+      const conPanorama = args.panorama === true || (args.panorama !== false && simbolos.length === 0);
+      const lista = [...new Set([...(conPanorama ? PANORAMA : []), ...simbolos])];
+      if (!lista.length) throw new ErrorHerramienta(`No reconozco ${noEntendidos.join(", ")}. Pide el símbolo (por ejemplo AAPL o VOO).`);
+      return {
+        nivel: "libre",
+        tipo: "finanzas",
+        descripcion: "Ver precios de la bolsa",
+        ejecutar: async () => {
+          const res = await Promise.allSettled(lista.map((s) => historia(s)));
+          const datos: Record<string, unknown>[] = [];
+          const lineas: string[] = [];
+          const conDatos: Serie[] = [];
+          const fallos: string[] = [...noEntendidos];
+          res.forEach((r, i) => {
+            if (r.status === "rejected") {
+              fallos.push(lista[i]);
+              return;
+            }
+            const s: Serie = r.value;
+            conDatos.push(s);
+            const m = metricas(s);
+            datos.push({ nombre: s.nombre, simbolo: s.simbolo, precio: precioLegible(s), hoy: pctSimple(m.hoy), mes: pctSimple(m.mes), en_el_anio: pctSimple(m.anio), doce_meses: pctSimple(m.doceMeses) });
+            lineas.push(
+              `- **${s.nombre}** (${s.simbolo}): ${precioLegible(s)} · hoy ${pct(m.hoy)} · mes ${pctSimple(m.mes)} · en el año ${pctSimple(m.anio)} · 12 meses ${pctSimple(m.doceMeses)}`
+            );
+          });
+          if (!datos.length) {
+            const noExisten = res.every((r) => r.status === "rejected" && /No existe el símbolo/.test(String(r.reason?.message)));
+            throw new ErrorHerramienta(
+              noExisten
+                ? `No encontré ${fallos.join(", ")} en la bolsa. Pregúntale al usuario el símbolo exacto (por ejemplo AAPL, VOO, BIMBOA.MX).`
+                : "No pude traer precios ahora (los sitios de precios no respondieron). Revisa el internet o intenta en un momento; también puedes usar investigar."
+            );
+          }
+          // Siempre con gráfica: cómo se movió cada uno en los últimos 12 meses (en %, para poder compararlos)
+          const hora = new Date().toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" });
+          const texto =
+            `# Bolsa de valores\nPrecios al ${hora} (pueden tener unos minutos de retraso).\n\n${lineas.join("\n")}` +
+            `\n\n- ▲ = subió · ▼ = bajó. "En el año" = desde el 1 de enero. La gráfica muestra cuánto subió o bajó cada uno en 12 meses.`;
+          const svg = limpiarSvg(graficaSvg(conDatos, "Últimos 12 meses", "porcentaje"));
+          if (svg) dibujarEnPizarra("Bolsa de valores", svg, texto);
+          else escribirPizarra("Bolsa de valores", texto, false);
+          return {
+            precios: datos,
+            ...(fallos.length ? { sin_datos: fallos } : {}),
+            nota: "La gráfica y el detalle ya están en la pizarra. Di en voz lo principal (2 o 3 frases, porcentajes redondeados).",
+          };
+        },
+      };
+    }
+
+    case "comparar_etfs": {
+      const pedidos = Array.isArray(args.etfs) ? args.etfs.filter((x): x is string => typeof x === "string").slice(0, 10) : [];
+      const lista = pedidos.length ? [...new Set(pedidos.map((p) => simboloDe(p)).filter((x): x is string => !!x))] : ETFS_POPULARES;
+      if (!lista.length) throw new ErrorHerramienta("No reconozco esos ETFs. Pide sus símbolos (por ejemplo VOO, QQQ, VT).");
+      const monto = typeof args.monto_pesos === "number" && args.monto_pesos > 0 ? Math.min(args.monto_pesos, 1e9) : null;
+      const buscarDonde = args.donde_comprar !== false;
+      return {
+        nivel: "libre",
+        tipo: "finanzas",
+        descripcion: "Comparar ETFs",
+        ejecutar: async () => {
+          const [series, dolar, donde] = await Promise.all([
+            Promise.allSettled(lista.map((s) => historia(s, true))),
+            historia("MXN=X").catch(() => null),
+            buscarDonde && investigador ? investigador(PREGUNTA_DONDE_COMPRAR).catch((err) => `(No pude buscar dónde comprarlos: ${fallaDeBusqueda(err)})`) : Promise.resolve(""),
+          ]);
+          const tipoCambio = dolar?.precio ?? null;
+          const filas: { s: Serie; m: ReturnType<typeof metricas> }[] = [];
+          const fallos: string[] = [];
+          series.forEach((r, i) => (r.status === "fulfilled" ? filas.push({ s: r.value, m: metricas(r.value) }) : fallos.push(lista[i])));
+          if (!filas.length) {
+            throw new ErrorHerramienta("No pude traer los precios de los ETFs ahora (los sitios de precios no respondieron). Intenta en un momento.");
+          }
+          const lineas = filas.map(({ s, m }) => {
+            const info = ETFS[s.simbolo];
+            const enPesos = s.moneda === "USD" && tipoCambio ? ` (≈ ${(s.precio * tipoCambio).toLocaleString("es-MX", { maximumFractionDigits: 0 })} pesos)` : "";
+            const alcanza =
+              monto && s.precio
+                ? ` · con ${monto.toLocaleString("es-MX")} pesos ≈ ${(monto / (s.moneda === "USD" && tipoCambio ? s.precio * tipoCambio : s.precio)).toFixed(2)} títulos`
+                : "";
+            return (
+              `- **${s.simbolo.replace("ISHRS.MX", "")}** — ${info?.nombre ?? s.nombre}: ${precioLegible(s)}${enPesos}${alcanza}\n` +
+              `  12 meses ${pctSimple(m.doceMeses)} · 5 años ${m.cincoAniosAnual === null ? "—" : `${pctSimple(m.cincoAniosAnual)} por año`} · ` +
+              `sube y baja ±${m.volatilidad === null ? "—" : m.volatilidad.toFixed(0)} % al año · peor caída ${pctSimple(m.peorCaida)}` +
+              (info ? ` · costo anual ${info.costo} · riesgo ${info.riesgo}\n  Qué tiene: ${info.que_tiene}` : "")
+            );
+          });
+          const analisis = analisisEtfs(filas);
+          const contenido =
+            `# Comparación de ETFs\nDatos reales de los últimos 5 años${tipoCambio ? ` · dólar a ${tipoCambio.toFixed(2)} pesos` : ""}. ` +
+            `La gráfica muestra cómo habrían crecido $10,000 en cada uno.\n\n` +
+            `${analisis.texto}\n\n` +
+            `## Los números de cada uno\n${lineas.join("\n")}\n\n` +
+            "## Cómo leer esto\n- **Rendimiento por año**: cuánto creció en promedio cada año (pasado, no garantizado).\n" +
+            "- **Sube y baja**: qué tanto se mueve en un año normal; más alto = más riesgo.\n" +
+            "- **Peor caída**: lo más que llegó a bajar desde su punto más alto.\n" +
+            "- **Costo anual**: lo que cobra el fondo cada año; entre más bajo, mejor.\n" +
+            (donde ? `\n## Dónde comprarlos desde México\n${donde}\n` : "") +
+            `\n## Importante\n${AVISO}`;
+          const svg = limpiarSvg(graficaSvg(filas.map((f) => f.s), "ETFs: 5 años", "dinero"));
+          if (svg) dibujarEnPizarra("Comparación de ETFs", svg, contenido);
+          else escribirPizarra("Comparación de ETFs", contenido, false);
+          return {
+            etfs: filas.map(({ s, m }) => ({
+              simbolo: s.simbolo,
+              nombre: ETFS[s.simbolo]?.nombre ?? s.nombre,
+              doce_meses: pctSimple(m.doceMeses),
+              cinco_anios_por_anio: pctSimple(m.cincoAniosAnual),
+              sube_y_baja: m.volatilidad === null ? "—" : `±${m.volatilidad.toFixed(0)} %`,
+              peor_caida: pctSimple(m.peorCaida),
+              costo_anual: ETFS[s.simbolo]?.costo ?? "desconocido",
+            })),
+            ...(fallos.length ? { sin_datos: fallos } : {}),
+            analisis: analisis.resumen,
+            donde_comprar: donde ? String(donde).slice(0, 1500) : "no se buscó",
+            aviso: AVISO,
+            nota:
+              "La gráfica y el análisis ya están en la pizarra. En voz (4 o 5 frases) explica el análisis: cuál creció más, " +
+              "cuál fue más estable, cuál tiene mejor equilibrio entre ganancia y riesgo, el más barato, y dónde se pueden comprar. NO digas 'compra X' ni prometas ganancias; si pide una recomendación, " +
+              "pregúntale su plazo y cuánto riesgo aguanta, y explica opciones generales. Menciona que no es asesoría personal.",
           };
         },
       };
