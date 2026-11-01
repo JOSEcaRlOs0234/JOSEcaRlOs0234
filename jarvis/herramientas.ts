@@ -40,7 +40,7 @@ import { limpiarSvg, svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
 import { canvasConfigurado, descargarTareas, entregaLegible, esTarea } from "./canvas-lms.ts";
 import { calificacionesConfiguradas, descargarCalificaciones, fechaLegible } from "./canvas-calificaciones.ts";
-import { buscarHerramienta, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
+import { buscarHerramienta, estadoCanvaMcp, llamarCanvaMcp, PREFIJO as PREFIJO_CANVA_ED } from "./canva-mcp.ts";
 import {
   buscarDisenos,
   canvaConfigurado,
@@ -91,6 +91,8 @@ let ia: {
   leerSobreTema?: (tema: string) => Promise<Informe & { leidas: number }>;
   buscarEstadisticas?: (tema: string) => Promise<Informe & { leidas: number }>;
   revisarConexiones?: () => Promise<{ prueba: string; ok: boolean; detalle: string; solucion?: string }[]>;
+  // Edición dentro de Canva (Canva MCP): conecta, o devuelve la página de Canva donde el usuario da permiso
+  activarEdicionCanva?: () => Promise<{ conectado: true; herramientas: number } | { url: string }>;
   hacerPagina?: (
     descripcion: string,
     anterior?: { nombre: string; html: string }
@@ -294,6 +296,21 @@ export const DECLARACIONES = [
         donde_comprar: { type: "boolean", description: "Buscar dónde comprarlos desde México (por defecto sí)" },
       },
     },
+  },
+  {
+    name: "revisar_canva",
+    description:
+      "Revisa la conexión con Canva: si la cuenta está conectada, si la EDICIÓN dentro de los diseños está activa y, si " +
+      "algo falla, qué falta y cómo arreglarlo. Úsala cuando quieran diseñar o editar en Canva y no tengas herramientas canva_ed_.",
+    parametersJsonSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "activar_edicion_canva",
+    description:
+      "Activa la EDICIÓN dentro de Canva (editar textos y elementos de los diseños, generar diseños con contenido). Si " +
+      "falta el permiso, abre en el navegador la página de Canva donde el usuario aprieta \"Permitir\". Después de " +
+      "activarla aparecen las herramientas canva_ed_.",
+    parametersJsonSchema: { type: "object", properties: {} },
   },
   {
     name: "tareas_canvas",
@@ -1339,6 +1356,73 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         },
       };
     }
+
+    case "revisar_canva":
+      return {
+        nivel: "libre",
+        tipo: "canva",
+        descripcion: "Revisar la conexión con Canva",
+        ejecutar: async () => {
+          const base = estadoCanva();
+          const ed = estadoCanvaMcp();
+          const pasos: string[] = [];
+          if (!base.configurado) {
+            pasos.push("Faltan las llaves de la app de Canva: el usuario las pega en Ajustes → Canva (Client ID y Client secret).");
+          } else if (!base.conectado) {
+            pasos.push("La cuenta de Canva no está conectada: en Ajustes → Canva, botón \"Conectar con Canva\".");
+          }
+          if (base.configurado && !ed.conectado) {
+            pasos.push(
+              "La edición dentro de los diseños no está activa: usa activar_edicion_canva (abre la página de permiso de Canva). " +
+                "Requisito: en canva.com/developers, en su app → Integration methods, debe estar encendido \"Canva MCP\"."
+            );
+          }
+          return {
+            cuenta_conectada: base.conectado,
+            ...(base.nombre ? { cuenta: base.nombre } : {}),
+            edicion_activa: ed.conectado,
+            herramientas_de_edicion: ed.herramientas,
+            ...(ed.error ? { ultimo_error_de_edicion: ed.error.slice(0, 300) } : {}),
+            que_falta: pasos.length ? pasos : ["Nada: Canva y la edición están listos."],
+          };
+        },
+      };
+
+    case "activar_edicion_canva":
+      return {
+        nivel: "normal",
+        tipo: "canva",
+        descripcion: "Activar la edición dentro de tus diseños de Canva (abre la página de permiso de Canva)",
+        ejecutar: async () => {
+          if (!canvaConfigurado()) {
+            throw new ErrorHerramienta("Faltan las llaves de la app de Canva. El usuario las pega en Ajustes → Canva y luego lo intentas otra vez.");
+          }
+          if (!ia?.activarEdicionCanva) throw new ErrorHerramienta("La edición de Canva no está disponible.");
+          let r;
+          try {
+            r = await ia.activarEdicionCanva();
+          } catch (err) {
+            throw new ErrorHerramienta(
+              "No se pudo activar la edición de Canva" +
+                (err instanceof Error && err.message ? ` (${err.message.slice(0, 200)})` : "") +
+                ". Lo más común: en canva.com/developers, en su app → Integration methods, hay que encender \"Canva MCP\" y " +
+                "en Redirect URLs tener http://127.0.0.1:3000/canva/callback. Explícale eso al usuario paso a paso."
+            );
+          }
+          if ("conectado" in r) {
+            return { resultado: `Listo: la edición de Canva ya está activa (${r.herramientas} herramientas). Ya puedes editar sus diseños.` };
+          }
+          await win.abrirUrl(r.url);
+          return {
+            resultado:
+              "Abrí en el navegador la página de permiso de Canva. Dile al usuario que entre con su cuenta PERSONAL de Canva " +
+              "y apriete \"Permitir\"; al terminar verá \"¡Edición de Canva conectada!\". Luego que te vuelva a pedir lo que quería.",
+            nota:
+              "Si el navegador abre con la cuenta de la escuela, que copie la dirección de esa página y la pegue en una " +
+              "ventana InPrivate donde tenga abierta su cuenta personal de Canva.",
+          };
+        },
+      };
 
     case "tareas_canvas": {
       if (!canvasConfigurado()) {

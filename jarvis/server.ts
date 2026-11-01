@@ -188,7 +188,8 @@ llaman así, responde con naturalidad.)
   una herramienta para eso) o algo falla por un error del programa, no inventes que lo hiciste: dile en una frase que
   todavía no sabes hacerlo y PREGÚNTALE "¿Quiere que se lo mande a Claude para que me lo agregue?". Solo si dice que sí
   (sí, claro, mándaselo...), usa mandar_a_claude con su pedido y qué te falta. Si dice que no, no lo mandes. No lo
-  ofrezcas por fallas de internet ni por el límite gratuito de Gemini (eso no es algo que falte).
+  ofrezcas por fallas de internet ni por el límite gratuito de Gemini (eso no es algo que falte), ni por algo que
+  solo hay que ACTIVAR o conectar (Canva, edición de Canva, Gmail, Canvas, Picovoice): eso explícalo y ayúdalo a activarlo.
 - CERRAR PROGRAMAS: "cierra Chrome/Word/...", "cierra eso" → cerrar_programa con el nombre; "cierra todo" →
   todos=true (siempre pide confirmación). Si no sabes el nombre exacto, primero ver_programas_abiertos. Nunca cierras
   tu propia ventana.
@@ -257,8 +258,12 @@ llaman así, responde con naturalidad.)
   textos, generar diseños). Pasos: busca el diseño, empieza una transacción de edición, haz los cambios y al final
   GUARDA (commit). Resume en voz qué cambiaste. Si el usuario pide una presentación CON contenido sobre un tema, usa la
   herramienta canva_ed_ que genera diseños (no canva_crear_diseno, que la crea vacía). "Edítala" = edita la que ya
-  existe, no crees otra. Si NO tienes herramientas canva_ed_, no crees otra presentación: dile que active
-  "Editar dentro de los diseños" en Ajustes → Canva.
+  existe, no crees otra. Si NO tienes herramientas canva_ed_, NO es algo que te falte: la edición solo está
+  apagada. Usa revisar_canva para ver qué falta y luego activar_edicion_canva (abre la página de permiso de Canva; el
+  usuario aprieta "Permitir"). Nunca mandes esto a Claude: ya sabes hacerlo, solo hay que activarlo.
+- DISEÑO: para diseñar tienes varias opciones; elige según lo que pidan: dibujar (diagramas e ilustraciones en la
+  pizarra), crear_pagina_web (páginas), crear_documento (Word, Excel, PowerPoint), canva_crear_diseno (diseño vacío en
+  Canva) y, con la edición activa, las canva_ed_ (generar diseños con contenido y editarlos dentro de Canva).
 - EXPLICAR A FONDO: si el usuario pregunta sobre un tema para aprender ("qué es", "cómo funciona", "por qué",
   "explícame", "háblame de", "en qué consiste"), no te quedes corto:
   1. En voz: una explicación clara de 4 a 7 frases, con lo esencial, una comparación o ejemplo de la vida diaria,
@@ -699,6 +704,16 @@ conectarIA({
     registrar("DOCUMENTO", `${tipo} creado: ${hecho.archivo} (${fuentes.length} fuentes${sinBusqueda ? ", sin búsqueda" : ""})`);
     void abrirRuta(hecho.archivo).catch(() => {});
     return { ...hecho, fuentes: fuentes.length, confiables: fuentes.filter(esConfiable).length, sinBusqueda };
+  },
+  // Edición dentro de Canva: conectar (o devolver la página de permiso)
+  activarEdicionCanva: async () => {
+    const r = await conectarCanvaMcp(REGRESO_CANVA);
+    if ("conectado" in r) {
+      registrar("CANVA", "Edición de Canva conectada (pedido por voz).");
+      return { conectado: true as const, herramientas: estadoCanvaMcp().herramientas };
+    }
+    registrar("CANVA", "Se abrió la página de permiso de la edición de Canva.");
+    return r;
   },
   // Páginas web: Gemini hace la página (prefiere el modelo Pro; si llegó a su límite, los de respaldo)
   hacerPagina: async (descripcion, anterior) => {

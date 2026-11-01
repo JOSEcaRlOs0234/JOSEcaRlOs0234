@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.36.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.37.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -668,6 +668,17 @@
     descansa 2 min (`enfriarModelo`) y se pregunta al siguiente; sin respuesta → 504 "Gemini está tardando demasiado".
     `memoriaPara` máx. 1.5 s. Yahoo/Stooq 6 s por intento; búsqueda de dónde comprar ETFs máx. 15 s. Probado con Gemini
     simulado lento (30 s): contesta en 12 s con el respaldo y el siguiente mensaje al instante.
+- PEDIDO "PARA CLAUDE" desde Ares 2.36.0: "agregar herramientas de diseño y edición (edición directa dentro de Canva),
+  dejando fuera WhatsApp y Spotify". La edición en Canva YA existía (v2.7, canva_ed_ vía Canva MCP) pero no estaba
+  conectada (sin "Activar edición"/permiso; el error de authorize de v2.7.1 nunca se confirmó resuelto), así que Gemini
+  no veía canva_ed_ y lo mandó a Claude. v2.37: herramientas `revisar_canva` (libre: cuenta conectada, edición activa,
+  nº de herramientas, último error, `que_falta` con pasos) y `activar_edicion_canva` (normal, tipo "canva":
+  `ia.activarEdicionCanva` = conectarCanvaMcp(REGRESO_CANVA); si falta permiso abre la URL de autorización con
+  win.abrirUrl y explica "Permitir" + truco InPrivate; error → explica "Canva MCP" en Integration methods y el redirect).
+  PERSONALIDAD: "EDITAR EN CANVA" (sin canva_ed_ = está apagada, usar revisar/activar, nunca mandarlo a Claude), nueva
+  "DISEÑO" (dibujar, crear_pagina_web, crear_documento, canva_crear_diseno, canva_ed_), y "PARA CLAUDE" no se ofrece
+  para cosas que solo hay que activar (Canva, Gmail, Canvas, Picovoice). Probado con servidor MCP falso (sin llaves →
+  explica; con llaves → abre permiso; tras "Permitir" → 5 herramientas canva_ed_).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
