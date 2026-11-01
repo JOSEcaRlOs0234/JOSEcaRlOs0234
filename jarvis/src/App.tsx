@@ -440,6 +440,14 @@ export default function App() {
   const [canvaLlaves, setCanvaLlaves] = useState({ clientId: "", clientSecret: "" });
   const [canvaEsperando, setCanvaEsperando] = useState(false);
 
+  // WhatsApp (avisos de quién escribe; lee los mensajes solo si se lo piden)
+  const [whatsapp, setWhatsapp] = useState<{ activo: boolean; voz: boolean; funcionando: boolean; error: string | null }>({
+    activo: true,
+    voz: true,
+    funcionando: false,
+    error: null,
+  });
+
   // Canvas del Tec (tareas)
   const [canvasLms, setCanvasLms] = useState<{ configurado: boolean; ultimaRevision: number | null; error: string | null }>({
     configurado: false,
@@ -888,6 +896,31 @@ export default function App() {
       if (r.ok) setCalificaciones(await r.json());
     } catch {
       showNotification("No pude desconectar las calificaciones.", "error");
+    }
+  };
+
+  const cargarWhatsapp = useCallback(async () => {
+    try {
+      const r = await fetch("/api/whatsapp");
+      if (r.ok) setWhatsapp(await r.json());
+    } catch {
+      // Se reintenta al abrir Ajustes
+    }
+  }, []);
+  useEffect(() => {
+    if (ajustesAbiertos) cargarWhatsapp();
+  }, [ajustesAbiertos, cargarWhatsapp]);
+  const cambiarWhatsapp = async (cambio: { activo?: boolean; voz?: boolean; borrar?: boolean }) => {
+    try {
+      const r = await fetch("/api/whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(cambio),
+      });
+      if (r.ok) setWhatsapp(await r.json());
+      if (cambio.borrar) showNotification("Borré los mensajes de WhatsApp que tenía guardados.", "info");
+    } catch {
+      showNotification("No pude cambiar lo de WhatsApp.", "error");
     }
   };
 
@@ -2250,6 +2283,46 @@ export default function App() {
                     <Plus className="w-3.5 h-3.5" />
                   </button>
                 </form>
+              </div>
+
+              {/* WHATSAPP (avisos y lectura de mensajes cuando se pide) */}
+              <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">
+                <div className="flex items-center justify-between border-b border-[#00e5ff]/20 pb-1.5">
+                  <h2 className="font-hud-display text-xs font-bold tracking-wider uppercase text-[#e2f8ff]">WhatsApp</h2>
+                  <span
+                    className={`font-hud-mono text-[10px] ${
+                      !whatsapp.activo ? "text-[#68a8d8]" : whatsapp.funcionando ? "text-[#00f5a0]" : "text-[#ff9933]"
+                    }`}
+                  >
+                    {!whatsapp.activo ? "APAGADO" : whatsapp.funcionando ? "ACTIVO" : "REVISANDO..."}
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer">
+                  <input type="checkbox" checked={whatsapp.activo} onChange={(e) => cambiarWhatsapp({ activo: e.target.checked })} />
+                  Avisarme quién me escribe y poder leerme los mensajes
+                </label>
+                <label className="flex items-center gap-2 text-[11px] font-hud-mono text-[#e2f8ff] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={whatsapp.voz}
+                    disabled={!whatsapp.activo}
+                    onChange={(e) => cambiarWhatsapp({ voz: e.target.checked })}
+                  />
+                  Decir en voz quién me escribe
+                </label>
+                {whatsapp.error && <p className="text-[10px] font-hud-mono text-[#ff9933] leading-snug">{whatsapp.error}</p>}
+                <p className="text-[10px] font-hud-mono text-[#68a8d8] leading-snug">
+                  Leo los mensajes SOLO cuando me lo pides (&ldquo;léeme mis mensajes&rdquo;). Los tomo de las notificaciones de
+                  Windows, sin conectarme a WhatsApp; se borran solos a las 48 horas. Necesitas la app de WhatsApp (o WhatsApp
+                  Web) con sus notificaciones activadas.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => cambiarWhatsapp({ borrar: true })}
+                  className="self-start px-2 py-1 text-[11px] font-hud-mono border border-[#ff9933]/50 text-[#ff9933] hover:bg-[#ff9933]/15 cursor-pointer"
+                >
+                  Borrar mensajes guardados
+                </button>
               </div>
 
               {/* PANTALLA DE INICIO */}
