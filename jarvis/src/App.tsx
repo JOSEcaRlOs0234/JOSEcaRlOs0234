@@ -588,17 +588,6 @@ export default function App() {
     cargarRegistro();
   };
 
-  const apagarJarvis = async () => {
-    if (!window.confirm("¿Apagar a Jarvis? Para volver a usarlo, abre el icono de Jarvis.")) return;
-    try {
-      await fetch("/api/apagar", { method: "POST" });
-    } catch {
-      // El servidor se apaga y corta la conexión
-    }
-    setServidor("sin_conexion");
-    window.close();
-  };
-
   const cargarRecuerdos = useCallback(async () => {
     try {
       const r = await fetch("/api/recuerdos");
@@ -1076,7 +1065,7 @@ export default function App() {
       setServidor(datos);
       if (datos.version !== paquete.version) {
         showNotification(
-          "Sigue encendida una versión vieja de Jarvis. Usa \"Apagar\" y vuelve a abrirlo con su icono.",
+          "Sigue encendida una versión vieja de Jarvis. Cierra esta ventana y vuelve a abrirlo con su icono (el icono apaga la versión vieja solo).",
           "warning"
         );
       }
@@ -2739,15 +2728,6 @@ export default function App() {
           >
             <Settings className="w-3.5 h-3.5" />
             Ajustes
-          </button>
-          <button
-            type="button"
-            onClick={apagarJarvis}
-            className="ml-1 px-2 py-0.5 border border-[#ff3355]/50 text-[#ff3355] hover:bg-[#ff3355]/15 cursor-pointer flex items-center gap-1"
-            title="Apagar a Jarvis por completo (cerrar la ventana no lo apaga)"
-          >
-            <Power className="w-3.5 h-3.5" />
-            Apagar
           </button>
         </div>
       </header>

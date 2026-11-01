@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.31.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.31.1). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -593,6 +593,10 @@
   bruma azul, resplandor suave en el borde (sin línea) y centro oscuro con borde apenas irregular (`bordeEn`, senos
   pequeños). Estados: reposo lento; escuchando velocidad/latido con el volumen del micrófono; pensando rápido y girando;
   hablando late con una onda. Etiquetas, botones y props iguales (frequencyData ya no se usa). ~58 fps en Playwright.
+- v2.31.1 (pedido: "mantén todo, quítale el botón de apagar"): se quitó de la barra superior el botón Apagar y
+  `apagarJarvis` (App.tsx). `POST /api/apagar` SIGUE en el servidor (lo usan Jarvis.vbs para apagar versiones viejas y
+  las pruebas). El aviso de versión vieja ahora dice "cierra la ventana y vuelve a abrir con el icono". Jarvis se queda
+  encendido por detrás (cerrar la ventana no lo apaga; se apaga con Windows).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
