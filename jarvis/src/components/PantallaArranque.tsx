@@ -37,7 +37,7 @@ export function guardarDuracionArranque(d: DuracionArranque): void {
 }
 
 const SISTEMAS = [
-  "Núcleo de inteligencia artificial",
+  "Inteligencia artificial: ARES",
   "Conexión con Gemini",
   "Memoria y recuerdos",
   "Oído (micrófono)",

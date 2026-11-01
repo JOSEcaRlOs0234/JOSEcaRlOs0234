@@ -235,7 +235,7 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
         {/* Indicador central de estado superpuesto */}
         <div className="absolute pointer-events-none flex flex-col items-center justify-center text-center">
           <span className="font-hud-mono text-[10px] tracking-[0.28em] text-[#b8f4ff]/80">
-            J.A.R.V.I.S.
+            A.R.E.S.
           </span>
           <span className="font-hud-display text-xs sm:text-sm font-bold tracking-[0.22em] text-[#e2f8ff] drop-shadow-[0_0_8px_rgba(0,229,255,0.8)] mt-0.5">
             {currentMeta.title}
@@ -258,7 +258,7 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
               ? "bg-[#00f5a0]/15 border-[#00f5a0]/70 text-[#00f5a0]"
               : "bg-[#00e5ff]/10 border-[#00e5ff]/50 text-[#e2f8ff] hover:bg-[#00e5ff]/20"
           }`}
-          title="Háblale a Jarvis con tu voz"
+          title="Háblale a Ares con tu voz"
         >
           {dictando ? (
             <>
@@ -268,7 +268,7 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
           ) : (
             <>
               <MicOff className="w-3.5 h-3.5" />
-              <span>Hablar con Jarvis</span>
+              <span>Hablar con Ares</span>
             </>
           )}
         </button>
@@ -277,7 +277,7 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
           type="button"
           onClick={onSimulateVoice}
           className="px-3 py-2 rounded-full text-xs font-hud-mono text-[#68a8d8] hover:text-[#e2f8ff] hover:bg-[#00e5ff]/10 transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0"
-          title="Probar respuesta hablada de Jarvis"
+          title="Probar respuesta hablada de Ares"
         >
           Probar voz
         </button>

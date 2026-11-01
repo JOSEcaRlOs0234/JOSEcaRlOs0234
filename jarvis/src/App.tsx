@@ -323,7 +323,7 @@ class GrabadoraClase {
 }
 
 /** ¿Lo que se oyó es la orden de terminar la clase? ("Jarvis, termina la clase", "Jarvis, ya puedes hablar"...) */
-const ORDEN_TERMINAR = /\b(jarvis|yarvis|jarbis)\b.*\b(termina|terminar|termino|terminamos|fin de la clase|acabo|se acabo|deja de escuchar|ya puedes hablar|despierta)\b/;
+const ORDEN_TERMINAR = /\b(jarvis|yarvis|jarbis|ares|aress)\b.*\b(termina|terminar|termino|terminamos|fin de la clase|acabo|se acabo|deja de escuchar|ya puedes hablar|despierta)\b/;
 
 /** Tono corto "bip-bip" de que Jarvis te está escuchando. */
 function tono(): void {
@@ -359,7 +359,7 @@ const PEDIDO_RESUMEN =
 const MENSAJE_INICIAL: HudMessage = {
   id: "msg-inicio",
   rol: "jarvis",
-  texto: "Sistemas en línea. Escríbame o pulse \"Hablar con Jarvis\" para conversar, señor.",
+  texto: "Ares en línea. Escríbame o pulse \"Hablar con Ares\" para conversar, señor.",
   timestamp: horaActual(),
   local: true,
 };
@@ -1695,7 +1695,7 @@ export default function App() {
         if (datos.pedirFoto && datos.pedirFoto !== ultimaFotoRef.current) {
           const id = datos.pedirFoto;
           ultimaFotoRef.current = id;
-          showNotification("📷 Jarvis está mirando por la cámara", "info");
+          showNotification("📷 Ares está mirando por la cámara", "info");
           tomarFotoConCamara()
             .then(async (jpeg) => {
               setFotoReciente(jpeg);
@@ -2944,8 +2944,8 @@ export default function App() {
           )}
           {fotoReciente && (
             <div className="absolute bottom-2 left-2 z-40 border-2 border-[#00e5ff] bg-[#020c18] p-1 shadow-[0_0_20px_rgba(0,229,255,0.4)]">
-              <img src={fotoReciente} alt="Lo que vio Jarvis" className="w-56 h-auto block" />
-              <div className="text-[10px] font-hud-mono text-[#00e5ff] text-center pt-0.5">📷 Lo que vio Jarvis</div>
+              <img src={fotoReciente} alt="Lo que vio Ares" className="w-56 h-auto block" />
+              <div className="text-[10px] font-hud-mono text-[#00e5ff] text-center pt-0.5">📷 Lo que vio Ares</div>
             </div>
           )}
           {codigoAbierto && !pizarraAbierta && !notasAbiertas && (
@@ -3103,7 +3103,7 @@ export default function App() {
                   >
                     <div className="flex items-center justify-between text-[10px] font-hud-mono mb-0.5">
                       <span className={isJarvis ? "text-[#00e5ff] font-bold" : "text-[#00f5a0] font-bold"}>
-                        {isJarvis ? "J.A.R.V.I.S." : "TÚ"}
+                        {isJarvis ? "ARES" : "TÚ"}
                       </span>
                       <span className="text-[#68a8d8]">{msg.timestamp}</span>
                     </div>
@@ -3119,7 +3119,7 @@ export default function App() {
                 </div>
               )}
               {enviando && (
-                <div className="text-[11px] font-hud-mono text-[#ff9933] animate-pulse">Jarvis está pensando...</div>
+                <div className="text-[11px] font-hud-mono text-[#ff9933] animate-pulse">Ares está pensando...</div>
               )}
               <div ref={transcriptEndRef} />
             </div>
@@ -3145,7 +3145,7 @@ export default function App() {
                 type="text"
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
-                placeholder="Escríbele a Jarvis..."
+                placeholder="Escríbele a Ares..."
                 maxLength={4000}
                 className="flex-1 min-w-0 rounded-md bg-[#030e21] border border-[#00e5ff]/25 px-2.5 py-1.5 text-xs font-hud-mono text-[#e2f8ff] placeholder-[#68a8d8]/60 focus:outline-none focus:border-[#00e5ff]"
               />

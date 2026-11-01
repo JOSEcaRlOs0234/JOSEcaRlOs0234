@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.32.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.33.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -612,6 +612,14 @@
   no reinician. `reconocimientoRef` guarda un objeto `control` con abort() (cancelar = no entrega texto). Probado en
   Playwright con SpeechRecognition falso: corte a media frase → manda "pon música de los Beatles por favor" completo;
   silencio 9 s → termina; botón cancelar → apaga. El reconocedor del modo clase no se tocó.
+- v2.33 LA IA SE LLAMA "ARES" (pedido: "el proyecto se seguirá llamando Jarvis, pero que la IA se llame Ares"):
+  PROYECTO = Jarvis (carpetas, icono, barra superior J.A.R.V.I.S., pantalla de inicio, Documentos\Jarvis, textos de
+  Ajustes sobre el programa). IA = Ares: PERSONALIDAD ("Te llamas ARES... Jarvis es el nombre del programa y la palabra
+  para despertarte"), etiqueta del chat "ARES", "Escríbele a Ares...", "Ares está pensando...", "Hablar con Ares",
+  centro del portal "A.R.E.S.", PermisoDialog "Ares quiere:", saludo inicial, cámara ("Lo que vio Ares"), arranque
+  "Inteligencia artificial: ARES". ORDEN_TERMINAR del modo clase acepta "Jarvis" o "Ares". La PALABRA PARA DESPERTAR
+  sigue siendo "Jarvis" (Porcupine BuiltinKeyword.JARVIS); "Ares" necesitaría un .ppn propio hecho en
+  console.picovoice.ai con su clave (que aún no tiene).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
