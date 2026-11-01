@@ -10,6 +10,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
+import { aprender, recordar } from "./red-memoria.ts";
 import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
@@ -446,6 +447,13 @@ export const DECLARACIONES = [
       },
       required: ["que_falta"],
     },
+  },
+  {
+    name: "recordar_en_red",
+    description:
+      "Busca en la red neuronal de memoria todo lo que Jarvis sabe del usuario relacionado con un tema (por significado, " +
+      "no solo palabras exactas). Úsalo para '¿qué recuerdas de...?', '¿qué sabes de mí?', '¿qué te dije sobre...?'.",
+    parametersJsonSchema: { type: "object", properties: { tema: { type: "string" } }, required: ["tema"] },
   },
   {
     name: "revisar_conexiones",
@@ -1666,6 +1674,21 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       };
     }
 
+    case "recordar_en_red": {
+      const tema = texto(args.tema, "tema", 500);
+      return {
+        nivel: "libre",
+        tipo: "memoria",
+        descripcion: `Recordar sobre: ${tema.slice(0, 80)}`,
+        ejecutar: async () => {
+          const r = await recordar(tema, 10);
+          return r.length
+            ? { recuerdos: r.map((x) => `${x.texto} (${x.tipo}, activación ${x.activacion})`) }
+            : { resultado: "No tengo recuerdos relacionados con eso todavía." };
+        },
+      };
+    }
+
     case "revisar_conexiones": {
       return {
         nivel: "libre",
@@ -1889,6 +1912,8 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
         descripcion: `Recordar: "${recuerdo}"`,
         ejecutar: async () => {
           const r = agregarRecuerdo(recuerdo);
+          // También se vuelve una neurona de la red de memoria
+          await aprender(recuerdo, "dato").catch(() => null);
           return { resultado: `Guardado en la memoria con id ${r.id}.` };
         },
       };

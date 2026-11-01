@@ -53,6 +53,7 @@ import { PermisoDialog, Confirmacion } from "./components/PermisoDialog";
 import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { NotasPanel, Nota } from "./components/NotasPanel";
+import { RedMemoriaPanel } from "./components/RedMemoriaPanel";
 import {
   DURACIONES,
   guardarDuracionArranque,
@@ -467,6 +468,7 @@ export default function App() {
   // Notas
   const [notas, setNotas] = useState<Nota[]>([]);
   const [notasAbiertas, setNotasAbiertas] = useState(false);
+  const [redAbierta, setRedAbierta] = useState(false);
   const notasVistaRef = useRef(0);
 
   // Modelos de Gemini disponibles
@@ -2788,6 +2790,9 @@ export default function App() {
               <div className="text-[10px] font-hud-mono text-[#00e5ff] text-center pt-0.5">📷 Lo que vio Jarvis</div>
             </div>
           )}
+          {redAbierta && !pizarraAbierta && !notasAbiertas && (
+            <RedMemoriaPanel onCerrar={() => setRedAbierta(false)} avisar={(t, tipo) => showNotification(t, tipo ?? "info")} />
+          )}
           {notasAbiertas && !pizarraAbierta && (
             <NotasPanel
               notas={notas}
@@ -2824,8 +2829,16 @@ export default function App() {
               )}
             </div>
           )}
-          {!pizarraAbierta && !notasAbiertas && (
+          {!pizarraAbierta && !notasAbiertas && !redAbierta && (
             <div className="absolute top-2 right-2 z-20 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => setRedAbierta(true)}
+                className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#9d8cff]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#9d8cff]/15 cursor-pointer flex items-center gap-1"
+                title="Ver la red neuronal de memoria"
+              >
+                <Brain className="w-3.5 h-3.5" /> Red
+              </button>
               {!(clase && (clase.estado === "escuchando" || clase.estado === "procesando")) && (
                 <button
                   type="button"

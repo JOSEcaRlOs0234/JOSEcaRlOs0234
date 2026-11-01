@@ -97,6 +97,20 @@ import {
 import { correoConfigurado, correoValido, explicarErrorCorreo, probarCuenta, usuarioCorreo } from "./correo.ts";
 import { borrarPizarra, leerPizarra } from "./pizarra.ts";
 import { copiarMuestras } from "./voz.ts";
+import {
+  anotarIntercambio,
+  aprender,
+  completarVectores,
+  conectarRed,
+  ESQUEMA_EXTRAER,
+  estadoRed,
+  olvidar,
+  olvidarTodo,
+  PEDIDO_EXTRAER,
+  recordar,
+  recuerdosRelacionados,
+  sembrar,
+} from "./red-memoria.ts";
 import { crearPorcupine, decirEnVoz, explicarErrorPorcupine, OidoDeJarvis } from "./aplausos.ts";
 import { cuandoCambienRecordatorios, cuandoLegible, leerRecordatorios, vigilarRecordatorios } from "./recordatorios.ts";
 import { abrirRuta, carpetasUsuario, programarEncendido, tocarSonido } from "./windows.ts";
@@ -179,6 +193,9 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →
   "siguiente"; "la anterior" → "anterior". Después de pausar no hace falta decir nada largo. Lo mismo con VIDEOS
   ("pausa el video", "ponle play", "sigue el video"): controlar_musica sirve para cualquier video o audio de la laptop.
+- RED DE MEMORIA: tienes una red neuronal de memoria que aprende sola de lo que platican. Cuando haya recuerdos
+  relacionados aparecerán abajo en "RED DE MEMORIA"; úsalos con naturalidad (no los recites). Si preguntan "¿qué
+  recuerdas de...?", "¿qué sabes de mí?", usa recordar_en_red. Si dicen "recuerda que..." usa guardar_recuerdo.
 - CONEXIONES: si una búsqueda falla o preguntan "¿por qué no te conectas?", "¿tienes internet?", "¿qué pasa con Claude?",
   usa revisar_conexiones y explica en palabras sencillas qué falla y cómo arreglarlo. No digas "no tengo internet" sin
   revisarlo: casi siempre es el límite GRATUITO de búsquedas de Google (se arregla esperando). La consulta directa a
@@ -305,13 +322,24 @@ function convieneOtroModelo(err: any): boolean {
 }
 
 /** Le pregunta a Gemini (con la lista de herramientas). Si el modelo elegido falla, prueba con los de respaldo. */
+// Red de memoria: recuerdos activados por el último mensaje del usuario (se calcula una vez por mensaje)
+let memoriaActivada = { pedido: "", texto: "" };
+async function memoriaPara(contents: any[]): Promise<string> {
+  const ultimo = [...contents].reverse().find((c) => c?.role === "user" && c.parts?.some((p: any) => typeof p?.text === "string"));
+  const pedido = (ultimo?.parts ?? []).map((p: any) => p?.text ?? "").join(" ").trim();
+  if (!pedido || pedido.startsWith("(Mensaje automático")) return "";
+  if (pedido !== memoriaActivada.pedido) memoriaActivada = { pedido, texto: await recuerdosRelacionados(pedido) };
+  return memoriaActivada.texto;
+}
+
 async function preguntarAGemini(contents: any[]) {
+  const memoria = await memoriaPara(contents).catch(() => "");
   const pedir = (model: string) =>
     ai.models.generateContent({
       model,
       contents,
       config: {
-        systemInstruction: instrucciones(),
+        systemInstruction: memoria ? `${instrucciones()}\n\n${memoria}` : instrucciones(),
         // La lista permitida de siempre + la edición de Canva (si está conectada)
         tools: [{ functionDeclarations: [...DECLARACIONES, ...declaracionesCanvaMcp()] as any }],
       },
@@ -484,9 +512,74 @@ async function revisarConexiones(): Promise<Prueba[]> {
   return resultado;
 }
 
+// Red neuronal de memoria (panel)
+app.get("/api/red", (_req, res) => {
+  res.json(estadoRed());
+});
+app.post("/api/red", async (req, res) => {
+  const texto = typeof req.body?.texto === "string" ? req.body.texto : "";
+  const r = await aprender(texto, typeof req.body?.tipo === "string" ? req.body.tipo : "dato");
+  if (!r) return res.status(400).json({ error: "Escribe algo más largo para recordar." });
+  registrar("MEMORIA", `Agregado a mano: ${r.nodo.texto}`);
+  res.json(estadoRed());
+});
+app.post("/api/red/recordar", async (req, res) => {
+  const consulta = typeof req.body?.consulta === "string" ? req.body.consulta.slice(0, 500) : "";
+  res.json({ activados: await recordar(consulta, 8, false) });
+});
+app.delete("/api/red/:id", (req, res) => {
+  const n = olvidar(String(req.params.id));
+  if (n) registrar("MEMORIA", `Olvidado: ${n.texto}`);
+  res.json(estadoRed());
+});
+app.delete("/api/red", (_req, res) => {
+  olvidarTodo();
+  registrar("MEMORIA", "Se borró toda la red de memoria.");
+  res.json(estadoRed());
+});
+
 app.get("/api/diagnostico", async (_req, res) => {
   res.json({ pruebas: await revisarConexiones() });
 });
+
+// Red neuronal de memoria: embeddings de Gemini (significado) + extracción automática de recuerdos
+const MODELOS_EMBEDDING = ["gemini-embedding-001", "text-embedding-004"];
+conectarRed({
+  incrustar: async (textos) => {
+    let ultimo: unknown;
+    for (const modelo of MODELOS_EMBEDDING) {
+      try {
+        const r = await ai.models.embedContent({ model: modelo, contents: textos, config: { outputDimensionality: 256 } });
+        const vectores = (r.embeddings ?? []).map((e) => e.values ?? []);
+        if (vectores.length === textos.length && vectores.every((v) => v.length)) return vectores;
+      } catch (err) {
+        ultimo = err;
+      }
+    }
+    throw ultimo ?? new Error("Sin embeddings");
+  },
+  extraer: async (conversacion) => {
+    const r = await conRespaldo(
+      (modelo) =>
+        ai.models.generateContent({
+          model: modelo,
+          contents: conversacion,
+          config: { systemInstruction: PEDIDO_EXTRAER, responseMimeType: "application/json", responseJsonSchema: ESQUEMA_EXTRAER },
+        }),
+      "gemini-3.5-flash-lite"
+    );
+    const datos = JSON.parse(r.text ?? "{}");
+    return Array.isArray(datos?.recuerdos) ? datos.recuerdos : [];
+  },
+  alAprender: (nuevos) => registrar("MEMORIA", `Aprendí: ${nuevos.map((n) => n.texto).join(" | ").slice(0, 300)}`),
+});
+// La primera vez, los recuerdos de siempre pasan a la red; y se completan los vectores que falten
+setTimeout(() => {
+  if (!claveConfigurada) return;
+  void sembrar(leerRecuerdos().map((r) => r.texto))
+    .then(() => completarVectores())
+    .catch(() => {});
+}, 15_000);
 
 // Investigación a fondo y dibujos (herramientas investigar_a_fondo y dibujar)
 conectarIA({
@@ -701,9 +794,12 @@ conectarIA({
 });
 
 /** Envía al navegador el resultado del agente y lo anota en el registro. */
+let ultimoPedidoUsuario = "";
 function responderResultado(res: express.Response, resultado: Awaited<ReturnType<Agente["conversar"]>>) {
   if ("confirmacion" in resultado) return res.json(resultado);
   const texto = resultado.texto || "Hecho, señor.";
+  // La red de memoria aprende de lo platicado (por tandas, en segundo plano)
+  if (ultimoPedidoUsuario && !ultimoPedidoUsuario.startsWith("(Mensaje automático")) anotarIntercambio(ultimoPedidoUsuario, texto);
   registrar("CHAT", `Jarvis: ${texto}`);
   guardarEnHistorial("jarvis", texto);
   res.json({ texto });
@@ -784,6 +880,7 @@ app.post("/api/chat", async (req, res) => {
 
   registrar("CHAT", `Usuario: ${ultimo.texto}`);
   guardarEnHistorial("usuario", ultimo.texto);
+  ultimoPedidoUsuario = ultimo.texto;
   try {
     responderResultado(res, await agente.conversar(contents));
   } catch (err) {

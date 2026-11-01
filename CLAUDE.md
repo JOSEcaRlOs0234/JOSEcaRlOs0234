@@ -48,7 +48,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.26.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.27.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -510,6 +510,23 @@
   Al iniciar se BORRAN datos/contactos.json, datos/whatsapp.json y datos/tmp-notificaciones (privacidad). Se quedan:
   abrir/cerrar la app de WhatsApp como cualquier programa. Las notas v2.12 y v2.24–v2.25 quedan como historia (commit
   "Jarvis 2.25.0" si algún día lo vuelve a pedir).
+- v2.27 RED NEURONAL DE MEMORIA (preguntó qué recomendaba para "cerebro mejor y memoria"; se le explicó que Gemini YA es
+  una red neuronal y que entrenar una propia no conviene; aceptó una "red neuronal de memoria"): `red-memoria.ts` =
+  nodos (texto, tipo dato|gusto|estudio|plan|persona|tema, creado, usado, vector) en datos/red-memoria.json (máx. 800;
+  si se llena se van los menos usados). Vectores = embeddings de Gemini (`gemini-embedding-001`, respaldo
+  `text-embedding-004`, outputDimensionality 256) vía `conectarRed({incrustar, extraer, alAprender})` en server.ts; sin
+  embeddings cae a parecido por palabras. `conexiones`: vecinos ≥ umbral (0.62, o el percentil 80 de todas las parejas
+  si hay ≥8 nodos), máx. 4 por nodo. `aprender` (repetido ≥0.95 → refuerza), `recordar` (activa por parecido ≥0.58 y
+  propaga 50 % por las conexiones), `recuerdosRelacionados` → se agrega a systemInstruction en `preguntarAGemini`
+  (`memoriaPara`, 1 vez por mensaje; no en "(Mensaje automático"). Aprende SOLO: `anotarIntercambio` en
+  `responderResultado` (con `ultimoPedidoUsuario`), por tandas de 4 intercambios o 2 min → `extraer` = Gemini
+  (prefiere gemini-3.5-flash-lite) con `PEDIDO_EXTRAER` + `ESQUEMA_EXTRAER` (nunca contraseñas/tarjetas/direcciones/
+  salud íntima). La 1.ª vez `sembrar` pasa los recuerdos de memoria.json; `completarVectores` rellena los que falten.
+  guardar_recuerdo también llama `aprender`. Herramienta `recordar_en_red` {tema} (libre). Rutas `GET/POST/DELETE
+  /api/red`, `POST /api/red/recordar`, `DELETE /api/red/:id`. UI `components/RedMemoriaPanel.tsx` (botón "Red" junto a
+  Notas/Pizarra): canvas con física (repulsión + resortes), colores por tipo, pulsos por las conexiones, buscar "Activar"
+  enciende neuronas, clic → ver/Olvidar, agregar a mano. PERSONALIDAD "RED DE MEMORIA". Probado con embeddings y
+  Gemini simulados (aprende por tandas, recuerda química/música, nada con "clima") + captura; NO con embeddings reales.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
