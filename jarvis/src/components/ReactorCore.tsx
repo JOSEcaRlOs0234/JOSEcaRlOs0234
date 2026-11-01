@@ -248,27 +248,15 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
         </div>
       </div>
 
-      {/* Etiqueta de estado actual y subtítulo técnico */}
-      <div className="mt-1 flex flex-col items-center gap-1 z-10">
-        <div
-          className={`px-3 py-0.5 border text-[11px] font-hud-mono tracking-widest uppercase ${currentMeta.badgeColor}`}
-        >
-          ESTADO ACTIVO: {currentMeta.title}
-        </div>
-        <p className="text-[11px] text-[#68a8d8] font-hud-mono">
-          {currentMeta.subtitle}
-        </p>
-      </div>
-
       {/* Botones principales: hablar con Jarvis y probar su voz */}
       <div className="mt-3 flex flex-wrap items-center justify-center gap-2 z-10 px-2">
         <button
           type="button"
           onClick={onToggleDictado}
-          className={`px-5 py-2 text-xs font-hud-mono font-bold uppercase tracking-wider border transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
+          className={`px-5 py-2 rounded-full text-xs font-hud-mono font-semibold uppercase tracking-wider border transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
             dictando
-              ? "bg-[#00f5a0]/25 border-[#00f5a0] text-[#00f5a0] shadow-[0_0_16px_rgba(0,245,160,0.45)]"
-              : "bg-[#00e5ff]/20 border-[#00e5ff] text-[#e2f8ff] hover:bg-[#00e5ff]/35 shadow-[0_0_14px_rgba(0,229,255,0.35)]"
+              ? "bg-[#00f5a0]/15 border-[#00f5a0]/70 text-[#00f5a0]"
+              : "bg-[#00e5ff]/10 border-[#00e5ff]/50 text-[#e2f8ff] hover:bg-[#00e5ff]/20"
           }`}
           title="Háblale a Jarvis con tu voz"
         >
@@ -288,7 +276,7 @@ export const ReactorCore: React.FC<ReactorCoreProps> = ({
         <button
           type="button"
           onClick={onSimulateVoice}
-          className="px-3 py-2 text-xs font-hud-mono border bg-[#051329]/75 border-[#00e5ff]/30 text-[#68a8d8] hover:border-[#00e5ff]/70 hover:text-[#e2f8ff] transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0"
+          className="px-3 py-2 rounded-full text-xs font-hud-mono text-[#68a8d8] hover:text-[#e2f8ff] hover:bg-[#00e5ff]/10 transition-all duration-150 cursor-pointer whitespace-nowrap shrink-0"
           title="Probar respuesta hablada de Jarvis"
         >
           Probar voz

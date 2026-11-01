@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.31.1). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.32.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -597,6 +597,13 @@
   `apagarJarvis` (App.tsx). `POST /api/apagar` SIGUE en el servidor (lo usan Jarvis.vbs para apagar versiones viejas y
   las pruebas). El aviso de versión vieja ahora dice "cierra la ventana y vuelve a abrir con el icono". Jarvis se queda
   encendido por detrás (cerrar la ventana no lo apaga; se apaga con Windows).
+- v2.32 INTERFAZ MÁS LIMPIA (pedido: "mantén todo igual, haz que la interfaz se vea más limpia, solo checa eso"):
+  solo estilos. index.css: fondo sin cuadrícula (solo brillo radial); `.hud-panel` sin corchetes de esquina ni
+  sombras, borde fino y border-radius 10px. App.tsx: barra superior sin fondo/borde ni "· ASISTENTE PERSONAL"; Ajustes
+  sin borde; botón "Ciudad" → icono 📍; reloj más grande sin línea divisoria; botones sobre el portal (Páginas, Red,
+  Modo clase, Notas, Pizarra) sin borde y del mismo color; chat: voz = solo icono, mensajes como burbujas redondeadas sin
+  borde, caja de texto y Enviar redondeados. ReactorCore: se quitó la etiqueta "ESTADO ACTIVO" + subtítulo (el estado
+  ya se ve dentro del portal); botones redondos y suaves. Todas las funciones siguen igual.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.
