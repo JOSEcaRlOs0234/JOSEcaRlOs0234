@@ -15,7 +15,13 @@ import { mensajesRecientes } from "./whatsapp.ts";
 import { buscarPagina, guardarPagina, leerHtml, ultimaPagina, type Pagina } from "./paginas.ts";
 import {
   analisisEtfs,
+  apilarSvg,
   AVISO,
+  graficaPrediccion,
+  proyectar,
+  rendimientosSemanales,
+  textoPrediccion,
+  verificar,
   ETFS,
   graficaSvg,
   ETFS_POPULARES,
@@ -275,13 +281,16 @@ export const DECLARACIONES = [
     name: "comparar_etfs",
     description:
       "Compara ETFs con datos REALES de 5 años (rendimiento por año, cuánto sube y baja, peor caída, costo anual y qué " +
-      "tienen adentro) y busca en internet DÓNDE comprarlos desde México (casas de bolsa autorizadas, comisiones, " +
-      "impuestos). Úsala para '¿en qué ETF conviene invertir?', '¿dónde compro ETFs?', 'compara VOO y QQQ'. Todo queda en la pizarra.",
+      "tienen adentro), PREDICE cuál es mejor para buen rendimiento (simula 2,000 escenarios a futuro y da el mejor " +
+      "candidato, con rango malo/probable/bueno y probabilidad de perder), VERIFICA la predicción contra el pasado y busca " +
+      "DÓNDE comprarlos desde México. Úsala para '¿en qué ETF conviene invertir?', '¿cuál va a rendir más?', '¿dónde compro " +
+      "ETFs?', 'compara VOO y QQQ'. Todo queda en la pizarra con gráficas.",
     parametersJsonSchema: {
       type: "object",
       properties: {
         etfs: { type: "array", items: { type: "string" }, description: "ETFs a comparar (vacío = los más populares)" },
         monto_pesos: { type: "number", description: "Si dijo cuánto quiere invertir, en pesos" },
+        anios: { type: "integer", description: "En cuántos años quiere el dinero (plazo de la predicción; por defecto 5)" },
         donde_comprar: { type: "boolean", description: "Buscar dónde comprarlos desde México (por defecto sí)" },
       },
     },
@@ -1241,6 +1250,7 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       if (!lista.length) throw new ErrorHerramienta("No reconozco esos ETFs. Pide sus símbolos (por ejemplo VOO, QQQ, VT).");
       const monto = typeof args.monto_pesos === "number" && args.monto_pesos > 0 ? Math.min(args.monto_pesos, 1e9) : null;
       const buscarDonde = args.donde_comprar !== false;
+      const anios = Math.max(1, Math.min(30, Math.round(Number(args.anios) || 5)));
       return {
         nivel: "libre",
         tipo: "finanzas",
@@ -1249,7 +1259,15 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
           const [series, dolar, donde] = await Promise.all([
             Promise.allSettled(lista.map((s) => historia(s, true))),
             historia("MXN=X").catch(() => null),
-            buscarDonde && investigador ? investigador(PREGUNTA_DONDE_COMPRAR).catch((err) => `(No pude buscar dónde comprarlos: ${fallaDeBusqueda(err)})`) : Promise.resolve(""),
+            // La búsqueda de dónde comprar tiene 15 s como máximo, para que la respuesta no tarde de más
+            buscarDonde && investigador
+              ? Promise.race([
+                  investigador(PREGUNTA_DONDE_COMPRAR).catch((err) => `(No pude buscar dónde comprarlos: ${fallaDeBusqueda(err)})`),
+                  new Promise<string>((listo) =>
+                    setTimeout(() => listo("(La búsqueda de dónde comprarlos tardó demasiado; pídeme \"¿dónde compro ETFs?\" para buscarlo aparte.)"), 15_000)
+                  ),
+                ])
+              : Promise.resolve(""),
           ]);
           const tipoCambio = dolar?.precio ?? null;
           const filas: { s: Serie; m: ReturnType<typeof metricas> }[] = [];
@@ -1273,10 +1291,18 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             );
           });
           const analisis = analisisEtfs(filas);
+          // Predicción (2,000 escenarios por ETF) y comprobación del método con el pasado
+          const proyecciones = filas
+            .map(({ s }) => ({ s, r: rendimientosSemanales(s) }))
+            .filter((x) => x.r.length >= 26)
+            .map(({ s, r }) => ({ s, p: proyectar(r, anios, s.simbolo) }));
+          const comprobacion = verificar(filas.map((f) => f.s));
+          const prediccion = textoPrediccion(proyecciones, comprobacion, anios);
           const contenido =
             `# Comparación de ETFs\nDatos reales de los últimos 5 años${tipoCambio ? ` · dólar a ${tipoCambio.toFixed(2)} pesos` : ""}. ` +
             `La gráfica muestra cómo habrían crecido $10,000 en cada uno.\n\n` +
             `${analisis.texto}\n\n` +
+            (proyecciones.length ? `${prediccion.texto}\n\n` : "") +
             `## Los números de cada uno\n${lineas.join("\n")}\n\n` +
             "## Cómo leer esto\n- **Rendimiento por año**: cuánto creció en promedio cada año (pasado, no garantizado).\n" +
             "- **Sube y baja**: qué tanto se mueve en un año normal; más alto = más riesgo.\n" +
@@ -1284,7 +1310,9 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             "- **Costo anual**: lo que cobra el fondo cada año; entre más bajo, mejor.\n" +
             (donde ? `\n## Dónde comprarlos desde México\n${donde}\n` : "") +
             `\n## Importante\n${AVISO}`;
-          const svg = limpiarSvg(graficaSvg(filas.map((f) => f.s), "ETFs: 5 años", "dinero"));
+          const svg = limpiarSvg(
+            apilarSvg(graficaSvg(filas.map((f) => f.s), "ETFs: últimos 5 años", "dinero"), graficaPrediccion(proyecciones, anios))
+          );
           if (svg) dibujarEnPizarra("Comparación de ETFs", svg, contenido);
           else escribirPizarra("Comparación de ETFs", contenido, false);
           return {
@@ -1299,11 +1327,13 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             })),
             ...(fallos.length ? { sin_datos: fallos } : {}),
             analisis: analisis.resumen,
+            prediccion: prediccion.resumen || "no hubo datos suficientes para predecir",
             donde_comprar: donde ? String(donde).slice(0, 1500) : "no se buscó",
             aviso: AVISO,
             nota:
-              "La gráfica y el análisis ya están en la pizarra. En voz (4 o 5 frases) explica el análisis: cuál creció más, " +
-              "cuál fue más estable, cuál tiene mejor equilibrio entre ganancia y riesgo, el más barato, y dónde se pueden comprar. NO digas 'compra X' ni prometas ganancias; si pide una recomendación, " +
+              "Las gráficas, el análisis y la predicción ya están en la pizarra. En voz (4 o 5 frases): cuál es el mejor " +
+              "candidato según la predicción y por qué (probable, si va mal, probabilidad de perder), qué tan confiable " +
+              "resultó la comprobación con el pasado, y dónde se pueden comprar. NO digas 'compra X' ni prometas ganancias; si pide una recomendación, " +
               "pregúntale su plazo y cuánto riesgo aguanta, y explica opciones generales. Menciona que no es asesoría personal.",
           };
         },

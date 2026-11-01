@@ -498,7 +498,10 @@ export default function App() {
   const [mostrarArranque, setMostrarArranque] = useState(() => {
     try {
       // Una vez por ventana y no cuando se abre sola por un recordatorio
-      if (new URLSearchParams(window.location.search).has("aviso")) return false;
+      const params = new URLSearchParams(window.location.search);
+      if (params.has("aviso")) return false;
+      // Al despertarlo (aplausos, "Jarvis" o tu voz) se salta la pantalla de inicio para contestar más rápido
+      if (params.get("despertar") === "1") return false;
       if (sessionStorage.getItem("jarvis_arranque_visto")) return false;
       sessionStorage.setItem("jarvis_arranque_visto", "1");
     } catch {
@@ -1867,8 +1870,8 @@ export default function App() {
     const params = new URLSearchParams(window.location.search);
     if (params.get("despertar") !== "1") return;
     window.history.replaceState(null, "", "/");
-    // Si suena la entrada, se deja escuchar unos segundos antes de saludar
-    const id = window.setTimeout(() => despertarRef.current(true), intro || introEnWindows ? 3500 : 900);
+    // Saludar casi al instante (la música de entrada se baja sola cuando Ares habla)
+    const id = window.setTimeout(() => despertarRef.current(true), intro || introEnWindows ? 1200 : 400);
     return () => clearTimeout(id);
   }, []);
 

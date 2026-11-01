@@ -9,7 +9,7 @@
 
 import express from "express";
 import { copyFileSync, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from "fs";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import dotenv from "dotenv";
 import path from "path";
 import { exec } from "child_process";
@@ -217,6 +217,9 @@ llaman así, responde con naturalidad.)
   reales, con gráfica en la pizarra). Si preguntan por ETFs o "¿qué es mejor?" ("¿en qué ETF conviene invertir?",
   "¿dónde compro ETFs?", "compara VOO y QQQ"), usa comparar_etfs: muestra una GRÁFICA de 5 años y un ANÁLISIS de cuál
   es mejor según cada objetivo, más dónde comprarlos desde México. Explica el análisis sencillo, con números redondeados.
+  Si preguntan "¿cuál va a rendir más?" o piden una predicción, también usa comparar_etfs (con anios = su plazo): hace
+  una PREDICCIÓN con 2,000 escenarios simulados y la VERIFICA contra el pasado. Di el mejor candidato y su rango (si va
+  mal / probable / si va bien) y aclara que es una estimación con datos reales, no una garantía.
   NO eres asesor financiero: da información para que el usuario decida, menciona riesgos, comisiones, diversificación
   y plazo; nunca prometas ganancias ni digas "compra esto seguro". Si pide "¿cuál me conviene?", pregúntale para cuándo
   quiere el dinero y cuánto riesgo aguanta, y explica opciones generales (por ejemplo, un ETF amplio y barato para
@@ -321,6 +324,9 @@ function explicarError(err: any): string {
   if (codigo === 429 || /quota|RESOURCE_EXHAUSTED|rate limit/i.test(texto)) {
     return "Llegué al límite de uso gratuito de Gemini por ahora. Espera un minuto e inténtalo de nuevo.";
   }
+  if (codigo === 504) {
+    return "Gemini está tardando demasiado en este momento. Inténtalo de nuevo en unos segundos.";
+  }
   if (/fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network/i.test(texto)) {
     return "No me puedo conectar a internet para hablar con Gemini. Revisa tu conexión.";
   }
@@ -353,9 +359,22 @@ async function memoriaPara(contents: any[]): Promise<string> {
   return memoriaActivada.texto;
 }
 
+// RAPIDEZ (v2.36): cada pedido de la plática tiene tiempo límite. Si el modelo elegido tarda más de LIMITE_PRIMERO, se
+// corta y se pregunta al siguiente (los de respaldo son más rápidos) con LIMITE_RESPALDO. Así una respuesta normal llega
+// en pocos segundos y casi nunca pasa de 20. Además se le pide "pensar poco" (sigue razonando, pero sin tardarse).
+const LIMITE_PRIMERO_MS = 12_000;
+const LIMITE_RESPALDO_MS = 9_000;
+let pensarPocoSirve = true; // si algún modelo no acepta el ajuste, se quita solo
+
+const esTiempoAgotado = (err: any) => err?.name === "TimeoutError" || err?.name === "AbortError" || /aborted|timed? ?out/i.test(String(err?.message ?? ""));
+
 async function preguntarAGemini(contents: any[]) {
-  const memoria = await memoriaPara(contents).catch(() => "");
-  const pedir = (model: string) =>
+  // Los recuerdos de la red de memoria no pueden retrasar la respuesta más de 1.5 s
+  const memoria = await Promise.race([
+    memoriaPara(contents).catch(() => ""),
+    new Promise<string>((listo) => setTimeout(() => listo(""), 1500)),
+  ]);
+  const pedir = (model: string, limiteMs: number) =>
     ai.models.generateContent({
       model,
       contents,
@@ -363,18 +382,38 @@ async function preguntarAGemini(contents: any[]) {
         systemInstruction: memoria ? `${instrucciones()}\n\n${memoria}` : instrucciones(),
         // La lista permitida de siempre + la edición de Canva (si está conectada)
         tools: [{ functionDeclarations: [...DECLARACIONES, ...declaracionesCanvaMcp()] as any }],
+        ...(pensarPocoSirve ? { thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } } : {}),
+        abortSignal: AbortSignal.timeout(limiteMs),
       },
     });
 
   let respuesta;
   let ultimoError: any;
+  let primero = true;
   for (const modelo of ordenDePrueba(modeloActual)) {
+    const limite = primero ? LIMITE_PRIMERO_MS : LIMITE_RESPALDO_MS;
+    primero = false;
     try {
-      respuesta = await pedir(modelo);
+      try {
+        respuesta = await pedir(modelo, limite);
+      } catch (err: any) {
+        // Un modelo que no entiende "pensar poco": se quita el ajuste y se repite una vez
+        if (pensarPocoSirve && Number(err?.status) === 400 && /think/i.test(String(err?.message))) {
+          pensarPocoSirve = false;
+          registrar("AVISO", "El modelo no acepta el ajuste de razonamiento corto; sigo sin él.");
+          respuesta = await pedir(modelo, limite);
+        } else throw err;
+      }
       if (modelo !== modeloActual) registrar("AVISO", `Respondió el modelo de respaldo ${modelo}.`);
       break;
     } catch (err) {
       ultimoError = err;
+      if (esTiempoAgotado(err)) {
+        // Lento ahora: descansa 2 minutos para que los siguientes mensajes vayan directo a uno rápido
+        enfriarModelo(modelo, 2 * 60 * 1000);
+        registrar("AVISO", `El modelo ${modelo} tardó más de ${limite / 1000} s; pregunto a uno más rápido.`);
+        continue;
+      }
       if (!convieneOtroModelo(err)) throw err;
       // Límite gratuito (429) o saturado: descansar 1 minuto; si no existe (404): 1 hora
       const estado = Number((err as any)?.status ?? 0);
@@ -382,7 +421,12 @@ async function preguntarAGemini(contents: any[]) {
       registrar("AVISO", `El modelo ${modelo} falló (${estado || "?"}); probando otro.`);
     }
   }
-  if (!respuesta) throw ultimoError;
+  if (!respuesta) {
+    if (esTiempoAgotado(ultimoError)) {
+      throw Object.assign(new Error("Gemini está tardando demasiado en este momento. Inténtalo de nuevo en unos segundos."), { status: 504 });
+    }
+    throw ultimoError;
+  }
 
   const llamadas: Llamada[] = (respuesta.functionCalls ?? []).map((c: any) => ({
     id: c.id,

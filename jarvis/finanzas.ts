@@ -111,7 +111,7 @@ async function deYahoo(simbolo: string, rango: string, intervalo: string): Promi
   for (const host of ["query1", "query2"]) {
     try {
       const url = `https://${host}.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(simbolo)}?range=${rango}&interval=${intervalo}&includePrePost=false`;
-      const r = await pedir(url, { headers: NAVEGADOR, signal: AbortSignal.timeout(12_000) });
+      const r = await pedir(url, { headers: NAVEGADOR, signal: AbortSignal.timeout(6_000) });
       if (r.status === 404) throw new Error(`No existe el símbolo ${simbolo}.`);
       if (!r.ok) throw new Error(`Yahoo respondió ${r.status}`);
       const datos: any = await r.json();
@@ -163,7 +163,7 @@ export function aStooq(simbolo: string): string | null {
 async function deStooq(simbolo: string): Promise<Serie> {
   const s = aStooq(simbolo);
   if (!s) throw new Error(`El respaldo no tiene ${simbolo}`);
-  const r = await pedir(`https://stooq.com/q/d/l/?s=${encodeURIComponent(s)}&i=d`, { headers: NAVEGADOR, signal: AbortSignal.timeout(12_000) });
+  const r = await pedir(`https://stooq.com/q/d/l/?s=${encodeURIComponent(s)}&i=d`, { headers: NAVEGADOR, signal: AbortSignal.timeout(6_000) });
   if (!r.ok) throw new Error(`Stooq respondió ${r.status}`);
   const lineas = (await r.text()).trim().split(/\r?\n/);
   if (!/^Date,/i.test(lineas[0] ?? "")) throw new Error(`Sin datos de ${simbolo}`);
@@ -455,4 +455,211 @@ export function analisisEtfs(filas: Fila[]): { texto: string; resumen: string } 
     .filter(Boolean)
     .join(", ");
   return { texto, resumen };
+}
+
+// ------------------------------------------------------------------ PREDICCIÓN (simulación de escenarios) y VERIFICACIÓN
+
+/**
+ * Nadie puede predecir la bolsa con certeza. Lo que se hace aquí es lo que hacen los profesionales:
+ *  1. Simular miles de futuros posibles reusando cómo se movió REALMENTE cada ETF (bloques de 4 semanas de su historia).
+ *  2. No suponer que los últimos años se repiten: el crecimiento promedio se mezcla 50/50 con el promedio de largo plazo
+ *     de la bolsa (acciones ≈ 7.5 % al año, bonos ≈ 4 %), así no se exagera lo que subió mucho últimamente.
+ *  3. Verificar el método: con la PRIMERA mitad de la historia se "predice" la segunda y se revisa si acertó.
+ */
+
+/** Números al azar repetibles (misma semilla = mismos resultados). */
+function azar(semilla: number): () => number {
+  let s = semilla % 2147483647 || 1;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+const semillaDe = (t: string) => [...t].reduce((a, c) => (a * 31 + c.charCodeAt(0)) % 2147483647, 7);
+
+/** Rendimientos semanales (logarítmicos) de una serie (si es diaria, se toma 1 de cada 5 días). */
+export function rendimientosSemanales(s: Serie): number[] {
+  const pasoDias = s.tiempos.length > 1 ? (s.tiempos[s.tiempos.length - 1] - s.tiempos[0]) / 86400_000 / (s.tiempos.length - 1) : 7;
+  const salto = pasoDias > 3 ? 1 : 5;
+  const r: number[] = [];
+  for (let i = salto; i < s.cierres.length; i += salto) r.push(Math.log(s.cierres[i] / s.cierres[i - salto]));
+  return r;
+}
+
+const LARGO_PLAZO = (simbolo: string) => (["BND", "AGG", "TLT", "SHY"].includes(simbolo) ? 0.04 : 0.075);
+
+export interface Proyeccion {
+  anios: number;
+  malo: number; // de cada $10,000 (10 % de los escenarios terminan peor que esto)
+  probable: number; // mediana
+  bueno: number; // 10 % de los escenarios terminan mejor que esto
+  probPerder: number; // % de escenarios que terminan con menos de lo invertido
+  anualProbable: number; // % por año del escenario probable
+}
+
+/** Simula `escenarios` futuros de `anios` años con los rendimientos `r` (semanales). */
+export function proyectar(r: number[], anios: number, simbolo: string, base = 10_000, escenarios = 2000, mezcla = 0.5): Proyeccion {
+  const semanas = Math.round(anios * 52);
+  const mediaHist = r.reduce((a, b) => a + b, 0) / Math.max(1, r.length);
+  const mediaLargo = Math.log(1 + LARGO_PLAZO(simbolo)) / 52;
+  const ajuste = mezcla * mediaHist + (1 - mezcla) * mediaLargo - mediaHist; // mueve el promedio, conserva el sube y baja
+  const rnd = azar(semillaDe(`${simbolo}-${anios}`));
+  const BLOQUE = 4;
+  const finales: number[] = [];
+  for (let e = 0; e < escenarios; e++) {
+    let log = 0;
+    for (let w = 0; w < semanas; w += BLOQUE) {
+      const inicio = Math.floor(rnd() * Math.max(1, r.length - BLOQUE));
+      for (let k = 0; k < BLOQUE && w + k < semanas; k++) log += (r[inicio + k] ?? 0) + ajuste;
+    }
+    finales.push(base * Math.exp(log));
+  }
+  finales.sort((a, b) => a - b);
+  const p = (q: number) => finales[Math.min(finales.length - 1, Math.floor(q * finales.length))];
+  const probable = p(0.5);
+  return {
+    anios,
+    malo: p(0.1),
+    probable,
+    bueno: p(0.9),
+    probPerder: (finales.filter((f) => f < base).length / finales.length) * 100,
+    anualProbable: (Math.pow(probable / base, 1 / anios) - 1) * 100,
+  };
+}
+
+/** Puntaje para "cuál es mejor": el escenario probable pesa 60 % y el escenario malo 40 % (cuida no perder). */
+export const puntaje = (p: Proyeccion) => 0.6 * p.probable + 0.4 * p.malo;
+
+export interface Verificacion {
+  dentroDelRango: number; // cuántos ETFs terminaron dentro del rango malo–bueno que se predijo
+  total: number;
+  aciertoGanador: boolean | null; // ¿el que se predijo como mejor quedó entre los 3 mejores de verdad?
+  predichoMejor: string | null;
+  realMejor: string | null;
+  anios: number;
+}
+
+/** Con la primera mitad de la historia se predice la segunda mitad, y se compara con lo que pasó de verdad. */
+export function verificar(series: Serie[]): Verificacion | null {
+  const datos = series
+    .map((s) => {
+      const r = rendimientosSemanales(s);
+      const mitad = Math.floor(r.length / 2);
+      if (mitad < 26) return null;
+      const antes = r.slice(0, mitad);
+      const despues = r.slice(mitad);
+      const anios = despues.length / 52;
+      const pred = proyectar(antes, anios, s.simbolo, 10_000, 1000);
+      const real = 10_000 * Math.exp(despues.reduce((a, b) => a + b, 0));
+      return { simbolo: s.simbolo, pred, real, anios };
+    })
+    .filter((x): x is NonNullable<typeof x> => !!x);
+  if (datos.length < 2) return null;
+  const dentro = datos.filter((d) => d.real >= d.pred.malo && d.real <= d.pred.bueno).length;
+  const predOrden = [...datos].sort((a, b) => puntaje(b.pred) - puntaje(a.pred));
+  const realOrden = [...datos].sort((a, b) => b.real - a.real);
+  const top = realOrden.slice(0, Math.min(3, Math.ceil(datos.length / 2))).map((d) => d.simbolo);
+  return {
+    dentroDelRango: dentro,
+    total: datos.length,
+    aciertoGanador: predOrden[0] ? top.includes(predOrden[0].simbolo) : null,
+    predichoMejor: predOrden[0]?.simbolo ?? null,
+    realMejor: realOrden[0]?.simbolo ?? null,
+    anios: Math.round(datos[0].anios * 10) / 10,
+  };
+}
+
+const dinero = (v: number) => `$${Math.round(v).toLocaleString("es-MX")}`;
+const nombreCorto = (simbolo: string) => LEYENDA[simbolo] ?? simbolo.replace("ISHRS.MX", "").replace(".MX", "");
+
+/** Texto de la predicción + verificación para la pizarra, y un resumen para decir en voz. */
+export function textoPrediccion(
+  filas: { s: Serie; p: Proyeccion }[],
+  v: Verificacion | null,
+  anios: number
+): { texto: string; resumen: string; mejor: string | null } {
+  const orden = [...filas].sort((a, b) => puntaje(b.p) - puntaje(a.p));
+  const mejor = orden[0];
+  const masGanancia = [...filas].sort((a, b) => b.p.probable - a.p.probable)[0];
+  const masSeguro = [...filas].sort((a, b) => a.p.probPerder - b.p.probPerder)[0];
+  const lineas = orden.map(
+    ({ s, p }, i) =>
+      `${i + 1}. **${nombreCorto(s.simbolo)}**: probable ${dinero(p.probable)} (${pctSimple(p.anualProbable)} por año) · ` +
+      `si va mal ${dinero(p.malo)} · si va bien ${dinero(p.bueno)} · probabilidad de perder ${p.probPerder.toFixed(0)} %`
+  );
+  let confiable = "";
+  if (v) {
+    confiable =
+      `\n\n## ¿Qué tan confiable es? (comprobación con el pasado)\n` +
+      `- Con la primera mitad de los datos se "predijeron" los siguientes ${v.anios} años y se comparó con lo que pasó de verdad.\n` +
+      `- El resultado real cayó dentro del rango "si va mal – si va bien" en **${v.dentroDelRango} de ${v.total}** ETFs.\n` +
+      (v.predichoMejor && v.realMejor
+        ? `- El método eligió **${nombreCorto(v.predichoMejor)}** como mejor; en la realidad el que más ganó fue **${nombreCorto(v.realMejor)}**` +
+          `${v.aciertoGanador ? " (el elegido sí quedó entre los mejores ✓)." : " (esta vez el elegido NO quedó entre los mejores ✗)."}\n`
+        : "") +
+      "- Por eso, toma la predicción como una guía de rangos, no como una promesa.";
+  }
+  const texto =
+    `## Predicción a ${anios} años (2,000 escenarios simulados con $10,000)\n` +
+    "Se simularon miles de futuros posibles con el sube y baja real de cada ETF, mezclando lo que pasó en los últimos 5 años " +
+    "con el promedio histórico de largo plazo de la bolsa (para no exagerar lo que subió mucho últimamente).\n\n" +
+    lineas.join("\n") +
+    (mejor
+      ? `\n\n**Mejor candidato para buen rendimiento cuidando el riesgo: ${nombreCorto(mejor.s.simbolo)}.**` +
+        (masGanancia && masGanancia !== mejor ? ` Si buscas la mayor ganancia posible aceptando más riesgo: ${nombreCorto(masGanancia.s.simbolo)}.` : "") +
+        (masSeguro && masSeguro !== mejor ? ` El que tiene menos probabilidad de perder: ${nombreCorto(masSeguro.s.simbolo)}.` : "")
+      : "") +
+    confiable;
+  const resumen = mejor
+    ? `predicción a ${anios} años: mejor candidato ${nombreCorto(mejor.s.simbolo)} (probable ${dinero(mejor.p.probable)} de cada $10,000, ` +
+      `probabilidad de perder ${mejor.p.probPerder.toFixed(0)} %)` +
+      (masGanancia && masGanancia !== mejor ? `; más ganancia con más riesgo: ${nombreCorto(masGanancia.s.simbolo)}` : "") +
+      (v ? `; comprobación con el pasado: acertó el rango en ${v.dentroDelRango} de ${v.total}` : "")
+    : "";
+  return { texto, resumen, mejor: mejor ? mejor.s.simbolo : null };
+}
+
+/** Gráfica de barras de la predicción: para cada ETF, la barra va de "si va mal" a "si va bien" y el punto es lo probable. */
+export function graficaPrediccion(filas: { s: Serie; p: Proyeccion }[], anios: number, base = 10_000): string {
+  if (!filas.length) return "";
+  const orden = [...filas].sort((a, b) => puntaje(b.p) - puntaje(a.p));
+  const W = 1200, izq = 170, der = 60, arriba = 100, fila = 54;
+  const H = arriba + orden.length * fila + 70;
+  const max = Math.max(...orden.map((f) => f.p.bueno), base) * 1.05;
+  const min = Math.min(...orden.map((f) => f.p.malo), base) * 0.9;
+  const x = (v: number) => izq + ((v - min) / (max - min)) * (W - izq - der);
+  const partes: string[] = [`<rect width="${W}" height="${H}" fill="#030a18"/>`];
+  partes.push(`<text x="40" y="48" fill="#e2f8ff" font-size="30" font-family="sans-serif" font-weight="bold">${escapar(`Predicción a ${anios} años: ¿en cuánto se convierten $10,000?`)}</text>`);
+  partes.push(`<text x="40" y="76" fill="#8fb4d6" font-size="18" font-family="sans-serif">${escapar("Barra = de \"si va mal\" a \"si va bien\" (80 % de los escenarios) · punto = lo más probable")}</text>`);
+  const xb = x(base);
+  partes.push(`<line x1="${xb.toFixed(1)}" y1="${arriba - 10}" x2="${xb.toFixed(1)}" y2="${H - 50}" stroke="#ff6b81" stroke-width="1.5" stroke-dasharray="6 6"/>`);
+  partes.push(`<text x="${xb.toFixed(1)}" y="${H - 28}" fill="#ff6b81" font-size="16" font-family="sans-serif" text-anchor="middle">lo invertido ($10,000)</text>`);
+  orden.forEach(({ s, p }, i) => {
+    const y = arriba + i * fila + fila / 2;
+    const color = i === 0 ? "#00f5a0" : "#00e5ff";
+    partes.push(`<text x="${izq - 16}" y="${y + 7}" fill="${i === 0 ? "#00f5a0" : "#e2f8ff"}" font-size="20" font-family="sans-serif" font-weight="bold" text-anchor="end">${escapar((i === 0 ? "★ " : "") + nombreCorto(s.simbolo))}</text>`);
+    partes.push(`<rect x="${x(p.malo).toFixed(1)}" y="${y - 9}" width="${Math.max(2, x(p.bueno) - x(p.malo)).toFixed(1)}" height="18" rx="9" fill="${color}" fill-opacity="0.28" stroke="${color}" stroke-opacity="0.7"/>`);
+    partes.push(`<circle cx="${x(p.probable).toFixed(1)}" cy="${y}" r="8" fill="${color}"/>`);
+    partes.push(`<text x="${(x(p.bueno) + 10).toFixed(1)}" y="${y + 6}" fill="#8fb4d6" font-size="16" font-family="sans-serif">${escapar(dinero(p.probable))}</text>`);
+  });
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">${partes.join("")}</svg>`;
+}
+
+/** Junta dos gráficas SVG una debajo de la otra (para que en la pizarra se vean las dos). */
+export function apilarSvg(a: string, b: string): string {
+  const partes = [a, b].filter(Boolean).map((svg) => {
+    const m = svg.match(/viewBox="0 0 (\d+) (\d+)"/);
+    const interior = svg.replace(/^<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
+    return { ancho: Number(m?.[1] ?? 1200), alto: Number(m?.[2] ?? 760), interior };
+  });
+  if (partes.length < 2) return a || b;
+  let y = 0;
+  const grupos = partes.map((p) => {
+    const g = `<g transform="translate(0 ${y})">${p.interior}</g>`;
+    y += p.alto + 20;
+    return g;
+  });
+  const W = Math.max(...partes.map((p) => p.ancho));
+  const H = y - 20;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#030a18"/>${grupos.join("")}</svg>`;
 }

@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.35.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.36.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -650,6 +650,24 @@
   prometer, preguntar plazo/riesgo si pide "¿cuál me conviene?", nunca inventar precios). Probado con Yahoo y Gemini
   simulados (cálculos, análisis, gráfica renderizada con resvg, pantalla en Playwright); NO con Yahoo real (la nube no
   llega).
+- v2.36 PREDICCIÓN DE ETFs + APLAUSOS MÁS RÁPIDOS + RESPUESTAS ≤20 s (pedido: "entrénalo para que verifique y prediga
+  cuál es mejor para un mejor rendimiento; que abra más rápido con aplausos; que conteste más rápido, máx. 20 s, pero
+  bien"). Se le explicó que no se "entrena" a Gemini; se ajustó el programa.
+  - Predicción (finanzas.ts): `rendimientosSemanales`, `proyectar` (bootstrap por bloques de 4 semanas, 2,000 escenarios,
+    semilla fija; media mezclada 50/50 con largo plazo 7.5 % acciones / 4 % bonos `LARGO_PLAZO`) → malo p10 / probable
+    p50 / bueno p90, probPerder, anualProbable. `puntaje` = 0.6·probable + 0.4·malo. `verificar` = predice la 2.ª mitad con
+    la 1.ª (rango acertado X de N, ¿el elegido quedó entre los mejores?). `textoPrediccion`, `graficaPrediccion` (barras
+    malo–bueno + punto probable, ★ al mejor), `apilarSvg` (historia + predicción en un solo SVG). comparar_etfs: param
+    `anios` (1–30, por defecto 5); pizarra = Análisis + Predicción + Comprobación + números + dónde comprar.
+  - Aplausos: detector-aplausos `revisarSecuencia`: con 1 aplauso espera 820 ms (antes 500 → los aplausos con >0.5 s de
+    separación NO funcionaban), con 2 espera 350 ms (antes 500). Con `?despertar=1` se salta la pantalla de inicio y
+    saluda a 1.2 s (antes 3.5 s; 0.4 s sin música). Probado con señales sintéticas (300/600/750 ms activan; 1 golpe,
+    3 golpes y 1.1 s de separación no).
+  - Rapidez del chat (server.ts preguntarAGemini): `thinkingConfig.thinkingLevel = LOW` (si da 400 "think" se quita solo:
+    `pensarPocoSirve`), `abortSignal` 12 s al primer modelo y 9 s a los de respaldo; si se agota el tiempo, ese modelo
+    descansa 2 min (`enfriarModelo`) y se pregunta al siguiente; sin respuesta → 504 "Gemini está tardando demasiado".
+    `memoriaPara` máx. 1.5 s. Yahoo/Stooq 6 s por intento; búsqueda de dónde comprar ETFs máx. 15 s. Probado con Gemini
+    simulado lento (30 s): contesta en 12 s con el respaldo y el siguiente mensaje al instante.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

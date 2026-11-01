@@ -195,8 +195,9 @@ export class DetectorAplausos {
   private revisarSecuencia(ahora: number, _duracion: number): void {
     if (!this.aplausos.length || this.evento) return;
     const ultimo = this.aplausos[this.aplausos.length - 1];
-    // Esperar medio segundo de calma para asegurar que no viene un tercer golpe
-    if (ahora - ultimo.t < 500) return;
+    // Con UN aplauso se espera hasta 800 ms (lo más que puede tardar el segundo); con DOS, solo 350 ms de calma para
+    // asegurar que no viene un tercer golpe (antes eran 500 ms en ambos casos: no aceptaba aplausos lentos y tardaba más).
+    if (ahora - ultimo.t < (this.aplausos.length === 1 ? 820 : 350)) return;
     if (this.aplausos.length === 2) {
       this.avisar({ tipo: "activado" });
       this.pausaHasta = ahora + 4000;
