@@ -32,6 +32,7 @@ import {
   Settings,
   Palette,
   Lightbulb,
+  Code2,
 } from "lucide-react";
 import {
   CONFIG,
@@ -54,6 +55,7 @@ import paquete from "../package.json";
 import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { NotasPanel, Nota } from "./components/NotasPanel";
 import { RedMemoriaPanel } from "./components/RedMemoriaPanel";
+import { CodigoPanel } from "./components/CodigoPanel";
 import {
   DURACIONES,
   guardarDuracionArranque,
@@ -477,6 +479,10 @@ export default function App() {
   const [notas, setNotas] = useState<Nota[]>([]);
   const [notasAbiertas, setNotasAbiertas] = useState(false);
   const [redAbierta, setRedAbierta] = useState(false);
+  // Panel "Código" (páginas web y programas que hizo Jarvis)
+  const [codigoAbierto, setCodigoAbierto] = useState(false);
+  const [codigoCambio, setCodigoCambio] = useState(0);
+  const codigoVistoRef = useRef<number | null>(null);
   const notasVistaRef = useRef(0);
 
   // Modelos de Gemini disponibles
@@ -660,6 +666,26 @@ export default function App() {
       showNotification("No pude borrar la pizarra.", "error");
     }
   };
+
+  /** Si Jarvis programó o corrió algo nuevo, abre el panel de código con lo más reciente. */
+  const cargarCodigo = useCallback(async (abrirSiCambio: boolean) => {
+    try {
+      const r = await fetch("/api/codigo");
+      if (!r.ok) return;
+      const datos: { actualizada: number } = await r.json();
+      const antes = codigoVistoRef.current;
+      codigoVistoRef.current = datos.actualizada;
+      if (abrirSiCambio && antes !== null && datos.actualizada > antes) {
+        setCodigoCambio(datos.actualizada);
+        setCodigoAbierto(true);
+        setPizarraAbierta(false);
+        setNotasAbiertas(false);
+        setRedAbierta(false);
+      }
+    } catch {
+      // Se reintenta en la próxima conversación
+    }
+  }, []);
 
   /** Lee las notas; si Jarvis anotó algo nuevo, abre el panel de notas. */
   const cargarNotas = useCallback(async (abrirSiCambio: boolean) => {
@@ -1181,9 +1207,10 @@ export default function App() {
         cargarRecuerdos();
         cargarPizarra(true);
         cargarNotas(true);
+        cargarCodigo(true);
       }
     },
-    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos, cargarPizarra, cargarNotas]
+    [addMensaje, hablar, showNotification, cargarRegistro, cargarPermisos, cargarRecuerdos, cargarPizarra, cargarNotas, cargarCodigo]
   );
 
   const enviarMensaje = useCallback(
@@ -1544,9 +1571,10 @@ export default function App() {
     cargarRecuerdos();
     cargarPizarra(false);
     cargarNotas(false);
+    cargarCodigo(false);
     // Las voces de Windows se cargan un momento después de abrir la página
     if ("speechSynthesis" in window) window.speechSynthesis.getVoices();
-  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas]);
+  }, [comprobarServidor, cargarRegistro, cargarPermisos, cargarModelos, cargarRecuerdos, cargarPizarra, cargarNotas, cargarCodigo]);
 
   // Guardar la conversación (las últimas 60 líneas) para que siga al volver a abrir Jarvis
   useEffect(() => {
@@ -2863,7 +2891,14 @@ export default function App() {
               <div className="text-[10px] font-hud-mono text-[#00e5ff] text-center pt-0.5">📷 Lo que vio Jarvis</div>
             </div>
           )}
-          {redAbierta && !pizarraAbierta && !notasAbiertas && (
+          {codigoAbierto && !pizarraAbierta && !notasAbiertas && (
+            <CodigoPanel
+              refrescar={codigoCambio}
+              onCerrar={() => setCodigoAbierto(false)}
+              avisar={(t, tipo) => showNotification(t, tipo ?? "info")}
+            />
+          )}
+          {redAbierta && !pizarraAbierta && !notasAbiertas && !codigoAbierto && (
             <RedMemoriaPanel onCerrar={() => setRedAbierta(false)} avisar={(t, tipo) => showNotification(t, tipo ?? "info")} />
           )}
           {notasAbiertas && !pizarraAbierta && (
@@ -2902,8 +2937,19 @@ export default function App() {
               )}
             </div>
           )}
-          {!pizarraAbierta && !notasAbiertas && !redAbierta && (
+          {!pizarraAbierta && !notasAbiertas && !redAbierta && !codigoAbierto && (
             <div className="absolute top-2 right-2 z-20 flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setCodigoCambio(Date.now());
+                  setCodigoAbierto(true);
+                }}
+                className="px-2.5 py-1 text-[11px] font-hud-mono border border-[#ffb347]/40 text-[#b8f4ff] bg-[#041226]/80 hover:bg-[#ffb347]/15 cursor-pointer flex items-center gap-1"
+                title="Ver las páginas web y programas que hizo Jarvis"
+              >
+                <Code2 className="w-3.5 h-3.5" /> Código
+              </button>
               <button
                 type="button"
                 onClick={() => setRedAbierta(true)}

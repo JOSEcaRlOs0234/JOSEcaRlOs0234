@@ -81,6 +81,23 @@ import {
   pedidoDeEstructura,
   type Fuente,
 } from "./documentos.ts";
+import {
+  codigoActualizado,
+  correrEnLaptop,
+  ESQUEMA_CODIGO,
+  FaltaPrograma,
+  guardarImagen,
+  guardarResultado,
+  leerCodigo,
+  leerProyectos,
+  limpiarCodigo,
+  LENGUAJES,
+  pedidoDeCodigo,
+  sePuedeCorrer,
+  tieneVentana,
+  type Proyecto,
+  type Resultado,
+} from "./codigo.ts";
 import { busquedasDeDatos, INSTRUCCION_BUSQUEDA_DATOS, pedidoDeEstadisticas } from "./estadisticas.ts";
 import { leerPagina, pedidoDeLectura, pedidoDeLecturaVarias, separarResumen, type PaginaLeida } from "./lector-web.ts";
 import { fallaFoto, fotoPedida, guardarFoto, pedidoDeVista, pedirFoto, recibirFoto } from "./camara.ts";
@@ -205,6 +222,14 @@ const PERSONALIDAD = `Eres J.A.R.V.I.S., el asistente personal de tu usuario, al
   usa revisar_conexiones y explica en palabras sencillas qué falla y cómo arreglarlo. No digas "no tengo internet" sin
   revisarlo: casi siempre es el límite GRATUITO de búsquedas de Google (se arregla esperando). La consulta directa a
   Claude es opcional y de pago; "mandar a Claude" (copiar y pegar) funciona sin clave.
+- PROGRAMAR: si piden una página web ("hazme una página de...", "un sitio para mi negocio", "un portafolio") usa
+  crear_pagina_web; si piden un programa o código en cualquier lenguaje (Python, C++, Java, C#, JavaScript...) usa
+  programar con el lenguaje que digan (si no dicen, Python). Si quieren VER qué hace o el resultado, pon
+  mostrar_resultado=true: Python se corre al momento en la nube; para otros lenguajes llama después a ejecutar_codigo
+  (pide permiso y lo corre en la laptop). Para cambiar lo último que hiciste ("ponle color azul", "agrégale un botón",
+  "pásalo a C++", "corrige el error") usa cambiar="ultimo". El código se ve completo en el panel Código de la pantalla:
+  NO lo pegues en el chat ni lo leas en voz; di en 2 o 3 frases qué hace y, si se corrió, qué salió. Si falta el
+  compilador en la laptop, di cómo instalarlo (la herramienta lo dice) y, si es Python, que igual se corrió en la nube.
 - ESTADÍSTICAS: SÍ tienes internet. Si piden cifras, porcentajes, cantidades o datos por sector/región/año ("¿qué
   porcentaje...?", "estadísticas de...", "¿cuánto se usa X por sector en México?"), usa buscar_estadisticas. Di en voz
   las cifras principales; el informe con cada dato, su año y su fuente queda en la pizarra. Nunca inventes números: si
@@ -417,6 +442,52 @@ async function conPaciencia<T>(pedir: () => Promise<T>): Promise<T> {
     await new Promise((listo) => setTimeout(listo, 25_000));
     return await pedir();
   }
+}
+
+/**
+ * Corre un programa de Python en la NUBE de Google (herramienta de ejecución de código de Gemini): no toca la laptop.
+ * Si el programa lee del teclado, se le da `entrada` ya escrita. Las gráficas (matplotlib) se guardan como imágenes.
+ */
+async function correrEnNube(p: Proyecto, codigo: string, entrada: string): Promise<Resultado> {
+  const inicio = Date.now();
+  const prefacio = entrada.trim() ? `import sys, io\nsys.stdin = io.StringIO(${JSON.stringify(entrada.endsWith("\n") ? entrada : entrada + "\n")})\n` : "";
+  const r: any = await conPaciencia(() =>
+    conRespaldo((modelo) =>
+      ai.models.generateContent({
+        model: modelo,
+        contents:
+          "Ejecuta EXACTAMENTE este programa de Python con la herramienta de ejecución de código, UNA sola vez, sin " +
+          "cambiarlo, corregirlo ni completarlo (si falla, el error también es el resultado). Después responde solo: listo.\n\n" +
+          "```python\n" + prefacio + codigo + "\n```",
+        config: { tools: [{ codeExecution: {} }] },
+      })
+    )
+  );
+  const partes: any[] = r?.candidates?.[0]?.content?.parts ?? [];
+  const salidas: string[] = [];
+  let ok = true;
+  let corrio = false;
+  const imagenes: string[] = [];
+  for (const parte of partes) {
+    if (parte?.codeExecutionResult) {
+      corrio = true;
+      if (parte.codeExecutionResult.output) salidas.push(String(parte.codeExecutionResult.output));
+      ok = parte.codeExecutionResult.outcome === "OUTCOME_OK";
+    } else if (parte?.inlineData?.data && /^image\/(png|jpeg)$/.test(parte.inlineData.mimeType ?? "") && imagenes.length < 6) {
+      imagenes.push(await guardarImagen(p, imagenes.length + 1, Buffer.from(parte.inlineData.data, "base64"), parte.inlineData.mimeType));
+    }
+  }
+  if (!corrio) throw new Error("La nube no ejecutó el programa.");
+  registrar("CODIGO", `Corrido en la nube: ${p.nombre} (${ok ? "bien" : "con error"})`);
+  return {
+    donde: "nube",
+    ok,
+    salida: salidas.join("\n").trim().slice(0, 30_000) || (imagenes.length ? "(Hizo gráficas)" : "(El programa no mostró nada)"),
+    comando: "python (nube de Google)",
+    segundos: Math.round((Date.now() - inicio) / 100) / 10,
+    imagenes,
+    fecha: Date.now(),
+  };
 }
 
 // Para dibujar se prefiere el modelo más listo (Pro); si llegó a su límite gratuito, se deja descansar 30 min
@@ -640,6 +711,36 @@ conectarIA({
     void abrirRuta(hecho.archivo).catch(() => {});
     return { ...hecho, fuentes: fuentes.length, confiables: fuentes.filter(esConfiable).length, sinBusqueda };
   },
+  // Programar: Gemini escribe el código (prefiere el modelo Pro; si llegó a su límite, los de respaldo)
+  escribirCodigo: async (lenguaje, descripcion, anterior) => {
+    const r = await conPaciencia(() =>
+      conRespaldo(
+        (modelo) =>
+          ai.models.generateContent({
+            model: modelo,
+            contents: pedidoDeCodigo(lenguaje, descripcion, anterior),
+            config: {
+              systemInstruction: "Eres un programador experto y buen maestro. Escribes código correcto, limpio y comentado en español.",
+              responseMimeType: "application/json",
+              responseJsonSchema: ESQUEMA_CODIGO,
+            },
+          }),
+        MODELO_DIBUJO,
+        30 * 60 * 1000
+      )
+    );
+    const datos = JSON.parse(r.text ?? "{}");
+    const codigo = typeof datos.codigo === "string" ? limpiarCodigo(datos.codigo) : "";
+    if (!codigo.trim()) throw new Error("Gemini no devolvió código.");
+    registrar("CODIGO", `${lenguaje.nombre}: ${String(datos.nombre ?? "").slice(0, 80)} (${codigo.length} caracteres)`);
+    return {
+      nombre: String(datos.nombre ?? "").slice(0, 60),
+      codigo,
+      explicacion: String(datos.explicacion ?? "").slice(0, 1500),
+      entrada_ejemplo: typeof datos.entrada_ejemplo === "string" ? datos.entrada_ejemplo.slice(0, 2000) : "",
+    };
+  },
+  correrEnNube,
   // Leer una página de internet (o un PDF) y contar lo que dice
   leerPaginaWeb: async (url, pregunta) => {
     const pagina = await leerPagina(url);
@@ -943,6 +1044,72 @@ app.get("/api/pizarra", (_req, res) => {
 app.delete("/api/pizarra", (_req, res) => {
   registrar("PIZARRA", "Pizarra borrada desde la interfaz.");
   res.json(borrarPizarra());
+});
+
+// Código y páginas web (panel "Código")
+const proyectoDe = (id: string) => leerProyectos().find((p) => p.id === id) ?? null;
+
+app.get("/api/codigo", (_req, res) => {
+  const proyectos = leerProyectos()
+    .sort((a, b) => b.actualizado - a.actualizado)
+    .map((p) => ({ id: p.id, nombre: p.nombre, lenguaje: p.lenguaje, actualizado: p.actualizado }));
+  res.json({ proyectos, actualizada: codigoActualizado() });
+});
+
+app.get("/api/codigo/:id", async (req, res) => {
+  const p = proyectoDe(req.params.id);
+  if (!p) return res.status(404).json({ error: "No encontré ese proyecto." });
+  const l = LENGUAJES.find((x) => x.id === p.lenguaje);
+  res.json({
+    proyecto: p,
+    nombreLenguaje: l?.nombre ?? p.lenguaje,
+    web: !!l?.web,
+    sePuedeCorrer: sePuedeCorrer(p.lenguaje),
+    codigo: await leerCodigo(p),
+  });
+});
+
+app.get("/api/codigo/:id/imagen/:nombre", (req, res) => {
+  const p = proyectoDe(req.params.id);
+  // Solo las gráficas que salieron al correr el programa (nada de rutas libres)
+  if (!p || !p.resultado?.imagenes?.includes(req.params.nombre)) return res.status(404).end();
+  res.sendFile(path.join(p.carpeta, req.params.nombre));
+});
+
+// Botón "Correr en mi laptop": el clic del usuario (con confirmación en pantalla) es su permiso
+app.post("/api/codigo/:id/ejecutar", async (req, res) => {
+  const p = proyectoDe(req.params.id);
+  if (!p) return res.status(404).json({ error: "No encontré ese proyecto." });
+  if (!sePuedeCorrer(p.lenguaje)) return res.status(400).json({ error: "Este lenguaje no se puede correr desde Jarvis." });
+  const entrada = typeof req.body?.entrada === "string" ? req.body.entrada.slice(0, 5000) : p.entradaEjemplo;
+  registrar("ACCION", `Correr programa (botón): ${p.nombre}`);
+  try {
+    let r: Resultado;
+    try {
+      r = await correrEnLaptop(p, entrada);
+    } catch (err) {
+      const codigo = await leerCodigo(p);
+      if (!(err instanceof FaltaPrograma && p.lenguaje === "python" && !tieneVentana(codigo, "python"))) throw err;
+      r = await correrEnNube(p, codigo, entrada);
+    }
+    res.json({ proyecto: guardarResultado(p.id, r) });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "No pude correr el programa." });
+  }
+});
+
+app.post("/api/codigo/:id/abrir", async (req, res) => {
+  const p = proyectoDe(req.params.id);
+  if (!p) return res.status(404).json({ error: "No encontré ese proyecto." });
+  const web = LENGUAJES.find((x) => x.id === p.lenguaje)?.web;
+  // Solo se abre la carpeta, o la página si es web (nunca un programa: se abriría o correría solo)
+  const destino = req.body?.que === "navegador" && web ? path.join(p.carpeta, p.archivo) : p.carpeta;
+  try {
+    await abrirRuta(destino);
+    res.json({ ok: true });
+  } catch {
+    res.status(400).json({ error: "No pude abrirlo." });
+  }
 });
 
 // Notas (panel "Notas")

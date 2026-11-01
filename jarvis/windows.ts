@@ -432,3 +432,28 @@ export function accionSistema(accion: "bloquear" | "suspender" | "reiniciar" | "
   hijo.on("error", () => {});
   hijo.unref();
 }
+
+// ------------------------------------------------------------------ programas recién instalados
+
+let pathCache: { valor: string; hora: number } | null = null;
+
+/**
+ * El PATH "fresco" de Windows (sistema + usuario). Si el usuario instala Python, g++, Java... mientras Jarvis está
+ * encendido, el PATH con el que arrancó Jarvis ya es viejo: así se encuentran sin tener que reiniciarlo.
+ */
+export async function pathActual(): Promise<string> {
+  if (!esWindows) return process.env.PATH ?? "";
+  if (pathCache && Date.now() - pathCache.hora < 60_000) return pathCache.valor;
+  try {
+    const salida = (
+      await powershell(
+        "[Environment]::GetEnvironmentVariable('Path','Machine') + ';' + [Environment]::GetEnvironmentVariable('Path','User')"
+      )
+    ).trim();
+    const valor = [salida, process.env.PATH ?? ""].filter(Boolean).join(";");
+    pathCache = { valor, hora: Date.now() };
+    return valor;
+  } catch {
+    return process.env.PATH ?? "";
+  }
+}

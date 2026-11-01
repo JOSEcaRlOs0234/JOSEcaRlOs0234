@@ -12,6 +12,22 @@ import * as win from "./windows.ts";
 import { agregarRecuerdo, borrarRecuerdo, MAX_LARGO_RECUERDO } from "./memoria.ts";
 import { aprender, recordar } from "./red-memoria.ts";
 import { mensajesRecientes } from "./whatsapp.ts";
+import {
+  buscarProyecto,
+  correrEnLaptop,
+  FaltaPrograma,
+  guardarProyecto,
+  guardarResultado,
+  LENGUAJES,
+  leerCodigo,
+  lenguajeDe,
+  sePuedeCorrer,
+  tieneVentana,
+  ultimoProyecto,
+  type Lenguaje,
+  type Proyecto,
+  type Resultado,
+} from "./codigo.ts";
 import { borrarPizarra, dibujarEnPizarra, escribirPizarra, leerPizarra, MAX_PIZARRA } from "./pizarra.ts";
 import { svgAPng, ultimoDibujoAMano } from "./dibujos.ts";
 import { claseActiva, iniciarClase, terminarClase } from "./clase.ts";
@@ -68,6 +84,12 @@ let ia: {
   leerSobreTema?: (tema: string) => Promise<Informe & { leidas: number }>;
   buscarEstadisticas?: (tema: string) => Promise<Informe & { leidas: number }>;
   revisarConexiones?: () => Promise<{ prueba: string; ok: boolean; detalle: string; solucion?: string }[]>;
+  escribirCodigo?: (
+    lenguaje: Lenguaje,
+    descripcion: string,
+    anterior?: { nombre: string; codigo: string }
+  ) => Promise<{ nombre: string; codigo: string; explicacion: string; entrada_ejemplo?: string }>;
+  correrEnNube?: (p: Proyecto, codigo: string, entrada: string) => Promise<Resultado>;
 } | null = null;
 export function conectarIA(funciones: NonNullable<typeof ia>): void {
   ia = funciones;
@@ -211,6 +233,60 @@ export const DECLARACIONES = [
         },
       },
       required: ["tipo", "tema"],
+    },
+  },
+  {
+    name: "crear_pagina_web",
+    description:
+      "Crea (o cambia) una PÁGINA WEB completa con HTML, CSS y JavaScript: portafolio, página de un negocio, juego, " +
+      "calculadora, invitación, formulario, etc. Se guarda en Documentos\\Jarvis\\Programas y se VE dentro de Jarvis " +
+      "(panel Código). Para cambiar la página anterior (\"ponle otro color\", \"agrégale una sección\") usa cambiar=\"ultimo\".",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        descripcion: { type: "string", description: "Qué página quiere, con TODOS los detalles que dio el usuario" },
+        cambiar: {
+          type: "string",
+          description: 'Vacío = página nueva. "ultimo" = cambiar la última. O el nombre de un proyecto que ya existe.',
+        },
+        abrir_en_navegador: { type: "boolean", description: "true si el usuario pide abrirla en el navegador" },
+      },
+      required: ["descripcion"],
+    },
+  },
+  {
+    name: "programar",
+    description:
+      "Escribe (o cambia) un PROGRAMA en cualquier lenguaje: Python, C++, C, Java, C#, JavaScript, TypeScript, Go, Rust, " +
+      "PHP, Ruby, R, Lua, Kotlin, Swift, SQL, MATLAB, Arduino... Se guarda en Documentos\\Jarvis\\Programas y el código " +
+      "se ve en el panel Código de Jarvis. Con mostrar_resultado=true y Python, se corre al momento en la nube de Google " +
+      "(sin tocar la laptop) y se muestra lo que imprime. Para otros lenguajes, después usa ejecutar_codigo.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        lenguaje: { type: "string", description: "Lenguaje de programación (por ejemplo: python, c++, java)" },
+        descripcion: { type: "string", description: "Qué debe hacer el programa, con TODOS los detalles del usuario" },
+        cambiar: {
+          type: "string",
+          description: 'Vacío = programa nuevo. "ultimo" = cambiar (o traducir a otro lenguaje) el último. O el nombre de un proyecto.',
+        },
+        mostrar_resultado: { type: "boolean", description: "true si el usuario quiere ver qué hace / el resultado" },
+      },
+      required: ["lenguaje", "descripcion"],
+    },
+  },
+  {
+    name: "ejecutar_codigo",
+    description:
+      "Corre EN LA LAPTOP un programa que ya hiciste con programar (el último, o el que se nombre) para mostrar su " +
+      "resultado: usa el compilador que tenga instalado (python, g++, java, dotnet, go, rustc, php, ruby, node...). " +
+      "Siempre pide permiso. Si es una página web, la abre en el navegador.",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        proyecto: { type: "string", description: "Nombre del proyecto (vacío = el último)" },
+        entrada: { type: "string", description: "Lo que se le escribiría al programa por teclado (una respuesta por línea)" },
+      },
     },
   },
   {
@@ -1061,6 +1137,137 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
             }
             throw new ErrorHerramienta(`No pude crear el archivo${mensaje ? `: ${mensaje.slice(0, 200)}` : "."}`);
           }
+        },
+      };
+    }
+
+    case "crear_pagina_web":
+    case "programar": {
+      const web = nombre === "crear_pagina_web";
+      const l = web ? lenguajeDe("html")! : lenguajeDe(texto(args.lenguaje, "lenguaje", 40));
+      if (!l) {
+        throw new ErrorHerramienta(
+          `No conozco ese lenguaje. Puedo programar en: ${LENGUAJES.map((x) => x.nombre).join(", ")}.`
+        );
+      }
+      const descripcion = texto(args.descripcion, "descripcion", 4000);
+      const cambiar = typeof args.cambiar === "string" ? args.cambiar.trim() : "";
+      let anterior: Proyecto | null = null;
+      if (cambiar) {
+        anterior = /^(ultimo|último|anterior|el ultimo|el último)$/i.test(cambiar) ? ultimoProyecto() : buscarProyecto(cambiar);
+        if (!anterior) throw new ErrorHerramienta(`No encontré el proyecto "${cambiar}". Si es uno nuevo, deja "cambiar" vacío.`);
+      }
+      const mostrar = args.mostrar_resultado === true;
+      const abrir = args.abrir_en_navegador === true;
+      return {
+        nivel: "normal",
+        tipo: "programar",
+        descripcion:
+          (anterior ? `Cambiar el proyecto "${anterior.nombre}"` : web ? "Crear una página web" : `Escribir un programa en ${l.nombre}`) +
+          `: "${descripcion.slice(0, 140)}" (en Documentos\\Jarvis\\Programas)`,
+        ejecutar: async () => {
+          if (!ia?.escribirCodigo) throw new ErrorHerramienta("Programar no está disponible.");
+          let hecho;
+          try {
+            const codigoAnterior = anterior ? await leerCodigo(anterior) : "";
+            hecho = await ia.escribirCodigo(l, descripcion, anterior && codigoAnterior ? { nombre: anterior.nombre, codigo: codigoAnterior } : undefined);
+          } catch (err) {
+            throw errorDeIA(err, "escribir el código");
+          }
+          const p = await guardarProyecto({
+            lenguaje: l,
+            nombre: hecho.nombre || (web ? "Página web" : `Programa en ${l.nombre}`),
+            codigo: hecho.codigo,
+            explicacion: hecho.explicacion ?? "",
+            entradaEjemplo: hecho.entrada_ejemplo ?? "",
+            sobre: anterior,
+          });
+          const respuesta: Record<string, unknown> = {
+            resultado: `Listo: "${p.nombre}" (${l.nombre}) está en Documentos\\Jarvis\\Programas\\${path.basename(p.carpeta)}\\${p.archivo} y se ve en el panel Código.`,
+            explicacion: hecho.explicacion,
+            codigo: hecho.codigo.length > 6000 ? hecho.codigo.slice(0, 6000) + "\n…(sigue)" : hecho.codigo,
+            nota: "El código completo ya se ve en la pantalla (panel Código): NO lo pegues entero en el chat; explica en pocas frases.",
+          };
+          if (web) {
+            if (abrir) await win.abrirRuta(path.join(p.carpeta, p.archivo)).catch(() => {});
+            respuesta.vista = abrir ? "La página se ve en el panel y se abrió en el navegador." : "La página ya se ve en el panel Código.";
+          } else if (mostrar) {
+            if (l.id === "python" && !tieneVentana(hecho.codigo, l.id) && ia.correrEnNube) {
+              try {
+                const r = await ia.correrEnNube(p, hecho.codigo, p.entradaEjemplo);
+                guardarResultado(p.id, r);
+                respuesta.salida_del_programa = r.salida.slice(0, 4000);
+                respuesta.corrio = r.ok ? "Se corrió en la nube de Google y funcionó." : "Se corrió en la nube de Google y marcó error (revisa la salida).";
+                if (r.imagenes?.length) respuesta.graficas = `${r.imagenes.length} gráfica(s) en el panel Código.`;
+              } catch {
+                respuesta.siguiente_paso = "No se pudo correr en la nube ahora; usa ejecutar_codigo para correrlo en la laptop (pide permiso).";
+              }
+            } else if (sePuedeCorrer(l.id)) {
+              respuesta.siguiente_paso = "Para mostrar el resultado, llama AHORA a ejecutar_codigo (el usuario dará permiso).";
+            } else {
+              respuesta.siguiente_paso = `${l.nombre} no se puede correr desde Jarvis; explica qué mostraría y cómo se corre.`;
+            }
+          }
+          return respuesta;
+        },
+      };
+    }
+
+    case "ejecutar_codigo": {
+      const pedido = typeof args.proyecto === "string" ? args.proyecto.trim() : "";
+      const p = pedido ? buscarProyecto(pedido) : ultimoProyecto();
+      if (!p) throw new ErrorHerramienta(pedido ? `No encontré el proyecto "${pedido}".` : "Todavía no hay programas hechos.");
+      const l = LENGUAJES.find((x) => x.id === p.lenguaje);
+      const entrada = typeof args.entrada === "string" ? args.entrada.slice(0, 5000) : p.entradaEjemplo;
+      const codigo = await leerCodigo(p);
+      if (!codigo) throw new ErrorHerramienta("No encontré el archivo del programa (¿lo movieron o lo borraron?).");
+      if (l?.web) {
+        return {
+          nivel: "normal",
+          tipo: "abrir_archivos",
+          descripcion: `Abrir la página "${p.nombre}" en el navegador`,
+          ejecutar: async () => {
+            await win.abrirRuta(path.join(p.carpeta, p.archivo));
+            return { resultado: "La página se abrió en el navegador." };
+          },
+        };
+      }
+      if (!sePuedeCorrer(p.lenguaje)) throw new ErrorHerramienta(`${l?.nombre ?? p.lenguaje} no se puede correr desde Jarvis.`);
+      const lineas = codigo.split("\n");
+      const vista = lineas.slice(0, 25).join("\n") + (lineas.length > 25 ? `\n… (${lineas.length - 25} líneas más)` : "");
+      return {
+        nivel: "delicada",
+        tipo: "ejecutar_codigo",
+        descripcion:
+          `Correr en tu laptop el programa "${p.nombre}" (${l?.nombre}). Lo escribió Jarvis; córrelo solo si estás de acuerdo.` +
+          (entrada ? `\nLo que se le escribirá: ${entrada.slice(0, 200)}` : "") +
+          `\n\n${vista}`,
+        ejecutar: async () => {
+          let r: Resultado;
+          try {
+            r = await correrEnLaptop(p, entrada);
+          } catch (err) {
+            if (err instanceof FaltaPrograma && p.lenguaje === "python" && ia?.correrEnNube && !tieneVentana(codigo, "python")) {
+              // Sin Python en la laptop: se corre en la nube de Google (no toca la laptop)
+              try {
+                r = await ia.correrEnNube(p, codigo, entrada);
+              } catch {
+                throw new ErrorHerramienta(err.message);
+              }
+            } else if (err instanceof FaltaPrograma) {
+              throw new ErrorHerramienta(err.message + " Después de instalarlo, pídeme otra vez que lo corra.");
+            } else throw new ErrorHerramienta(err instanceof Error ? err.message : "No pude correr el programa.");
+          }
+          guardarResultado(p.id, r);
+          return {
+            resultado: r.sigueAbierto
+              ? "El programa abrió su ventana y sigue abierto."
+              : r.ok
+                ? `Corrió bien (${r.donde === "nube" ? "en la nube de Google" : "en la laptop"}, ${r.segundos} s).`
+                : "Corrió pero marcó error.",
+            salida_del_programa: r.salida.slice(0, 4000),
+            nota: "La salida también se ve en el panel Código (pestaña Resultado). Si hubo error, explica la causa en palabras sencillas y ofrece corregirlo con programar cambiar=\"ultimo\".",
+          };
         },
       };
     }
@@ -2130,6 +2337,7 @@ async function revisarCanva(nombre: string, args: Record<string, unknown>): Prom
 
 // Nombres legibles de los permisos que se pueden recordar
 export const NOMBRES_PERMISOS: Record<string, string> = {
+  programar: "Programar y crear páginas web (en Documentos\\Jarvis\\Programas)",
   whatsapp_leer: "Leer tus mensajes de WhatsApp",
   cerrar_programas: "Cerrar programas",
   musica: "Poner música en YouTube",
@@ -2166,6 +2374,20 @@ const PROCESOS: Record<string, string[]> = {
 function procesosDe(pedido: string): string[] {
   const n = normalizar(pedido).replace(/^(el|la|los|las)\s+/, "");
   return PROCESOS[n] ?? [n.replace(/\s+/g, "")];
+}
+
+// ------------------------------------------------------------------ fallas de la IA
+
+/** Error claro cuando Gemini no pudo (límite gratuito, etc.), para que Jarvis no diga "no tengo permiso". */
+function errorDeIA(err: unknown, que: string): ErrorHerramienta {
+  const mensaje = err instanceof Error ? err.message : "";
+  if (/429|quota|RESOURCE_EXHAUSTED|rate limit|overloaded|UNAVAILABLE|503/i.test(mensaje)) {
+    return new ErrorHerramienta(
+      "No es un problema de permisos: se acabó por ahora el uso GRATUITO de Gemini (límite por minuto o por día). " +
+        "Dile al usuario que lo intente de nuevo en unos minutos."
+    );
+  }
+  return new ErrorHerramienta(`No pude ${que}${mensaje ? `: ${mensaje.slice(0, 200)}` : "."}`);
 }
 
 // ------------------------------------------------------------------ fallas de búsqueda
