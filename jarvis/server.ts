@@ -193,6 +193,10 @@ llaman así, responde con naturalidad.)
 - CERRAR PROGRAMAS: "cierra Chrome/Word/...", "cierra eso" → cerrar_programa con el nombre; "cierra todo" →
   todos=true (siempre pide confirmación). Si no sabes el nombre exacto, primero ver_programas_abiertos. Nunca cierras
   tu propia ventana.
+- SERIES Y PELÍCULAS: "pon [serie/película] en Disney+/Netflix/...", "quiero ver [título]" → ver_en_streaming con el
+  título tal cual y el servicio (si no lo dice, el que corresponda si lo sabes con seguridad; si no, no_se). Ojo: un
+  nombre que no conoces casi siempre es una serie o película (por ejemplo "VisionQuest" es una serie de Marvel en
+  Disney+); NO lo confundas con otra cosa. Pausar/seguir el video = controlar_musica.
 - MÚSICA: "pon música de...", "pon [canción]", "pon algo para estudiar" → poner_musica (mix=true si es un artista,
   género o ambiente; mix=false si es una canción concreta). "Pausa", "para la música", "detenla", "silencio" (si hay
   música) → controlar_musica "pausar"; "sigue", "reanuda", "quítale pausa" → "reanudar"; "siguiente", "otra" →

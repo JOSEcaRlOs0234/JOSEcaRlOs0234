@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.37.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.38.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -679,6 +679,15 @@
   "DISEÑO" (dibujar, crear_pagina_web, crear_documento, canva_crear_diseno, canva_ed_), y "PARA CLAUDE" no se ofrece
   para cosas que solo hay que activar (Canva, Gmail, Canvas, Picovoice). Probado con servidor MCP falso (sin llaves →
   explica; con llaves → abre permiso; tras "Permitir" → 5 herramientas canva_ed_).
+- PEDIDO "PARA CLAUDE" desde 2.37.0 mal interpretado por Ares ("reproducir contenido adulto como RedTube"): el usuario
+  aclaró que quería ver la serie **VisionQuest en Disney+** (Ares lo malinterpretó). Se le dijo que contenido adulto no
+  se agrega (Gemini no lo hace y no se programa para saltarse sus reglas). v2.38 SERIES Y PELÍCULAS: `streaming.ts`
+  (`SERVICIOS` disney/netflix/prime/max/appletv/youtube/no_se=JustWatch MX, cada uno con URL de búsqueda fija +
+  encodeURIComponent; `servicioDe` con alias). Herramienta `ver_en_streaming` {titulo, servicio} (normal, tipo recordable
+  "streaming"): abre la BÚSQUEDA del título en el servicio con la sesión del navegador del usuario; él elige y da
+  Reproducir (los servicios no dejan dar play desde fuera; no se manejan contraseñas). PERSONALIDAD "SERIES Y PELÍCULAS"
+  (nombres desconocidos casi siempre son series/películas; VisionQuest = serie de Marvel en Disney+; pausar =
+  controlar_musica). Las URL de búsqueda de Disney+/Max no se pudieron verificar desde la nube.
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

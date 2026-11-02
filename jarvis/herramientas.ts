@@ -55,6 +55,7 @@ import {
 } from "./canva.ts";
 import { agregarNota, borrarNota, buscarNotas, MAX_LARGO_NOTA } from "./notas.ts";
 import { buscarEnYoutube, urlDeBusqueda, urlParaReproducir } from "./musica.ts";
+import { SERVICIOS, servicioDe } from "./streaming.ts";
 import { anotarFalta, buscarFalta, marcarEnviada, mensajeParaClaude } from "./faltantes.ts";
 import type { Informe } from "./consultas.ts";
 import {
@@ -341,6 +342,25 @@ export const DECLARACIONES = [
         nombre: { type: "string", description: "El programa, por ejemplo 'Chrome', 'Word', 'Calculadora'" },
         todos: { type: "boolean", description: "true = cerrar todos los programas abiertos" },
       },
+    },
+  },
+  {
+    name: "ver_en_streaming",
+    description:
+      "Pone una SERIE o PELÍCULA en un servicio de streaming (Disney+, Netflix, Prime Video, Max, Apple TV, YouTube): abre " +
+      "en el navegador la búsqueda del título con la sesión del usuario, para que él elija y le dé Reproducir. Ej.: " +
+      "\"pon VisionQuest en Disney+\", \"quiero ver Stranger Things\". Si no sabe dónde está, servicio=no_se (dice dónde verla).",
+    parametersJsonSchema: {
+      type: "object",
+      properties: {
+        titulo: { type: "string", description: "Nombre de la serie o película, tal como lo dijo el usuario" },
+        servicio: {
+          type: "string",
+          enum: ["disney", "netflix", "prime", "max", "appletv", "youtube", "no_se"],
+          description: "Dónde verla (no_se si el usuario no lo dijo y no lo sabes)",
+        },
+      },
+      required: ["titulo"],
     },
   },
   {
@@ -1495,6 +1515,27 @@ export async function revisar(nombre: string, args: Record<string, unknown>): Pr
       };
     }
 
+    case "ver_en_streaming": {
+      const titulo = texto(args.titulo, "titulo", 150);
+      const clave = servicioDe(typeof args.servicio === "string" ? args.servicio : "");
+      const servicio = SERVICIOS[clave];
+      return {
+        nivel: "normal",
+        tipo: "streaming",
+        descripcion: clave === "no_se" ? `Buscar dónde ver "${titulo}"` : `Abrir "${titulo}" en ${servicio.nombre}`,
+        ejecutar: async () => {
+          await win.abrirUrl(servicio.busqueda(titulo));
+          return {
+            resultado:
+              clave === "no_se"
+                ? `Abrí JustWatch con "${titulo}": ahí se ve en qué servicio de México está. Dile al usuario en cuál aparece y ofrece abrirla ahí.`
+                : `Abrí ${servicio.nombre} buscando "${titulo}". Dile en una frase que elija el título y le dé Reproducir (si no ha iniciado sesión, que entre con su cuenta).`,
+            nota: "Para pausar o seguir el video después, usa controlar_musica (pausar / reanudar).",
+          };
+        },
+      };
+    }
+
     case "poner_musica": {
       const busqueda = texto(args.busqueda, "busqueda", 200);
       const mix = args.mix === true;
@@ -2493,6 +2534,7 @@ export const NOMBRES_PERMISOS: Record<string, string> = {
   whatsapp_leer: "Leer tus mensajes de WhatsApp",
   cerrar_programas: "Cerrar programas",
   musica: "Poner música en YouTube",
+  streaming: "Abrir series y películas (Disney+, Netflix...)",
   abrir_programa: "Abrir programas",
   abrir_web: "Abrir páginas web y búsquedas",
   volumen: "Cambiar el volumen",
