@@ -1,0 +1,14 @@
+{
+  "name": "Ares Móvil",
+  "short_name": "Ares",
+  "start_url": "/movil/",
+  "scope": "/movil/",
+  "display": "standalone",
+  "background_color": "#030710",
+  "theme_color": "#030710",
+  "lang": "es-MX",
+  "icons": [
+    { "src": "icono-180.png", "sizes": "180x180", "type": "image/png" },
+    { "src": "icono-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
