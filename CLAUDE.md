@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.38.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.39.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -688,6 +688,27 @@
   Reproducir (los servicios no dejan dar play desde fuera; no se manejan contraseñas). PERSONALIDAD "SERIES Y PELÍCULAS"
   (nombres desconocidos casi siempre son series/películas; VisionQuest = serie de Marvel en Disney+; pausar =
   controlar_musica). Las URL de búsqueda de Disney+/Max no se pudieron verificar desde la nube.
+- v2.39 DAY TRADING (el usuario mandó el zip de github.com/Jakeschincariol/day-trader-skill, MIT, 11 skills en
+  Python; eligió "lo esencial", el BROKER quedó FUERA: Ares nunca compra/vende). Se PORTÓ a TypeScript (sin Python):
+  `daytrading.ts` = reloj NYSE (Intl America/New_York, feriados y cierres temprano 2026–27, `estadoBolsa`), Yahoo
+  v8 chart 5m/60d y 1d/6mo (query2→query1, 8 s; `usarFetchTrading` para pruebas), `sesiones` (completas = 78 velas sin
+  huecos), `rangoApertura` (3 primeras velas), `buscarEntrada` (1.er CIERRE arriba del alto, solo velas cerradas, hasta
+  15:30), `armarPlan` (stop mitad/piso/pct redondeado hacia abajo, objetivo R·riesgo, rechaza stops pegados <0.05 %),
+  `dimensionar` (menor de 4 límites: pérdida máx, posición máx %, orden máx, efectivo−colchón; revisión de riesgo),
+  `maquinaDelTiempo` (10,000 replays, semilla 19 con mulberry32, velas de días pasados a la misma hora ±2 escaladas,
+  stop antes que objetivo, el precio sigue hasta la hora final; historia = misma regla en cada día real; `veredicto`
+  con punto de equilibrio 1/(1+R): <5 pts volado/equilibrio, 5–15 se inclina, ≥15 fuertemente; notas si >40 % ninguno o
+  R promedio contrario), `graficaMaquina` (abanico 5–95/25–75 + mediana + líneas), escáner (`LISTA_ESCANEO` ~60 líquidas;
+  `escanearApertura` ruptura del rango; `escanearDiario` ruptura 20d, bandera, recupera MA20, RSI14<30, rebote),
+  `noticiasDe` (RSS feeds.finance.yahoo.com + etiquetas + cambio del día), alertas `datos/alertas-bolsa.json`
+  (arriba/abajo/movimiento, suenan una vez) + `vigilarAlertasBolsa` cada 60 s con bolsa abierta → aviso 📈 (server.ts).
+  Reglas en `datos/trading.json` (presupuesto 5000, pérdida máx 50... de ejemplo hasta que el usuario las diga).
+  Herramientas (todas libres, tipo "finanzas"): escanear_acciones, noticias_acciones, plan_operacion (guarda
+  datos/plan-trading.json; `planDeHoy` en herramientas.ts), maquina_del_tiempo, alerta_bolsa, reglas_trading.
+  PERSONALIDAD "DAY TRADING". LICENCIAS-TERCEROS.md con el MIT. VALIDADO con los datos reales del propio proyecto
+  (TSLA 19-oct-2026): rango 354.47–362.18, entrada 364.18 10:15, stop 358.32, objetivo 370.04, historia 33 disparos
+  13/15/5 R −0.062 y 8 acciones $2,913.44 pérdida $46.88 IDÉNTICOS al original; simulación 29.5/25.0/45.5 vs 29.4/25.5/45.1.
+  NO probado con Yahoo en vivo (la nube no llega).
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

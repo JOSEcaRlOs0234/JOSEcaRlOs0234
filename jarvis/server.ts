@@ -81,6 +81,7 @@ import {
   pedidoDeEstructura,
   type Fuente,
 } from "./documentos.ts";
+import { vigilarAlertasBolsa } from "./daytrading.ts";
 import { ESQUEMA_PAGINA, leerHtml, leerPaginas, limpiarHtml, paginasActualizadas, pedidoDePagina } from "./paginas.ts";
 import { busquedasDeDatos, INSTRUCCION_BUSQUEDA_DATOS, pedidoDeEstadisticas } from "./estadisticas.ts";
 import { leerPagina, pedidoDeLectura, pedidoDeLecturaVarias, separarResumen, type PaginaLeida } from "./lector-web.ts";
@@ -218,6 +219,16 @@ llaman así, responde con naturalidad.)
   botón") usa cambiar="ultimo". La página se le muestra sola, terminada y en grande: NUNCA muestres, pegues ni menciones
   el código; di en 1 o 2 frases qué tiene. Si pide abrirla en el navegador, abrir_en_navegador=true. Ya NO programas en
   Python, C++ ni otros lenguajes (el usuario pidió quitarlo): si lo piden, dilo con amabilidad.
+- DAY TRADING (comprar y vender acciones el mismo día; basado en el proyecto "day-trader-skill" que te pasó el usuario):
+  · "¿qué acciones se están moviendo?", "escanea el mercado", "busca setups" → escanear_acciones.
+  · "noticias de Tesla/Apple" → noticias_acciones (los titulares vienen en inglés: explícalos en español).
+  · "arma un plan para TSLA", "¿cuándo entro?", "¿dónde pongo el stop?", "¿cuántas acciones compro?" → plan_operacion.
+  · "corre la máquina del tiempo", "¿qué probabilidades tiene?", "simula esta operación" → maquina_del_tiempo (di el
+    veredicto TAL CUAL y la semilla; si es un volado, dilo sin endulzarlo).
+  · "avísame cuando TSLA llegue a 370" → alerta_bolsa crear. "Mi presupuesto es..." → reglas_trading.
+  Antes del primer plan, pregúntale su presupuesto (dinero que puede permitirse perder) y su pérdida máxima por
+  operación, y guárdalos con reglas_trading. NUNCA compras ni vendes: Ares solo analiza y avisa. Di una vez que el day
+  trading hace perder dinero a la mayoría y que una simulación no es una predicción. No prometas ganancias.
 - FINANZAS: si preguntan "¿cómo va la bolsa?", "¿a cuánto está Apple / el dólar / el bitcoin?", usa ver_bolsa (precios
   reales, con gráfica en la pizarra). Si preguntan por ETFs o "¿qué es mejor?" ("¿en qué ETF conviene invertir?",
   "¿dónde compro ETFs?", "compara VOO y QQQ"), usa comparar_etfs: muestra una GRÁFICA de 5 años y un ANÁLISIS de cuál
@@ -1382,6 +1393,16 @@ function avisarTareasCanvas(nuevas: TareaCanvas[]) {
     void decirEnVoz(texto);
   }
 }
+// Alertas de precio de la bolsa (day trading): suenan una vez, con 📈
+vigilarAlertasBolsa((texto) => {
+  avisos = [...avisos, { id: siguienteAviso++, texto, icono: "📈" }].slice(-20);
+  registrar("BOLSA", texto);
+  guardarEnHistorial("jarvis", texto);
+  if (!hayVentanaVisible() && !claseActiva()) {
+    oido.pausar(10000);
+    void decirEnVoz(texto);
+  }
+});
 vigilarCanvas(avisarTareasCanvas, (err) => registrar("ERROR", `Canvas: ${err instanceof Error ? err.message : err}`));
 
 app.get("/api/canvas", (_req, res) => {
