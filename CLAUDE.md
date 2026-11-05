@@ -49,7 +49,7 @@
 - El usuario pidió: Jarvis como app + "acceso a la compu en general pero con mi permiso". Se interpretó como lista
   amplia de herramientas, todas con diálogo de permiso (nunca comandos libres, por su propia regla de seguridad).
 
-- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.39.0). Los lanzadores apagan un
+- **Al entregar cada actualización: subir `version` en jarvis/package.json** (va en 2.40.0). Los lanzadores apagan un
   Jarvis viejo que siga encendido (`/api/apagar`) y la interfaz avisa si la versión del servidor no coincide.
   (Problema real que pasó: la v1.0 seguía encendida y la interfaz nueva hablaba con el servidor viejo.)
 
@@ -709,6 +709,26 @@
   (TSLA 19-oct-2026): rango 354.47–362.18, entrada 364.18 10:15, stop 358.32, objetivo 370.04, historia 33 disparos
   13/15/5 R −0.062 y 8 acciones $2,913.44 pérdida $46.88 IDÉNTICOS al original; simulación 29.5/25.0/45.5 vs 29.4/25.5/45.1.
   NO probado con Yahoo en vivo (la nube no llega).
+- v2.40 ARES MÓVIL (pedido: "llevar a Ares a mi iPhone 11, que sea asistente del de la compu y útil"; eligió
+  TAILSCALE "desde donde sea"). El servidor SIGUE escuchando solo en 127.0.0.1: `tailscale serve --bg --yes
+  http://127.0.0.1:3000` (lo corre Ares al activar; reintenta sin --yes; si Tailscale pide habilitar HTTPS/Serve devuelve
+  el enlace login.tailscale.com) publica https://<laptop>.<red>.ts.net SOLO dentro de la red Tailscale del usuario.
+  `movil.ts`: datos/movil.json {activo, dispositivos[{id,nombre,huella sha256,creado,usado}]}; `nuevoCodigo` (6 dígitos,
+  10 min, 5 intentos, timingSafeEqual) → `vincular` devuelve una llave de 32 bytes base64url UNA vez (se guarda solo su
+  huella; máx. 10 aparatos); `dispositivoDe(header X-Ares-Movil)`; `vieneDeTailscale` (host / x-forwarded-host / origin
+  terminan en .ts.net); `estadoTailscale` (tailscale status --json → DNSName, BackendState) con rutas fijas de
+  tailscale.exe. server.ts: middleware ANTES del de /api: lo que viene por Tailscale solo puede ver /movil y /api/movil/*
+  (todo lo demás 403 + SEGURIDAD), con llave (salvo /api/movil/vincular, máx. 10 intentos/10 min); marca `desdeMovil`
+  para saltar el chequeo localhost. Rutas: /api/movil/{vincular, estado?desde (avisos), pizarra} y
+  /api/chat|/api/movil/chat, /api/permiso|/api/movil/permiso (mismo manejador). Admin SOLO desde la laptop
+  (/api/movil-admin, /activar, /codigo (QR svg con `qrcode`), /dispositivo/:id DELETE). Página `movil/index.html`
+  (vanilla, sin HTML de afuera: todo textContent; mini-markdown seguro para la pizarra; SVG como <img data:>), manifest +
+  iconos portal (Agregar a inicio = app). Chat + dictado (webkitSpeechRecognition; si no hay, micrófono del teclado) +
+  voz es-MX (se "despierta" con el primer toque), tarjeta de permiso Sí/No, pizarra, avisos cada 8 s, chips rápidos.
+  Ajustes → `components/MovilAjustes.tsx` "Ares en tu iPhone" (casilla, estado Tailscale, enlace de habilitar, Vincular
+  iPhone con QR + código, aparatos con Quitar). Probado: 16 pruebas de seguridad con curl (Host .ts.net) y la página en
+  viewport iPhone con Playwright (--host-resolver-rules). NO probado con Tailscale real ni en un iPhone real. Solo
+  funciona con la laptop prendida (si se duerme, el iPhone dice "sin conexión").
 - `windows.ts`: ejecuciones reales. Sin shell con texto libre: `explorer.exe <destino>`, programas fijos, y PowerShell con
   scripts fijos y datos por variables de entorno.
 - `registro.ts`: `registro/jarvis.log` (fecha | TIPO | mensaje). Tipos: SISTEMA, CHAT, ERROR, SEGURIDAD, AVISO, PERMISO, ACCION.

@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<title>Ares Móvil</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ares">
+<meta name="theme-color" content="#030710">
+<link rel="apple-touch-icon" href="icono-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root {
+    --fondo: #030710; --panel: rgba(8, 22, 44, 0.75); --borde: rgba(0, 229, 255, 0.18);
+    --texto: #e2f8ff; --suave: #8fb4d6; --cian: #00e5ff; --verde: #00f5a0; --rojo: #ff5c7a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--fondo); color: var(--texto);
+    font-family: -apple-system, "SF Pro Text", system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; height: 100dvh;
+    background: radial-gradient(circle at 50% 18%, rgba(0, 110, 255, 0.16), transparent 60%), var(--fondo); }
+  header { padding: calc(env(safe-area-inset-top) + 10px) 16px 8px; display: flex; align-items: center; gap: 12px; }
+  .portal { width: 38px; height: 38px; border-radius: 50%; flex: none;
+    background: radial-gradient(circle, #01030a 42%, rgba(120, 180, 255, 0.9) 48%, rgba(40, 110, 255, 0.35) 62%, transparent 72%);
+    box-shadow: 0 0 18px rgba(0, 160, 255, 0.55); animation: latir 3s ease-in-out infinite; }
+  .portal.pensando { animation-duration: 0.7s; }
+  @keyframes latir { 50% { transform: scale(1.08); box-shadow: 0 0 26px rgba(0, 200, 255, 0.8); } }
+  h1 { margin: 0; font-size: 18px; letter-spacing: 0.3em; font-weight: 700; }
+  .estado { font-size: 12px; color: var(--suave); }
+  .estado b { color: var(--verde); font-weight: 600; }
+  .estado b.mal { color: var(--rojo); }
+  header .espacio { flex: 1; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+  .icono { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; font-size: 18px;
+    background: var(--panel); border: 1px solid var(--borde); }
+  .icono.activo { color: var(--cian); border-color: rgba(0, 229, 255, 0.5); }
+  #chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 8px; scrollbar-width: none; }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip { flex: none; padding: 8px 12px; border-radius: 999px; font-size: 13px; background: var(--panel);
+    border: 1px solid var(--borde); color: var(--texto); white-space: nowrap; }
+  #mensajes { flex: 1; overflow-y: auto; padding: 8px 16px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .msg { max-width: 86%; padding: 10px 13px; border-radius: 16px; font-size: 15px; line-height: 1.4; white-space: pre-wrap;
+    word-wrap: break-word; }
+  .msg.ares { align-self: flex-start; background: rgba(6, 32, 63, 0.75); border-bottom-left-radius: 6px; }
+  .msg.yo { align-self: flex-end; background: rgba(255, 255, 255, 0.08); border-bottom-right-radius: 6px; }
+  .msg.aviso { align-self: center; background: rgba(0, 245, 160, 0.1); border: 1px solid rgba(0, 245, 160, 0.3); font-size: 14px; }
+  .msg .quien { display: block; font-size: 11px; letter-spacing: 0.15em; color: var(--cian); margin-bottom: 3px; }
+  .permiso { align-self: stretch; padding: 14px; border-radius: 16px; background: rgba(4, 18, 38, 0.95);
+    border: 1px solid rgba(0, 229, 255, 0.5); }
+  .permiso.delicada { border-color: var(--rojo); }
+  .permiso p { margin: 0 0 12px; white-space: pre-wrap; font-size: 14px; line-height: 1.4; }
+  .permiso .botones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .permiso button { padding: 12px; border-radius: 12px; font-weight: 600; border: 1px solid var(--borde); }
+  .permiso .si { background: rgba(0, 229, 255, 0.15); color: var(--cian); }
+  .permiso.delicada .si { background: rgba(255, 92, 122, 0.15); color: var(--rojo); border-color: var(--rojo); }
+  footer { padding: 8px 12px calc(env(safe-area-inset-bottom) + 10px); display: flex; gap: 8px; align-items: flex-end; }
+  #texto { flex: 1; min-height: 44px; max-height: 120px; resize: none; padding: 11px 14px; border-radius: 22px;
+    border: 1px solid var(--borde); background: rgba(3, 14, 33, 0.9); color: var(--texto); font: inherit; font-size: 16px; }
+  #texto:focus { outline: none; border-color: rgba(0, 229, 255, 0.5); }
+  .redondo { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 19px; flex: none;
+    background: rgba(0, 229, 255, 0.15); border: 1px solid rgba(0, 229, 255, 0.45); }
+  .redondo.escuchando { background: rgba(0, 245, 160, 0.25); border-color: var(--verde); animation: latir 1s infinite; }
+  .redondo:disabled { opacity: 0.4; }
+  #vincular { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 24px; gap: 14px; }
+  #vincular h2 { margin: 0; font-size: 22px; }
+  #vincular p { margin: 0; color: var(--suave); line-height: 1.5; font-size: 15px; }
+  #vincular input { padding: 14px; border-radius: 14px; border: 1px solid var(--borde); background: rgba(3, 14, 33, 0.9);
+    color: var(--texto); font-size: 22px; letter-spacing: 0.4em; text-align: center; }
+  #vincular .primario { padding: 14px; border-radius: 14px; background: rgba(0, 229, 255, 0.18); border: 1px solid var(--cian);
+    color: var(--cian); font-weight: 700; font-size: 16px; }
+  .error { color: var(--rojo); font-size: 14px; min-height: 20px; }
+  #pizarra { position: fixed; inset: 0; background: rgba(2, 6, 14, 0.97); display: none; flex-direction: column; z-index: 10; }
+  #pizarra.abierta { display: flex; }
+  #pizarra .barra { padding: calc(env(safe-area-inset-top) + 10px) 16px 10px; display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--borde); }
+  #pizarra .barra b { flex: 1; font-size: 16px; }
+  #pizarraCuerpo { flex: 1; overflow-y: auto; padding: 16px; font-size: 15px; line-height: 1.5; }
+  #pizarraCuerpo img { width: 100%; border-radius: 12px; margin-bottom: 12px; background: #030a18; }
+  #pizarraCuerpo h2, #pizarraCuerpo h3 { color: var(--cian); margin: 18px 0 6px; }
+  #pizarraCuerpo ul { padding-left: 20px; margin: 6px 0; }
+  #pizarraCuerpo a { color: var(--cian); }
+  #toast { position: fixed; left: 16px; right: 16px; top: calc(env(safe-area-inset-top) + 10px); padding: 12px 14px;
+    border-radius: 14px; background: rgba(0, 40, 30, 0.96); border: 1px solid rgba(0, 245, 160, 0.5); display: none; z-index: 20;
+    font-size: 14px; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<section id="vincular" class="oculto">
+  <div class="portal" style="width:64px;height:64px;margin-bottom:6px"></div>
+  <h2>Vincula tu iPhone con Ares</h2>
+  <p>En tu laptop abre Ares → <b>Ajustes</b> → <b>Ares en tu iPhone</b> → <b>Vincular iPhone</b>, y escribe aquí el código de 6 números (o escanea el código QR con la cámara).</p>
+  <input id="codigo" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="000000">
+  <button class="primario" id="botonVincular">Vincular</button>
+  <div class="error" id="errorVincular"></div>
+</section>
+
+<header id="cabecera" class="oculto">
+  <div class="portal" id="portal"></div>
+  <div>
+    <h1>ARES</h1>
+    <div class="estado" id="estado">conectando…</div>
+  </div>
+  <div class="espacio"></div>
+  <button class="icono" id="botonPizarra" title="Pizarra">▤</button>
+  <button class="icono activo" id="botonVoz" title="Voz de Ares">🔊</button>
+</header>
+<nav id="chips" class="oculto"></nav>
+<main id="mensajes" class="oculto"></main>
+<footer id="pie" class="oculto">
+  <textarea id="texto" rows="1" placeholder="Escríbele a Ares…"></textarea>
+  <button class="redondo" id="botonMic" title="Hablar">🎙️</button>
+  <button class="redondo" id="botonEnviar" title="Enviar">➤</button>
+</footer>
+
+<section id="pizarra">
+  <div class="barra"><b id="pizarraTitulo">Pizarra</b><button class="icono" id="cerrarPizarra">✕</button></div>
+  <div id="pizarraCuerpo"></div>
+</section>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const LLAVE = "ares_movil_llave", CHAT = "ares_movil_chat", VOZ = "ares_movil_voz", ULTIMO = "ares_movil_aviso";
+  const leer = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } };
+  const escribir = (k, v) => { try { localStorage.setItem(k, v); } catch {} };
+  let llave = leer(LLAVE, "");
+  let mensajes = [];
+  try { mensajes = JSON.parse(leer(CHAT, "[]")); } catch { mensajes = []; }
+  let vozActiva = leer(VOZ, "1") === "1";
+  let ultimoAviso = Number(leer(ULTIMO, "0")) || 0;
+  let enviando = false;
+
+  const CHIPS = [
+    ["📈 ¿Cómo va la bolsa?", "¿Cómo va la bolsa hoy?"],
+    ["⏸️ Pausa la música", "Pausa la música"],
+    ["▶️ Sigue la música", "Reanuda la música"],
+    ["📚 Mis tareas", "¿Qué tareas tengo en Canvas esta semana?"],
+    ["⏰ Recordatorios", "¿Qué recordatorios tengo?"],
+    ["🌤️ El clima", "¿Cómo está el clima hoy?"],
+    ["📰 Noticias", "Dame las noticias más importantes de hoy"],
+    ["💻 ¿Qué está abierto?", "¿Qué programas están abiertos en la laptop?"],
+  ];
+
+  // ------------------------------------------------------------ red
+  async function api(ruta, opciones = {}) {
+    const r = await fetch("/api/movil/" + ruta, {
+      ...opciones,
+      headers: { "Content-Type": "application/json", "X-Ares-Movil": llave, ...(opciones.headers || {}) },
+    });
+    let datos = {};
+    try { datos = await r.json(); } catch {}
+    if (r.status === 401) { llave = ""; escribir(LLAVE, ""); mostrarVincular("Este iPhone ya no está vinculado. Vuelve a vincularlo."); throw new Error("sin vincular"); }
+    if (!r.ok) throw new Error(datos.error || "Ares no respondió (" + r.status + ").");
+    return datos;
+  }
+
+  // ------------------------------------------------------------ pantalla
+  function mostrarVincular(error) {
+    for (const id of ["cabecera", "chips", "mensajes", "pie"]) $(id).classList.add("oculto");
+    $("vincular").classList.remove("oculto");
+    $("errorVincular").textContent = error || "";
+    const c = new URLSearchParams(location.search).get("codigo");
+    if (c) $("codigo").value = c;
+  }
+  function mostrarChat() {
+    $("vincular").classList.add("oculto");
+    for (const id of ["cabecera", "chips", "mensajes", "pie"]) $(id).classList.remove("oculto");
+    history.replaceState(null, "", "/movil/");
+    pintar();
+  }
+
+  function agregar(rol, texto, extra) {
+    mensajes.push({ rol, texto, ...(extra || {}) });
+    mensajes = mensajes.slice(-40);
+    escribir(CHAT, JSON.stringify(mensajes));
+    pintar();
+  }
+
+  function pintar(permiso) {
+    const cont = $("mensajes");
+    cont.textContent = "";
+    if (!mensajes.length) {
+      const d = document.createElement("div");
+      d.className = "msg ares";
+      d.textContent = "Ares en línea, señor. Desde aquí controla su laptop: escríbame, use el micrófono o los botones de arriba.";
+      cont.append(d);
+    }
+    for (const m of mensajes) {
+      const d = document.createElement("div");
+      d.className = "msg " + (m.rol === "usuario" ? "yo" : m.aviso ? "aviso" : "ares");
+      if (m.rol !== "usuario" && !m.aviso) {
+        const q = document.createElement("span"); q.className = "quien"; q.textContent = "ARES"; d.append(q);
+      }
+      d.append(document.createTextNode(m.texto));
+      cont.append(d);
+    }
+    if (permiso) cont.append(tarjetaPermiso(permiso));
+    cont.scrollTop = cont.scrollHeight;
+  }
+
+  function tarjetaPermiso(c) {
+    const t = document.createElement("div");
+    t.className = "permiso" + (c.delicada ? " delicada" : "");
+    const p = document.createElement("p");
+    p.textContent = (c.delicada ? "⚠️ Acción delicada. " : "") + "Ares quiere:\n" + c.descripcion;
+    const b = document.createElement("div"); b.className = "botones";
+    const no = document.createElement("button"); no.textContent = "No permitir";
+    const si = document.createElement("button"); si.className = "si"; si.textContent = "Sí, permitir";
+    no.onclick = () => responderPermiso(c, false);
+    si.onclick = () => responderPermiso(c, true);
+    b.append(no, si); t.append(p, b);
+    return t;
+  }
+
+  function pensando(si) {
+    enviando = si;
+    $("portal").classList.toggle("pensando", si);
+    $("botonEnviar").disabled = si;
+    $("estado").innerHTML = "";
+    const b = document.createElement("b"); b.textContent = si ? "pensando…" : "en línea";
+    $("estado").append(si ? "" : "", b, si ? "" : " · laptop conectada");
+  }
+
+  function toast(texto) {
+    const t = $("toast"); t.textContent = texto; t.style.display = "block";
+    clearTimeout(toast.t); toast.t = setTimeout(() => (t.style.display = "none"), 6000);
+  }
+
+  // ------------------------------------------------------------ voz
+  let voces = [];
+  const cargarVoces = () => { voces = (speechSynthesis.getVoices && speechSynthesis.getVoices()) || []; };
+  if ("speechSynthesis" in window) { cargarVoces(); speechSynthesis.onvoiceschanged = cargarVoces; }
+  function hablar(texto) {
+    if (!vozActiva || !("speechSynthesis" in window)) return;
+    const limpio = texto.replace(/\$+[^$]*\$+/g, "").replace(/[*#_`]/g, "").slice(0, 900);
+    const u = new SpeechSynthesisUtterance(limpio);
+    u.lang = "es-MX";
+    u.voice = voces.find((v) => v.lang === "es-MX") || voces.find((v) => v.lang && v.lang.startsWith("es")) || null;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(u);
+  }
+  // iOS solo deja hablar después de un toque: el primer toque "despierta" la voz
+  let vozDespierta = false;
+  document.addEventListener("touchend", () => {
+    if (vozDespierta || !("speechSynthesis" in window)) return;
+    vozDespierta = true;
+    const u = new SpeechSynthesisUtterance(" "); u.volume = 0; speechSynthesis.speak(u);
+  }, { once: false, passive: true });
+
+  const Reconocimiento = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let rec = null;
+  function microfono() {
+    if (!Reconocimiento) {
+      $("texto").focus();
+      toast("Usa el micrófono 🎙️ del teclado del iPhone para dictar, y luego toca ➤.");
+      return;
+    }
+    if (rec) { rec.stop(); return; }
+    rec = new Reconocimiento();
+    rec.lang = "es-MX"; rec.interimResults = true; rec.continuous = false;
+    let final = "";
+    $("botonMic").classList.add("escuchando");
+    rec.onresult = (e) => {
+      let parcial = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) final += e.results[i][0].transcript; else parcial += e.results[i][0].transcript;
+      }
+      $("texto").value = (final + " " + parcial).trim();
+    };
+    rec.onerror = (e) => { if (e.error === "not-allowed") toast("Permite el micrófono para Safari en Ajustes del iPhone, o usa el micrófono del teclado."); };
+    rec.onend = () => {
+      $("botonMic").classList.remove("escuchando");
+      rec = null;
+      if (final.trim()) enviar(final.trim());
+    };
+    rec.start();
+  }
+
+  // ------------------------------------------------------------ conversación
+  async function enviar(texto) {
+    texto = (texto || "").trim();
+    if (!texto || enviando) return;
+    $("texto").value = "";
+    agregar("usuario", texto);
+    pensando(true);
+    try {
+      const historial = mensajes.filter((m) => !m.aviso).map((m) => ({ rol: m.rol, texto: m.texto }));
+      manejar(await api("chat", { method: "POST", body: JSON.stringify({ mensajes: historial }) }));
+    } catch (err) {
+      if (err.message !== "sin vincular") agregar("ares", "⚠️ " + (err.message || "No pude hablar con la laptop. ¿Está prendida y con Tailscale?"));
+    } finally {
+      pensando(false);
+    }
+  }
+
+  function manejar(datos) {
+    if (datos.confirmacion) {
+      pintar(datos.confirmacion);
+      hablar("Necesito su permiso, señor.");
+      return;
+    }
+    if (datos.texto) {
+      agregar("ares", datos.texto);
+      hablar(datos.texto);
+      revisarPizarra();
+    }
+  }
+
+  async function responderPermiso(c, aprobado) {
+    agregar("usuario", (aprobado ? "✔ Permitido: " : "✖ No permitido: ") + c.descripcion);
+    pensando(true);
+    try {
+      manejar(await api("permiso", { method: "POST", body: JSON.stringify({ id: c.id, aprobado, recordar: false }) }));
+    } catch (err) {
+      if (err.message !== "sin vincular") agregar("ares", "⚠️ " + err.message);
+    } finally {
+      pensando(false);
+    }
+  }
+
+  // ------------------------------------------------------------ pizarra (texto seguro, sin HTML de afuera)
+  let pizarraVista = Number(leer("ares_movil_pizarra", "0")) || 0;
+  function enLinea(padre, texto) {
+    // **negritas** y [texto](https://...) — todo como texto, nunca HTML
+    const partes = texto.split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g);
+    for (const p of partes) {
+      if (!p) continue;
+      const negrita = p.match(/^\*\*([^*]+)\*\*$/);
+      const enlace = p.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+      if (negrita) { const b = document.createElement("b"); b.textContent = negrita[1]; padre.append(b); }
+      else if (enlace) { const a = document.createElement("a"); a.textContent = enlace[1]; a.href = enlace[2]; a.target = "_blank"; a.rel = "noopener noreferrer"; padre.append(a); }
+      else padre.append(document.createTextNode(p));
+    }
+  }
+  function pintarPizarra(p) {
+    $("pizarraTitulo").textContent = p.titulo || "Pizarra";
+    const c = $("pizarraCuerpo"); c.textContent = "";
+    if (p.dibujo) { const img = document.createElement("img"); img.alt = "Dibujo de Ares"; img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(p.dibujo); c.append(img); }
+    let lista = null;
+    for (const linea of String(p.contenido || "").split("\n")) {
+      const h = linea.match(/^(#{1,3})\s+(.*)/);
+      const v = linea.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
+      if (v) { if (!lista) { lista = document.createElement("ul"); c.append(lista); } const li = document.createElement("li"); enLinea(li, v[1]); lista.append(li); continue; }
+      lista = null;
+      if (h) { const t = document.createElement(h[1].length === 1 ? "h2" : "h3"); enLinea(t, h[2]); c.append(t); }
+      else if (linea.trim()) { const d = document.createElement("p"); enLinea(d, linea); c.append(d); }
+    }
+    if (!p.contenido && !p.dibujo) c.textContent = "La pizarra está vacía.";
+  }
+  async function revisarPizarra(abrirSiempre) {
+    try {
+      const p = await api("pizarra");
+      if (abrirSiempre || (p.actualizada && p.actualizada > pizarraVista && (p.contenido || p.dibujo))) {
+        pizarraVista = p.actualizada || 0; escribir("ares_movil_pizarra", String(pizarraVista));
+        pintarPizarra(p); $("pizarra").classList.add("abierta");
+      }
+    } catch {}
+  }
+
+  // ------------------------------------------------------------ avisos (recordatorios, bolsa, Canvas...)
+  async function latido() {
+    try {
+      const e = await api("estado?desde=" + ultimoAviso);
+      if (!enviando) pensando(false);
+      for (const a of e.avisos || []) {
+        if (ultimoAviso && a.id > ultimoAviso) { agregar("ares", (a.icono || "⏰") + " " + a.texto, { aviso: true }); toast((a.icono || "⏰") + " " + a.texto); hablar(a.texto); }
+      }
+      ultimoAviso = Math.max(ultimoAviso, e.ultimoAviso || 0);
+      escribir(ULTIMO, String(ultimoAviso));
+    } catch (err) {
+      if (err.message === "sin vincular") return;
+      $("estado").textContent = "";
+      const b = document.createElement("b"); b.className = "mal"; b.textContent = "sin conexión";
+      $("estado").append(b, " · ¿laptop prendida y Tailscale activo?");
+    }
+  }
+
+  // ------------------------------------------------------------ eventos
+  $("botonVincular").onclick = async () => {
+    const codigo = $("codigo").value.replace(/\D/g, "");
+    if (codigo.length !== 6) { $("errorVincular").textContent = "El código tiene 6 números."; return; }
+    $("errorVincular").textContent = "";
+    try {
+      const r = await fetch("/api/movil/vincular", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codigo, nombre: "iPhone" }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "No se pudo vincular.");
+      llave = d.llave; escribir(LLAVE, llave);
+      mostrarChat(); latido();
+      toast("¡Listo! Tu iPhone quedó vinculado con Ares.");
+    } catch (err) { $("errorVincular").textContent = err.message; }
+  };
+  $("botonEnviar").onclick = () => enviar($("texto").value);
+  $("texto").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar($("texto").value); } });
+  $("botonMic").onclick = microfono;
+  $("botonVoz").onclick = () => {
+    vozActiva = !vozActiva; escribir(VOZ, vozActiva ? "1" : "0");
+    $("botonVoz").textContent = vozActiva ? "🔊" : "🔇"; $("botonVoz").classList.toggle("activo", vozActiva);
+    if (!vozActiva && "speechSynthesis" in window) speechSynthesis.cancel();
+  };
+  $("botonPizarra").onclick = () => revisarPizarra(true);
+  $("cerrarPizarra").onclick = () => $("pizarra").classList.remove("abierta");
+  for (const [etiqueta, pedido] of CHIPS) {
+    const b = document.createElement("button"); b.className = "chip"; b.textContent = etiqueta;
+    b.onclick = () => enviar(pedido); $("chips").append(b);
+  }
+  $("botonVoz").textContent = vozActiva ? "🔊" : "🔇"; $("botonVoz").classList.toggle("activo", vozActiva);
+
+  if (llave) { mostrarChat(); latido(); } else mostrarVincular();
+  setInterval(() => { if (llave && document.visibilityState === "visible") latido(); }, 8000);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && llave) latido(); });
+})();
+</script>
+</body>
+</html>

@@ -56,6 +56,7 @@ import { PizarraPanel, PizarraDatos } from "./components/PizarraPanel";
 import { NotasPanel, Nota } from "./components/NotasPanel";
 import { RedMemoriaPanel } from "./components/RedMemoriaPanel";
 import { PaginaPanel } from "./components/PaginaPanel";
+import { MovilAjustes } from "./components/MovilAjustes";
 import {
   DURACIONES,
   guardarDuracionArranque,
@@ -2425,6 +2426,9 @@ export default function App() {
                   Borrar mensajes guardados
                 </button>
               </div>
+
+              {/* ARES EN TU IPHONE (Ares Móvil por Tailscale) */}
+              <MovilAjustes avisar={(t, tipo) => showNotification(t, tipo ?? "info")} />
 
               {/* PANTALLA DE INICIO */}
               <div className="hud-panel p-3 flex flex-col gap-2 shrink-0">

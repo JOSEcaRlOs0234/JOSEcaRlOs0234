@@ -1,7 +1,7 @@
 {
   "name": "jarvis",
   "private": true,
-  "version": "2.39.0",
+  "version": "2.40.0",
   "type": "module",
   "scripts": {
     "start": "tsx server.ts",
@@ -30,6 +30,7 @@
     "mailparser": "^3.9.38",
     "nodemailer": "^10.1.0",
     "pptxgenjs": "^4.0.1",
+    "qrcode": "^1.5.4",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "tailwindcss": "^4.3.3",
@@ -42,6 +43,7 @@
     "@types/mailparser": "^3.9.0",
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.2",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "typescript": "^5.9.3"

@@ -82,6 +82,20 @@ import {
   type Fuente,
 } from "./documentos.ts";
 import { vigilarAlertasBolsa } from "./daytrading.ts";
+import QRCode from "qrcode";
+import {
+  cambiarActivo as cambiarMovilActivo,
+  dispositivoDe,
+  dispositivos as dispositivosMovil,
+  estadoTailscale,
+  movilActivo,
+  nuevoCodigo,
+  publicarEnTailscale,
+  quitarDeTailscale,
+  quitarDispositivo,
+  vieneDeTailscale,
+  vincular,
+} from "./movil.ts";
 import { ESQUEMA_PAGINA, leerHtml, leerPaginas, limpiarHtml, paginasActualizadas, pedidoDePagina } from "./paginas.ts";
 import { busquedasDeDatos, INSTRUCCION_BUSQUEDA_DATOS, pedidoDeEstadisticas } from "./estadisticas.ts";
 import { leerPagina, pedidoDeLectura, pedidoDeLecturaVarias, separarResumen, type PaginaLeida } from "./lector-web.ts";
@@ -314,6 +328,31 @@ app.use((req, res, next) =>
     : leerJson(req, res, next)
 );
 
+// ARES MÓVIL: lo que llega por Tailscale (https://<laptop>.ts.net) solo puede ver la página /movil y las rutas
+// /api/movil/...; y todas (menos vincular) necesitan la llave secreta del iPhone vinculado. Nada más de Ares.
+const intentosVincular: number[] = [];
+app.use((req, res, next) => {
+  if (!vieneDeTailscale(req.headers)) return next();
+  if (!movilActivo()) return res.status(403).type("text").send("Ares Móvil está apagado. Actívalo en la laptop: Ajustes → Ares en tu iPhone.");
+  if (req.path === "/movil" || req.path.startsWith("/movil/")) return next();
+  if (req.path.startsWith("/api/movil/")) {
+    if (req.path === "/api/movil/vincular") {
+      const ahora = Date.now();
+      while (intentosVincular.length && ahora - intentosVincular[0] > 10 * 60_000) intentosVincular.shift();
+      if (intentosVincular.length >= 10) return res.status(429).json({ error: "Demasiados intentos; espera unos minutos." });
+      intentosVincular.push(ahora);
+    } else {
+      const d = dispositivoDe(req.headers["x-ares-movil"]);
+      if (!d) return res.status(401).json({ error: "Este iPhone no está vinculado (o lo quitaste). Vuelve a vincularlo." });
+      (req as any).dispositivo = d;
+    }
+    (req as any).desdeMovil = true;
+    return next();
+  }
+  registrar("SEGURIDAD", `Petición por Tailscale bloqueada: ${req.method} ${req.path.slice(0, 80)}`);
+  return res.status(403).type("text").send("No permitido.");
+});
+
 // Seguridad: solo aceptar peticiones que vengan de la propia interfaz de Ares.
 // Así, una página web cualquiera que abras en el navegador no puede darle órdenes a Ares.
 const ORIGENES_PERMITIDOS = new Set([
@@ -321,6 +360,8 @@ const ORIGENES_PERMITIDOS = new Set([
   `http://127.0.0.1:${PORT}`,
 ]);
 app.use("/api", (req, res, next) => {
+  // Ya revisada arriba (Ares Móvil por Tailscale, con llave)
+  if ((req as any).desdeMovil) return next();
   const origen = req.headers.origin;
   const host = req.headers.host;
   const hostValido = host === `localhost:${PORT}` || host === `127.0.0.1:${PORT}`;
@@ -966,7 +1007,7 @@ app.post("/api/modelo", async (req, res) => {
 });
 
 // Platicar con Ares
-app.post("/api/chat", async (req, res) => {
+app.post(["/api/chat", "/api/movil/chat"], async (req, res) => {
   if (!claveConfigurada) {
     return res.status(503).json({
       error: "Todavía no tengo mi clave de Gemini. Cierra Ares y vuelve a abrir \"Encender Ares\" para configurarla.",
@@ -1008,7 +1049,7 @@ app.post("/api/chat", async (req, res) => {
 });
 
 // El usuario contestó "Sí" o "No" a una pregunta de permiso
-app.post("/api/permiso", async (req, res) => {
+app.post(["/api/permiso", "/api/movil/permiso"], async (req, res) => {
   const { id, aprobado, recordar } = req.body ?? {};
   if (typeof id !== "string" || typeof aprobado !== "boolean") {
     return res.status(400).json({ error: "Respuesta de permiso no válida." });
@@ -1081,6 +1122,65 @@ app.post("/api/paginas/:id/abrir", async (req, res) => {
   } catch {
     res.status(400).json({ error: "No pude abrirla." });
   }
+});
+
+// ---------------------------------------------------------------- Ares Móvil (iPhone)
+
+// Página del iPhone (archivos fijos de la carpeta movil/)
+app.use("/movil", express.static(path.join(__dirname, "movil"), { index: "index.html" }));
+
+app.post("/api/movil/vincular", (req, res) => {
+  try {
+    const r = vincular(String(req.body?.codigo ?? ""), String(req.body?.nombre ?? "iPhone"));
+    registrar("SEGURIDAD", `iPhone vinculado a Ares Móvil (${String(req.body?.nombre ?? "iPhone").slice(0, 40)}).`);
+    res.json({ llave: r.llave, version: VERSION });
+  } catch (err) {
+    registrar("SEGURIDAD", `Intento de vincular un iPhone rechazado: ${err instanceof Error ? err.message : err}`);
+    res.status(400).json({ error: err instanceof Error ? err.message : "No se pudo vincular." });
+  }
+});
+
+app.get("/api/movil/estado", (req, res) => {
+  const desde = Number(req.query.desde) || 0;
+  res.json({
+    version: VERSION,
+    claveConfigurada,
+    avisos: avisos.filter((a) => a.id > desde).map(({ id, texto, icono }) => ({ id, texto, icono })),
+    ultimoAviso: siguienteAviso - 1,
+  });
+});
+
+app.get("/api/movil/pizarra", (_req, res) => {
+  res.json(leerPizarra());
+});
+
+// Administración (solo desde la laptop: estas rutas NO empiezan con /api/movil/)
+app.get("/api/movil-admin", async (_req, res) => {
+  res.json({ activo: movilActivo(), dispositivos: dispositivosMovil(), tailscale: await estadoTailscale() });
+});
+
+app.post("/api/movil-admin/activar", async (req, res) => {
+  const activo = req.body?.activo === true;
+  cambiarMovilActivo(activo);
+  registrar("SISTEMA", activo ? "Ares Móvil activado." : "Ares Móvil apagado.");
+  let publicar: Awaited<ReturnType<typeof publicarEnTailscale>> | null = null;
+  if (activo) publicar = await publicarEnTailscale(PORT);
+  else await quitarDeTailscale().catch(() => {});
+  res.json({ activo, publicar, tailscale: await estadoTailscale(), dispositivos: dispositivosMovil() });
+});
+
+app.post("/api/movil-admin/codigo", async (_req, res) => {
+  const ts = await estadoTailscale();
+  const c = nuevoCodigo();
+  const direccion = ts.direccion ? `${ts.direccion}/movil/?codigo=${c.codigo}` : null;
+  const qr = direccion ? await QRCode.toString(direccion, { type: "svg", margin: 1, color: { dark: "#e2f8ff", light: "#020c18" } }) : null;
+  registrar("SEGURIDAD", "Se generó un código para vincular un iPhone (vale 10 minutos).");
+  res.json({ ...c, direccion, qr });
+});
+
+app.delete("/api/movil-admin/dispositivo/:id", (req, res) => {
+  if (quitarDispositivo(req.params.id)) registrar("SEGURIDAD", "Se quitó un iPhone de Ares Móvil.");
+  res.json({ dispositivos: dispositivosMovil() });
 });
 
 // Notas (panel "Notas")
