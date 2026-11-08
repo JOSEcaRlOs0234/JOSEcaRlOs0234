@@ -1,0 +1,600 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Nano video renderer</title>
+<style>html,body{margin:0;background:#050b1a;overflow:hidden}canvas{display:block}</style></head>
+<body><canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const W = 1920, H = 1080;
+const cv = document.getElementById('c'), g = cv.getContext('2d');
+const FONT = '"DejaVu Sans", "Liberation Sans", sans-serif';
+const C = { bg0:'#040916', bg1:'#0b1a3a', cyan:'#38e1ff', mag:'#ff4fd8', gold:'#ffc54a', green:'#4dffa6', text:'#eaf2ff', dim:'#8ea3c7', red:'#ff5a5a' };
+let SCENES = null, TL = null;
+
+// ---------- utilidades ----------
+const clamp = (x, a=0, b=1) => Math.max(a, Math.min(b, x));
+const ease = x => { x = clamp(x); return x < .5 ? 4*x*x*x : 1 - Math.pow(-2*x + 2, 3) / 2; };
+const eout = x => 1 - Math.pow(1 - clamp(x), 3);
+const lerp = (a, b, t) => a + (b - a) * t;
+function rng(seed) { let s = seed >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
+function glowDot(x, y, r, col, a=1, glow=2.6) {
+  g.save(); g.globalAlpha = a;
+  const gr = g.createRadialGradient(x, y, 0, x, y, r * glow);
+  gr.addColorStop(0, col); gr.addColorStop(0.35, col + '88'); gr.addColorStop(1, col + '00');
+  g.fillStyle = gr; g.beginPath(); g.arc(x, y, r * glow, 0, 7); g.fill();
+  const sp = g.createRadialGradient(x - r*.35, y - r*.35, r*.1, x, y, r);
+  sp.addColorStop(0, '#ffffff'); sp.addColorStop(0.25, col); sp.addColorStop(1, shade(col, -0.45));
+  g.fillStyle = sp; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); g.restore();
+}
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16); let r = n >> 16, gg = (n >> 8) & 255, b = n & 255;
+  const f = v => Math.round(k < 0 ? v * (1 + k) : v + (255 - v) * k);
+  return '#' + [f(r), f(gg), f(b)].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+function text(s, x, y, size, col=C.text, align='left', weight='bold', a=1) {
+  g.save(); g.globalAlpha = a; g.fillStyle = col; g.font = `${weight} ${size}px ${FONT}`; g.textAlign = align; g.textBaseline = 'alphabetic';
+  g.fillText(s, x, y); g.restore();
+}
+function wrap(s, maxW, size, weight='bold') {
+  g.font = `${weight} ${size}px ${FONT}`; const words = s.split(' '); const lines = []; let cur = '';
+  for (const w of words) { const t = cur ? cur + ' ' + w : w; if (g.measureText(t).width > maxW && cur) { lines.push(cur); cur = w; } else cur = t; }
+  if (cur) lines.push(cur); return lines;
+}
+function rrect(x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
+
+// ---------- fondo ----------
+const BGP = (() => { const r = rng(7); return Array.from({length: 140}, () => ({x: r()*W, y: r()*H, z: .3 + r()*.9, p: r()*6.28})); })();
+function background(T, hue=0) {
+  const gr = g.createLinearGradient(0, 0, W, H); gr.addColorStop(0, C.bg0); gr.addColorStop(1, C.bg1);
+  g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  // hexágonos tenues
+  g.save(); g.globalAlpha = .06; g.strokeStyle = C.cyan; g.lineWidth = 1.2;
+  const s = 46, off = (T * 6) % (s * 3);
+  for (let row = -1; row < H / (s * .866) + 1; row++) for (let col = -1; col < W / (s * 3) + 2; col++) {
+    const cx = col * s * 3 + (row % 2) * s * 1.5 - off, cy = row * s * .866;
+    g.beginPath(); for (let k = 0; k < 6; k++) { const a = k * Math.PI / 3; g.lineTo(cx + s * .5 * Math.cos(a) * 1.15, cy + s * .5 * Math.sin(a) * 1.15); } g.closePath(); g.stroke();
+  }
+  g.restore();
+  for (const p of BGP) {
+    const x = (p.x + T * 12 * p.z) % W, y = p.y + Math.sin(T * .4 + p.p) * 14;
+    g.globalAlpha = .25 * p.z; g.fillStyle = hue ? C.mag : C.cyan; g.beginPath(); g.arc(x, y, 1.6 * p.z, 0, 7); g.fill();
+  }
+  g.globalAlpha = 1;
+  const vg = g.createRadialGradient(W/2, H/2, H*.3, W/2, H/2, H*.95); vg.addColorStop(0, '#00000000'); vg.addColorStop(1, '#000000aa');
+  g.fillStyle = vg; g.fillRect(0, 0, W, H);
+}
+
+// ---------- capas de texto comunes ----------
+function header(sc, t) {
+  if (!sc.kicker) return;
+  const a = eout(t / .8);
+  g.save(); g.translate(0, (1 - a) * 20);
+  text(sc.kicker, 110, 120, 26, C.cyan, 'left', 'bold', a);
+  g.fillStyle = C.cyan; g.globalAlpha = a; g.fillRect(110, 136, 90 * a, 4); g.globalAlpha = 1;
+  const tl = wrap(sc.title, 800, 58);
+  tl.forEach((l, i) => text(l, 110, 205 + i * 68, 58, C.text, 'left', 'bold', a));
+  g.restore();
+  return 205 + tl.length * 68;
+}
+function bullets(sc, t, d, y0) {
+  const n = sc.bullets.length; if (!n) return;
+  const span = Math.max(1, d - 3);
+  sc.bullets.forEach((b, i) => {
+    const ts = .8 + i * span / n, a = eout((t - ts) / .6);
+    if (a <= 0) return;
+    const y = y0 + 40 + i * 74;
+    g.save(); g.globalAlpha = a; g.translate((1 - a) * -30, 0);
+    rrect(110, y - 40, 760, 60, 14); g.fillStyle = '#0e2350cc'; g.fill(); g.strokeStyle = '#38e1ff44'; g.lineWidth = 1.5; g.stroke();
+    glowDot(140, y - 10, 7, i % 2 ? C.mag : C.cyan, 1, 2);
+    g.restore();
+    let fs = 28; g.font = `bold ${fs}px ${FONT}`; while (g.measureText(b).width > 690 && fs > 18) { fs--; g.font = `bold ${fs}px ${FONT}`; }
+    text(b, 165, y - (28 - fs) / 3, fs, C.text, 'left', 'bold', a);
+  });
+}
+function refs(sc, t) {
+  if (!sc.refs || !sc.refs.length) return;
+  const a = eout((t - 1.2) / .8);
+  const lines = [];
+  sc.refs.forEach(r => wrap(r, 790, 16, 'normal').forEach((l, k) => lines.push([l, k === 0])));
+  const h = 44 + lines.length * 21, y = 890 - h;
+  g.save(); g.globalAlpha = a * .95;
+  rrect(110, y, 830, h, 12); g.fillStyle = '#020611d0'; g.fill(); g.strokeStyle = '#ffc54a55'; g.stroke();
+  g.restore();
+  text('FUENTE' + (sc.refs.length > 1 ? 'S' : '') + ' CIENTÍFICA' + (sc.refs.length > 1 ? 'S' : ''), 130, y + 26, 15, C.gold, 'left', 'bold', a);
+  lines.forEach(([l, first], i) => text(l, 130, y + 48 + i * 21, 16, first ? '#dfe7f5' : '#b8c4da', 'left', 'normal', a));
+}
+function subtitles(scT, t) {
+  const ln = scT.lines.find(l => t >= l.start - .1 && t <= l.end + .35);
+  if (!ln) return;
+  const a = clamp((t - ln.start + .1) / .2) * clamp((ln.end + .35 - t) / .2);
+  const lines = wrap(ln.sub, 1600, 38, 'bold');
+  const h = lines.length * 50 + 26, y = 1052 - h;
+  g.save(); g.globalAlpha = a;
+  g.font = `bold 38px ${FONT}`; const w = Math.max(...lines.map(l => g.measureText(l).width)) + 60;
+  rrect(W/2 - w/2, y, w, h, 14); g.fillStyle = '#000000b8'; g.fill();
+  lines.forEach((l, i) => { g.fillStyle = '#ffffff'; g.textAlign = 'center'; g.fillText(l, W/2, y + 48 + i * 50); });
+  g.restore();
+}
+function progressBar(T) {
+  const p = T / TL.total; g.fillStyle = '#ffffff14'; g.fillRect(0, H - 6, W, 6);
+  const gr = g.createLinearGradient(0, 0, W, 0); gr.addColorStop(0, C.cyan); gr.addColorStop(1, C.mag);
+  g.fillStyle = gr; g.fillRect(0, H - 6, W * p, 6);
+}
+
+// ---------- visuales por escena (área: x 960–1820, y 170–800) ----------
+const VX = 1390, VY = 480;
+const V = {};
+
+V.intro = (t, d, sc, scT) => {
+  const r = rng(3), N = 260, p = ease((t - .5) / 5);
+  // nube -> red hexagonal
+  const pts = [];
+  for (let row = -6; row <= 6; row++) for (let col = -11; col <= 11; col++) {
+    const x = W/2 + col * 52 + (row % 2 ? 26 : 0), y = 470 + row * 45;
+    if (Math.hypot(x - W/2, (y - 470) * 1.6) < 560) pts.push([x, y]);
+  }
+  g.save(); g.globalAlpha = .35 * p; g.strokeStyle = C.cyan; g.lineWidth = 1.5;
+  for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+    const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+    if (dx*dx + dy*dy < 53*53) { g.beginPath(); g.moveTo(pts[i][0], pts[i][1]); g.lineTo(pts[j][0], pts[j][1]); g.stroke(); }
+  }
+  g.restore();
+  pts.forEach((q, i) => {
+    const sx = r() * W, sy = r() * H, ph = r() * 6.28;
+    const k = ease(p * 1.3 - (i % 40) / 120);
+    const x = lerp(sx + Math.sin(t + ph) * 40, q[0], k), y = lerp(sy + Math.cos(t * .8 + ph) * 40, q[1] + Math.sin(t * 2 + q[0] * .01) * 4 * k, k);
+    glowDot(x, y, 4.5, i % 7 ? C.cyan : C.mag, .9, 2.5);
+  });
+  const a = eout((t - 2.5) / 1.2);
+  g.save(); g.globalAlpha = a; g.fillStyle = '#050b1acc'; rrect(W/2 - 640, 330, 1280, 290, 30); g.fill(); g.restore();
+  text('LO QUE PUEDES HACER CON LA', W/2, 410, 40, C.cyan, 'center', 'bold', a);
+  g.save(); g.globalAlpha = a; g.font = `bold 128px ${FONT}`; g.textAlign = 'center';
+  const gr = g.createLinearGradient(W/2 - 600, 0, W/2 + 600, 0); gr.addColorStop(0, C.cyan); gr.addColorStop(.5, '#ffffff'); gr.addColorStop(1, C.mag);
+  g.fillStyle = gr; g.shadowColor = C.cyan; g.shadowBlur = 30; g.fillText('NANOTECNOLOGÍA', W/2, 545, 1240); g.restore();
+  text('Un viaje basado en artículos científicos', W/2, 595, 30, C.dim, 'center', 'normal', a);
+};
+
+V.scale = (t, d) => {
+  const items = [
+    {n: 'Cabello humano', v: 80000, col: '#d9a46a'}, {n: 'Glóbulo rojo', v: 7000, col: '#ff5a5a'},
+    {n: 'Bacteria', v: 1000, col: '#4dffa6'}, {n: 'Virus', v: 100, col: '#ff4fd8'},
+    {n: 'Proteína', v: 10, col: '#ffc54a'}, {n: 'ADN (ancho)', v: 2.5, col: '#38e1ff'}, {n: 'Átomo', v: 0.1, col: '#ffffff'}];
+  const x0 = 1060, x1 = 1730, ly = 640;
+  const lx = v => lerp(x1, x0, (Math.log10(v) + 1) / 6);
+  const a = eout(t / 1);
+  g.save(); g.globalAlpha = a; g.strokeStyle = C.dim; g.lineWidth = 3; g.beginPath(); g.moveTo(x0 - 20, ly); g.lineTo(x1 + 20, ly); g.stroke();
+  for (let e = -1; e <= 5; e++) { const x = lx(Math.pow(10, e)); g.fillStyle = C.dim; g.fillRect(x - 1.5, ly - 10, 3, 20); text(e === -1 ? '0.1 nm' : (Math.pow(10, e)).toLocaleString('en-US') + ' nm', x, ly + 42, 15, C.dim, 'center', 'normal', a); }
+  g.restore();
+  const cur = 5.2 - ease((t - 2) / (d * .55)) * 6.2; // exponente actual del "zoom"
+  items.forEach((it, i) => {
+    const x = lx(it.v), le = Math.log10(it.v), on = clamp(1 - Math.abs(le - cur) / 1.2);
+    const seen = cur <= le + .3 ? 1 : 0;
+    const aa = a * (.35 + .65 * Math.max(on, seen * .6));
+    const y = ly - 90 - (i % 2) * 120;
+    g.save(); g.globalAlpha = aa * .6; g.strokeStyle = it.col; g.setLineDash([4, 6]); g.beginPath(); g.moveTo(x, ly - 12); g.lineTo(x, y + 30); g.stroke(); g.restore();
+    glowDot(x, y, 14 + on * 16, it.col, aa, 2.2 + on);
+    text(it.n, x, y - 42 - on * 12, 22 + on * 6, it.col, 'center', 'bold', aa);
+  });
+  // lupa
+  const cx = lx(Math.pow(10, clamp(cur, -1, 5)));
+  g.save(); g.strokeStyle = C.gold; g.lineWidth = 4; g.globalAlpha = a; g.beginPath(); g.arc(cx, ly, 22, 0, 7); g.stroke();
+  g.beginPath(); g.moveTo(cx + 16, ly + 16); g.lineTo(cx + 34, ly + 34); g.stroke(); g.restore();
+  const zx = clamp(cx, 1080, 1720);
+  text('×' + Math.round(Math.pow(10, 5.2 - clamp(cur, -1, 5.2))).toLocaleString('en-US'), zx, ly - 300 + 10, 26, C.gold, 'center', 'bold', a * clamp((t - 2) / 1));
+  text('zoom', zx, ly - 300 + 36, 18, C.gold, 'center', 'normal', a * clamp((t - 2) / 1));
+};
+
+V.atoms = (t, d) => {
+  // sustrato de níquel
+  const ox = 990, oy = 230, cols = 30, rows = 19, s = 27;
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const x = ox + c * s + (r % 2) * s / 2, y = oy + r * s * .87;
+    g.fillStyle = `rgba(90,120,170,${.25 + .12 * Math.sin(c * .7 + r)})`; g.beginPath(); g.arc(x, y, 11, 0, 7); g.fill();
+  }
+  const font = { I: ['111', '010', '010', '010', '010', '010', '111'], B: ['110', '101', '101', '110', '101', '101', '110'], M: ['10001', '11011', '10101', '10001', '10001', '10001', '10001'] };
+  const targets = []; let cx = 0;
+  for (const ch of 'IBM') { const m = font[ch]; m.forEach((row, ry) => [...row].forEach((v, rx) => { if (v === '1') targets.push([cx + rx, ry]); })); cx += m[0].length + 1; }
+  const r = rng(11); const sc = 42, bx = 1400 - (cx - 1) * sc / 2, by = 330;
+  const start = 4, per = (d - 8) / targets.length;
+  let tip = null;
+  targets.forEach(([gx, gy], i) => {
+    const sx = 1000 + r() * 800, sy = 250 + r() * 470; const tx = bx + gx * sc, ty = by + gy * sc;
+    const k = ease((t - start - i * per) / (per * 1.6));
+    const x = lerp(sx, tx, k), y = lerp(sy, ty, k);
+    if (k > 0 && k < 1) tip = [x, y];
+    glowDot(x, y, 15, k >= 1 ? C.cyan : '#7fd6ff', 1, 2.2);
+  });
+  if (tip) {
+    g.save(); g.fillStyle = '#c0c8d8'; g.globalAlpha = .9; g.beginPath(); g.moveTo(tip[0], tip[1] - 22); g.lineTo(tip[0] - 26, tip[1] - 120); g.lineTo(tip[0] + 26, tip[1] - 120); g.closePath(); g.fill();
+    g.strokeStyle = C.gold; g.setLineDash([3, 5]); g.beginPath(); g.moveTo(tip[0], tip[1] - 22); g.lineTo(tip[0], tip[1] - 14); g.stroke(); g.restore();
+    text('punta STM', tip[0] + 34, tip[1] - 90, 20, C.gold, 'left', 'bold', .9);
+  }
+  const done = clamp((t - start - targets.length * per) / 1);
+  text('35 átomos de xenón sobre níquel', 1400, 770, 26, C.cyan, 'center', 'bold', .5 + .5 * done);
+};
+
+V.qdots = (t, d) => {
+  const cols = ['#3b5bff', '#22b8ff', '#2ee88a', '#e8e23a', '#ff9a2e', '#ff3b3b'];
+  const sizes = [2, 3, 4, 5, 6, 7];
+  sizes.forEach((sz, i) => {
+    const a = eout((t - 1 - i * .5) / .8); if (a <= 0) return;
+    const x = 1010 + i * 150, y = 470, r = 14 + sz * 8;
+    const pulse = 1 + .08 * Math.sin(t * 3 + i);
+    // rayos de luz
+    g.save(); g.globalAlpha = a * .5; g.strokeStyle = cols[i]; g.lineWidth = 3;
+    for (let k = 0; k < 10; k++) { const an = k * .628 + t * .5, r1 = r + 18, r2 = r + 40 + 12 * Math.sin(t * 4 + k); g.beginPath(); g.moveTo(x + Math.cos(an) * r1, y + Math.sin(an) * r1); g.lineTo(x + Math.cos(an) * r2, y + Math.sin(an) * r2); g.stroke(); }
+    g.restore();
+    glowDot(x, y, r * pulse, cols[i], a, 2.4);
+    text(sz + ' nm', x, y + 140, 26, C.text, 'center', 'bold', a);
+  });
+  const a2 = eout((t - 4.5) / 1);
+  g.save(); g.globalAlpha = a2; const gr = g.createLinearGradient(1010, 0, 1760, 0); cols.forEach((c, i) => gr.addColorStop(i / 5, c));
+  g.fillStyle = gr; rrect(1000, 660, 770, 14, 7); g.fill(); g.restore();
+  text('más pequeño → azul', 1000, 715, 22, '#7fa0ff', 'left', 'bold', a2);
+  text('más grande → rojo', 1770, 715, 22, '#ff7a7a', 'right', 'bold', a2);
+  text('Mismo material: CdSe', 1385, 290, 30, C.gold, 'center', 'bold', a2);
+};
+
+// fullereno C60: vértices del icosaedro truncado
+const PHI = (1 + Math.sqrt(5)) / 2;
+const C60 = (() => {
+  const base = [[0, 1, 3 * PHI], [1, 2 + PHI, 2 * PHI], [PHI, 2, Math.pow(PHI, 3)]];
+  const set = new Map();
+  for (const b of base) for (let sx of [1, -1]) for (let sy of [1, -1]) for (let sz of [1, -1]) {
+    const v = [b[0] * sx, b[1] * sy, b[2] * sz];
+    for (let k = 0; k < 3; k++) { const p = [v[k % 3], v[(k + 1) % 3], v[(k + 2) % 3]]; set.set(p.map(q => q.toFixed(3)).join(), p); }
+  }
+  const P = [...set.values()]; const E = [];
+  for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) { const d = Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1], P[i][2] - P[j][2]); if (Math.abs(d - 2) < .01) E.push([i, j]); }
+  return {P, E};
+})();
+function rot(p, ax, ay) { let [x, y, z] = p; let c = Math.cos(ay), s = Math.sin(ay); [x, z] = [x * c + z * s, -x * s + z * c]; c = Math.cos(ax); s = Math.sin(ax); [y, z] = [y * c - z * s, y * s + z * c]; return [x, y, z]; }
+function draw3D(P, E, cx, cy, sc, ax, ay, col, a) {
+  const Q = P.map(p => rot(p, ax, ay));
+  g.save(); g.globalAlpha = a; g.lineWidth = 2.5;
+  E.forEach(([i, j]) => { const z = (Q[i][2] + Q[j][2]) / 2; g.strokeStyle = col; g.globalAlpha = a * (.25 + .6 * (z / (sc ? 6 : 1) + 1) / 2); g.beginPath(); g.moveTo(cx + Q[i][0] * sc, cy + Q[i][1] * sc); g.lineTo(cx + Q[j][0] * sc, cy + Q[j][1] * sc); g.stroke(); });
+  g.restore();
+  Q.map((q, i) => [q, i]).sort((u, v) => u[0][2] - v[0][2]).forEach(([q]) => glowDot(cx + q[0] * sc, cy + q[1] * sc, 5.5, col, a * (.4 + .6 * clamp((q[2] + 5) / 10)), 1.8));
+}
+const TUBE = (() => {
+  const P = [], E = [], n = 12, L = 22, R = 2.2, dz = .5;
+  const idx = (i, j) => i * n + ((j % n) + n) % n;
+  for (let i = 0; i < L; i++) for (let j = 0; j < n; j++) { const an = (j + (i % 2) * .5) / n * Math.PI * 2; P.push([(i - L / 2) * dz * 1.3, R * Math.cos(an), R * Math.sin(an)]); }
+  for (let i = 0; i < L; i++) for (let j = 0; j < n; j++) { if (i + 1 < L) { E.push([idx(i, j), idx(i + 1, j)]); E.push([idx(i, j), idx(i + 1, j + (i % 2 ? 1 : -1))]); } }
+  return {P, E};
+})();
+V.carbon = (t, d, sc, scT) => {
+  const L = scT.lines; const t1 = L[1] ? L[1].start : 3, t2 = L[2] ? L[2].start : 10, t3 = L[3] ? L[3].start : 16;
+  const seg = (a, b) => clamp((t - a) / .8) * clamp((b - t) / .8);
+  const aC = t < t2 ? clamp((t - t1 + 1) / .8) * clamp((t2 - t) / .8) : 0;
+  if (aC > 0) { draw3D(C60.P, C60.E, VX, VY, 52, t * .5, t * .7, C.gold, aC); text('C60 · fullereno', VX, 790, 30, C.gold, 'center', 'bold', aC); }
+  const aT = seg(t2, t3);
+  if (aT > 0) { draw3D(TUBE.P, TUBE.E, VX, VY, 52, .25, t * .9, C.cyan, aT); text('Nanotubo de carbono', VX, 790, 30, C.cyan, 'center', 'bold', aT); }
+  const aG = clamp((t - t3) / .8);
+  if (aG > 0) {
+    const s = 34; const pts = [];
+    for (let r = -7; r <= 7; r++) for (let c = -9; c <= 9; c++) {
+      const x0 = c * s * 1.5, y0 = r * s * .866 * 2 + (c % 2 ? s * .866 : 0);
+      for (const [dx, dy] of [[-s / 2, 0], [s / 2, 0]]) pts.push([x0 + dx, y0 + dy]);
+    }
+    const proj = ([x, y]) => { const w = Math.sin(x * .012 + t * 1.6) * 18 + Math.cos(y * .015 + t) * 12; return [VX + x * .95 + y * .25, VY + y * .45 + w - x * .05]; };
+    const rr = 380;
+    g.save(); g.strokeStyle = C.green; g.lineWidth = 2; g.globalAlpha = aG * .8;
+    for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+      const dx = pts[i][0] - pts[j][0], dy = pts[i][1] - pts[j][1];
+      if (dx * dx + dy * dy < s * s * 1.05 && Math.hypot(pts[i][0], pts[i][1] * 1.3) < rr) { const a1 = proj(pts[i]), b1 = proj(pts[j]); g.beginPath(); g.moveTo(...a1); g.lineTo(...b1); g.stroke(); }
+    }
+    g.restore();
+    text('Grafeno · 1 átomo de grosor', VX, 790, 30, C.green, 'center', 'bold', aG);
+    if (L[4] && t > L[4].start) { const a = eout((t - L[4].start) / .8); g.save(); g.globalAlpha = a; rrect(VX - 260, 200, 520, 70, 16); g.fillStyle = '#4dffa622'; g.fill(); g.strokeStyle = C.green; g.lineWidth = 2; g.stroke(); g.restore(); text('💪 el más resistente jamás medido', VX, 247, 28, C.green, 'center', 'bold', a); }
+  }
+};
+
+V.lnp = (t, d, sc, scT) => {
+  const L = scT.lines; const tMove = L[2] ? L[2].start : 12, tProt = tMove + 4;
+  const cellX = 1640, cellY = 500;
+  // célula
+  g.save(); g.globalAlpha = .9; const cg = g.createRadialGradient(cellX, cellY, 30, cellX, cellY, 260); cg.addColorStop(0, '#2a1f5e'); cg.addColorStop(1, '#3d2a7a55');
+  g.fillStyle = cg; g.beginPath(); for (let k = 0; k <= 80; k++) { const an = k / 80 * 6.283; const rr = 230 + 10 * Math.sin(an * 5 + t); g.lineTo(cellX + 40 + Math.cos(an) * rr, cellY + Math.sin(an) * rr * 1.1); } g.fill();
+  g.strokeStyle = '#a58cff'; g.lineWidth = 4; g.stroke(); g.restore();
+  text('célula', cellX + 40, 790, 24, '#c9b8ff', 'center', 'bold', 1);
+  const k = ease((t - tMove) / 3.5);
+  const px = lerp(1180, cellX - 40, k), py = lerp(480, cellY, k) - Math.sin(k * Math.PI) * 120;
+  const R = lerp(130, 70, k), open = clamp((t - tMove - 3.2) / 1.2);
+  // ARNm dentro
+  g.save(); g.strokeStyle = C.gold; g.lineWidth = 5; g.globalAlpha = 1; g.beginPath();
+  for (let i = 0; i <= 60; i++) { const u = i / 60; const rx = lerp(R * .6, R * 2.6, open), x = px - rx + u * rx * 2; const y = py + Math.sin(u * 18 + t * 3) * lerp(R * .25, 18, open) + Math.cos(u * 7) * R * .2 * (1 - open); g.lineTo(x, y); }
+  g.stroke(); g.restore();
+  // bicapa lipídica
+  if (open < 1) {
+    const n = 34;
+    for (let layer = 0; layer < 2; layer++) for (let i = 0; i < n; i++) {
+      const an = i / n * 6.283 + t * .3 + layer * .09; const rr = R * (layer ? .82 : 1) + open * 80;
+      const x = px + Math.cos(an) * rr, y = py + Math.sin(an) * rr;
+      g.save(); g.globalAlpha = 1 - open; g.strokeStyle = '#7fe8ff88'; g.lineWidth = 2; g.beginPath(); g.moveTo(x, y); g.lineTo(px + Math.cos(an) * (rr - (layer ? -9 : 9)), py + Math.sin(an) * (rr - (layer ? -9 : 9))); g.stroke(); g.restore();
+      glowDot(x, y, 6, C.cyan, 1 - open, 1.6);
+    }
+  }
+  if (t < tMove) { text('Nanopartícula lipídica', px, py - R - 40, 26, C.cyan, 'center', 'bold', eout(t / 1)); text('ARNm', px, py + R + 50, 24, C.gold, 'center', 'bold', eout((t - 1) / 1)); }
+  // proteínas spike
+  const pp = clamp((t - tProt) / 3);
+  for (let i = 0; i < 9; i++) {
+    const a = clamp(pp * 9 - i); if (a <= 0) continue;
+    const an = -1.2 + i * .3; const x = cellX + 40 + Math.cos(an) * 245, y = cellY + Math.sin(an) * 270;
+    g.save(); g.globalAlpha = a; g.translate(x, y); g.rotate(an + Math.PI / 2); g.strokeStyle = C.mag; g.lineWidth = 6; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(0, -26); g.lineTo(-12, -42); g.moveTo(0, -26); g.lineTo(12, -42); g.stroke(); g.restore();
+  }
+  if (pp > .3) text('proteína → sistema inmune entrenado', cellX - 40, 225, 24, C.mag, 'center', 'bold', clamp((pp - .3) * 3));
+};
+
+V.cancer = (t, d, sc, scT) => {
+  const L = scT.lines; const tLaser = L[3] ? L[3].start + 1.5 : d * .6;
+  const y0 = 330, y1 = 470;
+  // tumor
+  const tumX = 1560, tumY = 640;
+  const heat = clamp((t - tLaser) / 3), kill = clamp((t - tLaser - 3) / 4);
+  g.save(); g.globalAlpha = 1 - kill * .7;
+  const r = rng(5);
+  for (let i = 0; i < 26; i++) { const an = r() * 6.28, rd = r() * 120; glowDot(tumX + Math.cos(an) * rd * 1.3, tumY + Math.sin(an) * rd * .6, 26 + r() * 8, heat > 0 ? shadeMix('#8a3a6a', '#ff7a2a', heat) : '#8a3a6a', .9, 1.2); }
+  g.restore();
+  text('tumor', tumX, tumY + 130, 26, '#ff9ad5', 'center', 'bold', 1);
+  // vaso sanguíneo
+  g.save(); g.fillStyle = '#5a0f1f88'; g.fillRect(990, y0, 830, y1 - y0); g.fillStyle = '#ff5a5a';
+  for (let x = 990; x < 1820; x += 8) { const gap = x > 1400 && ((x - 1400) % 110 < 34); if (!gap) { g.fillRect(x, y0 - 6, 6, 6); g.fillRect(x, y1, 6, 6); } }
+  g.restore();
+  text('tejido sano: pared cerrada', 1180, y0 - 30, 22, C.dim, 'center', 'bold', 1);
+  text('tumor: pared con fugas', 1600, y0 - 30, 22, '#ff9ad5', 'center', 'bold', 1);
+  // glóbulos y nanopartículas
+  const rr = rng(9);
+  for (let i = 0; i < 18; i++) { const x = 990 + ((rr() * 830 + t * 140) % 830), y = y0 + 20 + rr() * 100; g.fillStyle = '#d93a4a'; g.beginPath(); g.ellipse(x, y, 20, 12, 0, 0, 7); g.fill(); }
+  for (let i = 0; i < 46; i++) {
+    const ph = rr(), sp = 110 + rr() * 60, yy = y0 + 20 + rr() * 100; const born = i * .45;
+    if (t < born) continue;
+    let x = 990 + (t - born) * sp, y = yy;
+    const gapIdx = Math.floor(rr() * 4), gx = 1417 + gapIdx * 110;
+    if (x > gx) { const k = clamp((x - gx) / 260); x = gx + k * 80 + (rr() - .5) * 60 * k; y = lerp(yy, tumY - 40 + (rr() - .5) * 120, ease(k)); }
+    glowDot(x, y, 7, C.gold, 1, 2 + heat * 2);
+  }
+  if (t > tLaser - 1) {
+    const a = clamp((t - tLaser + 1) / .6);
+    g.save(); g.globalAlpha = a * (.5 + .2 * Math.sin(t * 20)); const lg = g.createLinearGradient(1820, 200, tumX, tumY); lg.addColorStop(0, '#ff2a2a00'); lg.addColorStop(1, '#ff2a2a');
+    g.strokeStyle = lg; g.lineWidth = 22; g.beginPath(); g.moveTo(1880, 160); g.lineTo(tumX, tumY); g.stroke(); g.restore();
+    text('luz infrarroja', 1760, 210, 22, '#ff8a8a', 'right', 'bold', a);
+  }
+};
+function shadeMix(a, b, k) { const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16); const m = s => Math.round(lerp((pa >> s) & 255, (pb >> s) & 255, k)); return '#' + [m(16), m(8), m(0)].map(v => v.toString(16).padStart(2, '0')).join(''); }
+
+const DNA_PATH = (() => {
+  const pts = []; const R = 270, rows = 22;
+  for (let i = 0; i < rows; i++) {
+    const y = -R + (i + .5) * 2 * R / rows, hw = Math.sqrt(R * R - y * y);
+    const xs = i % 2 ? [hw, -hw] : [-hw, hw];
+    for (let k = 0; k <= 24; k++) pts.push([lerp(xs[0], xs[1], k / 24), y]);
+  }
+  return pts;
+})();
+V.dna = (t, d, sc, scT) => {
+  const L = scT.lines; const tf0 = 0; const tf = L[1] ? L[1].start : 3; const k = ease((t - tf) / 7);
+  const N = DNA_PATH.length; const pts = DNA_PATH.map(([x, y], i) => {
+    const u = i / N; const sx = -420 + u * 840, sy = Math.sin(u * 40 + t) * 60 + Math.sin(u * 9) * 160;
+    return [VX + lerp(sx, x, k), VY + lerp(sy, y, k)];
+  });
+  // cara: ojos y boca (huecos) -> se dibujan encima con fondo
+  g.save(); g.strokeStyle = C.cyan; g.lineWidth = 6; g.lineJoin = 'round'; g.shadowColor = C.cyan; g.shadowBlur = 12; g.beginPath(); pts.forEach(p => g.lineTo(p[0], p[1])); g.stroke(); g.restore();
+  // grapas
+  const r = rng(4);
+  g.save(); g.lineWidth = 4;
+  for (let i = 0; i < 90; i++) { const a = clamp((k - .6) * 3 - i / 120); if (a <= 0) continue; const j = Math.floor(r() * (N - 60)); const p = pts[j], q = pts[Math.min(N - 1, j + 50 + Math.floor(r() * 10))];
+    g.globalAlpha = a * .9; g.strokeStyle = [C.mag, C.gold, C.green][i % 3]; g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); g.stroke(); }
+  g.restore();
+  const f = clamp((k - .85) * 6);
+  if (f > 0) {
+    g.save(); g.globalAlpha = f; g.fillStyle = '#071230';
+    g.beginPath(); g.ellipse(VX - 90, VY - 80, 34, 46, 0, 0, 7); g.fill(); g.beginPath(); g.ellipse(VX + 90, VY - 80, 34, 46, 0, 0, 7); g.fill();
+    g.lineWidth = 34; g.strokeStyle = '#071230'; g.lineCap = 'round'; g.beginPath(); g.arc(VX, VY + 20, 140, .35, Math.PI - .35); g.stroke(); g.restore();
+    text('≈ 100 nm', VX, VY + 330, 26, C.gold, 'center', 'bold', f);
+  }
+  if (k <= 0) text('hebra de ADN (andamio)', VX, VY - 250, 26, C.cyan, 'center', 'bold', eout(t / 1));
+};
+
+V.motor = (t, d) => {
+  const ang = t * 1.2; const steps = Math.floor(ang / (Math.PI / 2));
+  // destellos de luz UV
+  const flash = Math.max(0, 1 - ((ang % (Math.PI / 2)) / .5));
+  g.save(); g.globalAlpha = flash * .7; const fg = g.createRadialGradient(1700, 230, 0, 1700, 230, 220); fg.addColorStop(0, '#b88cff'); fg.addColorStop(1, '#b88cff00'); g.fillStyle = fg; g.fillRect(1480, 0, 440, 460); g.restore();
+  text('☀ luz', 1700, 240, 30, '#d4b8ff', 'center', 'bold', .5 + flash * .5);
+  // estator
+  g.save(); g.strokeStyle = C.dim; g.lineWidth = 8; g.beginPath(); g.moveTo(VX - 260, VY + 230); g.lineTo(VX + 260, VY + 230); g.stroke();
+  for (let i = -5; i <= 5; i++) glowDot(VX + i * 50, VY + 230, 9, '#8ea3c7', .8, 1.5);
+  g.beginPath(); g.moveTo(VX, VY + 230); g.lineTo(VX, VY + 40); g.stroke(); g.restore();
+  // rotor: anillos hexagonales en 3D simple
+  for (let b = 0; b < 2; b++) {
+    const a0 = ang + b * Math.PI; const ex = Math.cos(a0) * 220, ez = Math.sin(a0);
+    const x = VX + ex, y = VY - 20 + ez * 40; const sz = 60 + ez * 12;
+    g.save(); g.strokeStyle = b ? C.mag : C.cyan; g.lineWidth = 5; g.globalAlpha = .55 + .45 * (ez + 1) / 2;
+    g.beginPath(); g.moveTo(VX, VY + 40); g.lineTo(x, y); g.stroke();
+    g.beginPath(); for (let k = 0; k < 6; k++) { const an = k * Math.PI / 3 + t; g.lineTo(x + Math.cos(an) * sz, y + Math.sin(an) * sz * .7); } g.closePath(); g.stroke(); g.restore();
+    glowDot(x, y, 12, b ? C.mag : C.cyan, 1, 2);
+  }
+  glowDot(VX, VY + 40, 16, C.gold, 1, 2);
+  // flecha de dirección
+  g.save(); g.strokeStyle = C.green; g.lineWidth = 5; g.beginPath(); g.ellipse(VX, VY - 20, 300, 70, 0, Math.PI * .15, Math.PI * .85); g.stroke();
+  const ax = VX + 300 * Math.cos(Math.PI * .15), ay = VY - 20 + 70 * Math.sin(Math.PI * .15);
+  g.fillStyle = C.green; g.beginPath(); g.moveTo(ax + 18, ay - 18); g.lineTo(ax - 14, ay - 6); g.lineTo(ax + 6, ay + 22); g.fill(); g.restore();
+  text('siempre en el mismo sentido', VX, VY + 300, 26, C.green, 'center', 'bold', 1);
+  text('vueltas: ' + (steps / 4).toFixed(2), VX, 200, 24, C.dim, 'center', 'normal', 1);
+};
+
+V.chip = (t, d, sc, scT) => {
+  const L = scT.lines; const tz = L[2] ? L[2].start : d * .5; const z = ease((t - tz + .5) / 2);
+  const a1 = 1 - z;
+  if (a1 > 0) {
+    g.save(); g.globalAlpha = a1; const s = 420; const x = VX - s / 2, y = VY - s / 2;
+    g.fillStyle = '#9aa7b8'; for (let i = 0; i < 12; i++) { g.fillRect(x + 20 + i * 33, y - 30, 12, 30); g.fillRect(x + 20 + i * 33, y + s, 12, 30); g.fillRect(x - 30, y + 20 + i * 33, 30, 12); g.fillRect(x + s, y + 20 + i * 33, 30, 12); }
+    rrect(x, y, s, s, 18); g.fillStyle = '#152a4a'; g.fill(); g.strokeStyle = C.cyan; g.lineWidth = 3; g.stroke();
+    const r = rng(2);
+    for (let i = 0; i < 40; i++) { const yy = y + 30 + r() * (s - 60), xx = x + 30 + r() * (s - 200); const len = 60 + r() * 120;
+      g.strokeStyle = '#38e1ff55'; g.lineWidth = 2; g.beginPath(); g.moveTo(xx, yy); g.lineTo(xx + len, yy); g.lineTo(xx + len, yy + 30); g.stroke();
+      const pp = (t * .6 + r()) % 1; glowDot(xx + Math.min(pp * 1.3, 1) * len, yy, 3, C.cyan, 1, 3); }
+    g.restore();
+    const n = Math.floor(clamp((t - 1) / 6) * 20e9);
+    text(n.toLocaleString('en-US') + ' transistores', VX, VY + 290, 34, C.gold, 'center', 'bold', a1 * clamp((t - 1) / .5));
+  }
+  if (z > 0) {
+    g.save(); g.globalAlpha = z;
+    g.fillStyle = '#c9a54a'; rrect(VX - 360, VY - 60, 180, 120, 10); g.fill(); rrect(VX + 180, VY - 60, 180, 120, 10); g.fill();
+    g.fillStyle = '#2a3a5a'; g.fillRect(VX - 380, VY + 90, 760, 40); text('compuerta', VX, VY + 165, 22, C.dim, 'center', 'bold', z);
+    text('fuente', VX - 270, VY - 80, 22, '#ffd98a', 'center', 'bold', z); text('drenaje', VX + 270, VY - 80, 22, '#ffd98a', 'center', 'bold', z);
+    for (let i = -8; i <= 8; i++) { const x = VX + i * 22; g.fillStyle = '#2a3a5a'; for (let k = -1; k <= 1; k += 2) { glowDot(x, VY + k * 20, 6, C.green, .9, 1.5); } }
+    g.strokeStyle = C.green; g.lineWidth = 3; g.strokeRect(VX - 185, VY - 26, 370, 52);
+    for (let i = 0; i < 8; i++) { const pp = (t * .5 + i / 8) % 1; glowDot(VX - 180 + pp * 360, VY + Math.sin(pp * 12) * 6, 5, C.cyan, 1, 3); }
+    text('transistor de nanotubo de carbono', VX, VY - 160, 30, C.green, 'center', 'bold', z);
+    g.restore();
+  }
+};
+
+V.energy = (t, d, sc, scT) => {
+  const L = scT.lines; const tS = L[2] ? L[2].start : d * .5;
+  // batería
+  const bx = 1000, by = 260, bw = 360, bh = 470;
+  g.save(); g.strokeStyle = C.text; g.lineWidth = 5; rrect(bx, by, bw, bh, 26); g.stroke(); g.fillStyle = C.text; g.fillRect(bx + bw / 2 - 40, by - 24, 80, 24);
+  const grow = eout((t - 1) / 4);
+  for (let i = 0; i < 9; i++) { const x = bx + 40 + i * 35, hgt = (bh - 120) * grow; const sw = 5 + 3 * Math.sin(t * 2 + i) * grow;
+    const gr = g.createLinearGradient(0, by + bh - 30, 0, by + bh - 30 - hgt); gr.addColorStop(0, '#7f8fa8'); gr.addColorStop(1, '#c8d4ea');
+    g.fillStyle = gr; g.fillRect(x - sw / 2, by + bh - 30 - hgt, sw, hgt); }
+  const r = rng(8); for (let i = 0; i < 30; i++) { const ph = (t * .35 + r()) % 1; glowDot(bx + 30 + r() * (bw - 60), by + 40 + ph * (bh - 100), 5, C.green, .9, 2); }
+  g.restore();
+  text('nanoalambres de Si', bx + bw / 2, by + bh + 50, 24, C.text, 'center', 'bold', 1); text('iones de litio', bx + bw / 2, by + bh + 82, 20, C.green, 'center', 'bold', 1);
+  // celda solar
+  const a = eout((t - tS + .5) / 1); if (a <= 0) return;
+  const sx = 1470, sy = 470;
+  g.save(); g.globalAlpha = a;
+  glowDot(1700, 250, 40, C.gold, a, 3);
+  for (let i = 0; i < 6; i++) { const pp = (t * .8 + i / 6) % 1; const x0 = 1680 - i * 30, y0 = 280; const x = lerp(x0, 1450 + i * 50, pp), y = lerp(y0, sy, pp); g.strokeStyle = C.gold; g.lineWidth = 3; g.beginPath(); g.moveTo(x, y); g.lineTo(x - 14, y - 16); g.stroke(); }
+  const layers = [['#3a3f4a', 'vidrio'], ['#6a4a9a', 'perovskita'], ['#2a6a8a', ''], ['#b8b8c8', '']];
+  layers.forEach(([c, n], i) => { g.fillStyle = c; g.fillRect(sx - 60, sy + i * 40, 380, 38); if (n) text(n, sx + 130, sy + i * 40 + 27, 20, '#fff', 'center', 'bold', a); });
+  g.restore();
+  // contador de eficiencia
+  const eff = lerp(3.8, 25.7, ease((t - (L[3] ? L[3].start : d * .8)) / 3));
+  text(eff.toFixed(1) + ' %', sx + 130, sy + 260, 64, C.gold, 'center', 'bold', a);
+  text('eficiencia', sx + 130, sy + 296, 22, C.dim, 'center', 'bold', a);
+};
+
+V.water = (t, d) => {
+  const mx = 1400; const top = 200, bot = 780;
+  g.save(); g.fillStyle = '#123a6a55'; g.fillRect(990, top, 830, bot - top); g.restore();
+  // membrana de grafeno con poros
+  const pores = [300, 400, 500, 600, 700];
+  for (let y = top; y < bot; y += 14) { if (pores.some(p => Math.abs(y - p) < 12)) continue; glowDot(mx, y, 5, C.green, .9, 1.6); glowDot(mx + 8, y + 7, 5, C.green, .9, 1.6); }
+  text('agua salada', 1180, top + 40, 26, C.text, 'center', 'bold', 1); text('agua dulce', 1620, top + 40, 26, C.cyan, 'center', 'bold', 1);
+  text('grafeno con nanoporos', mx, bot + 40, 24, C.green, 'center', 'bold', 1);
+  const r = rng(6);
+  // moléculas de agua: cruzan por los poros
+  for (let i = 0; i < 34; i++) {
+    const pr = pores[i % pores.length]; const ph = (t * .12 + r()) % 1; const y0 = top + 60 + r() * (bot - top - 100);
+    const x = lerp(1010, 1800, ph); const y = x < mx ? lerp(y0, pr, clamp((x - 1010) / (mx - 1010))) : lerp(pr, y0, clamp((x - mx) / (1800 - mx)));
+    glowDot(x, y, 8, '#ff5a5a', 1, 1.4); glowDot(x - 9, y + 8, 4.5, '#ffffff', 1, 1.2); glowDot(x + 9, y + 8, 4.5, '#ffffff', 1, 1.2);
+  }
+  // iones de sal: rebotan
+  for (let i = 0; i < 16; i++) {
+    const ph = (t * .2 + r()) % 1; const y = top + 60 + r() * (bot - top - 100) + Math.sin(t + i) * 20;
+    const x = mx - 30 - Math.abs(Math.sin(ph * Math.PI)) * 360;
+    const na = i % 2; glowDot(x, y, na ? 11 : 15, na ? '#b06cff' : '#4dff7a', 1, 1.6); text(na ? 'Na⁺' : 'Cl⁻', x, y - 22, 16, '#ffffff', 'center', 'bold', .8);
+  }
+};
+
+V.nature = (t, d, sc, scT) => {
+  const L = scT.lines; const tG = L[2] ? L[2].start : d * .5; const sw = ease((t - tG + .5) / 1);
+  if (sw < 1) {
+    g.save(); g.globalAlpha = 1 - sw;
+    const sy = 640; g.fillStyle = '#1f6a3a'; g.fillRect(990, sy, 830, 160);
+    for (let x = 1000; x < 1820; x += 34) { g.fillStyle = '#3aa65a'; g.beginPath(); g.ellipse(x, sy, 13, 28, 0, Math.PI, 0); g.fill(); for (let k = -2; k <= 2; k++) { g.fillStyle = '#7fe0a0'; g.fillRect(x + k * 5 - 1, sy - 30 - Math.abs(k) * -3, 2, 8); } }
+    const ph = ((t * .12) % 1); const dx = lerp(1050, 1780, ph), dr = 70;
+    const r = rng(3); for (let i = 0; i < 14; i++) { const x = 1010 + r() * 800; const picked = x < dx; if (!picked) { g.fillStyle = '#6a4a2a'; g.beginPath(); g.arc(x, sy - 30, 7, 0, 7); g.fill(); } }
+    const dg = g.createRadialGradient(dx - 20, sy - 30 - dr - 20, 5, dx, sy - 30 - dr * .9, dr); dg.addColorStop(0, '#e8f8ff'); dg.addColorStop(1, '#38b8ff88');
+    g.fillStyle = dg; g.beginPath(); g.ellipse(dx, sy - 30 - dr * .92, dr, dr * .95, 0, 0, 7); g.fill();
+    g.save(); g.translate(dx, sy - 30 - dr * .92); g.rotate(ph * 30); for (let i = 0; i < Math.floor(ph * 14); i++) { g.fillStyle = '#6a4a2a'; g.beginPath(); g.arc(Math.cos(i) * 40, Math.sin(i * 1.7) * 40, 6, 0, 7); g.fill(); } g.restore();
+    text('Efecto loto: el agua rueda y limpia', VX, 260, 30, C.green, 'center', 'bold', 1 - sw);
+    text('nanoestructuras de cera', VX, 790, 22, '#a8f0c0', 'center', 'bold', 1 - sw);
+    g.restore();
+  }
+  if (sw > 0) {
+    g.save(); g.globalAlpha = sw;
+    // pared y pata de gecko con setas
+    g.fillStyle = '#3a4a6a'; g.fillRect(1700, 180, 120, 620);
+    for (let f = 0; f < 5; f++) { const an = -0.7 + f * .35; const fx = 1500 + Math.cos(an) * 160, fy = 490 + Math.sin(an) * 220;
+      g.strokeStyle = '#7fbf6a'; g.lineWidth = 34; g.lineCap = 'round'; g.beginPath(); g.moveTo(1380, 490); g.lineTo(fx, fy); g.stroke();
+      g.strokeStyle = '#c8f0a0'; g.lineWidth = 2;
+      for (let k = 0; k < 14; k++) { const yy = fy - 20 + k * 3; g.beginPath(); g.moveTo(fx + 10, yy); g.lineTo(1700, yy + Math.sin(t * 2 + k) * 2); g.stroke(); } }
+    glowDot(1340, 490, 60, '#5aa64a', 1, 1.2);
+    text('millones de pelos (setas)', VX - 80, 250, 28, C.gold, 'center', 'bold', sw);
+    text('fuerzas de van der Waals', VX - 80, 790, 26, C.cyan, 'center', 'bold', sw);
+    g.restore();
+  }
+};
+
+V.career = (t, d) => {
+  const fields = [['Física', C.cyan], ['Química', C.gold], ['Biología', C.green], ['Computación', C.mag], ['Ingeniería', '#ff9a2e'], ['Medicina', '#ff5a5a']];
+  const a = eout(t / 1); const R = 250;
+  fields.forEach(([n, c], i) => {
+    const aa = eout((t - 3 - i * .6) / .7); if (aa <= 0) return;
+    const an = -Math.PI / 2 + i * Math.PI / 3 + t * .08; const x = VX + Math.cos(an) * R * aa, y = VY + Math.sin(an) * R * .95 * aa;
+    g.save(); g.globalAlpha = aa * .7; g.strokeStyle = c; g.lineWidth = 3; g.setLineDash([6, 8]); g.lineDashOffset = -t * 30; g.beginPath(); g.moveTo(VX, VY); g.lineTo(x, y); g.stroke(); g.restore();
+    glowDot(x, y, 58, c, aa * .9, 1.5); text(n, x, y + 6, n.length > 10 ? 16 : 19, '#061024', 'center', 'bold', aa);
+  });
+  glowDot(VX, VY, 95, '#2a6aff', a, 1.8);
+  text('NANO', VX, VY + 18, 50, '#ffffff', 'center', 'bold', a);
+};
+
+V.outro = (t, d, sc, scT) => {
+  V.intro(Math.min(t + 6, 40), d, sc, scT); // red hexagonal de fondo
+  g.save(); g.fillStyle = '#050b1ae0'; g.fillRect(0, 0, W, H); g.restore();
+  const L = scT.lines;
+  const msg = [['Los problemas más grandes', C.text], ['se resuelven en lo más pequeño.', C.cyan]];
+  msg.forEach(([m, c], i) => text(m, W / 2, 340 + i * 90, 72, c, 'center', 'bold', eout((t - .5 - i * .8) / 1) * clamp((L[1].start + 0.2 - t) / .6 + 1)));
+  if (L[1] && t > L[1].start) {
+    const a = eout((t - L[1].start) / 1);
+    text('La próxima gran idea a escala nano', W / 2, 400, 64, C.text, 'center', 'bold', a * clamp((L[2].start - t) / .6 + 1) );
+    text('podría ser la tuya.', W / 2, 490, 64, C.gold, 'center', 'bold', a * clamp((L[2].start - t) / .6 + 1));
+  }
+  if (L[2] && t > L[2].start) {
+    const a = eout((t - L[2].start) / 1);
+    text('ESTUDIA', W / 2, 330, 60, C.cyan, 'center', 'bold', a);
+    g.save(); g.globalAlpha = a; g.font = `bold 140px ${FONT}`; g.textAlign = 'center';
+    const gr = g.createLinearGradient(W / 2 - 600, 0, W / 2 + 600, 0); gr.addColorStop(0, C.cyan); gr.addColorStop(.5, '#ffffff'); gr.addColorStop(1, C.mag);
+    g.fillStyle = gr; g.shadowColor = C.mag; g.shadowBlur = 40; g.fillText('NANOTECNOLOGÍA', W / 2, 490, 1500); g.restore();
+    text('El futuro se construye átomo por átomo.', W / 2, 590, 44, C.gold, 'center', 'bold', eout((t - L[2].start - 1.2) / 1));
+  }
+};
+
+V.refs = (t, d) => {
+  const all = []; SCENES.forEach(s => (s.refs || []).forEach(r => { if (!all.includes(r)) all.push(r); }));
+  text('Referencias', W / 2, 90, 52, C.cyan, 'center', 'bold', eout(t / .8));
+  const half = Math.ceil(all.length / 2); let yL = 150, yR = 150;
+  all.forEach((r, i) => {
+    const left = i < half; const x = left ? 90 : 990; const lines = wrap((i + 1) + '. ' + r, 840, 17, 'normal');
+    const a = eout((t - .3 - i * .08) / .6);
+    lines.forEach((l, k) => text(l, x, (left ? yL : yR) + k * 22, 17, '#c8d4ea', 'left', 'normal', a));
+    if (left) yL += lines.length * 22 + 10; else yR += lines.length * 22 + 10;
+  });
+  text('Video educativo · narración y animaciones generadas por computadora', W / 2, 1050, 18, C.dim, 'center', 'normal', eout((t - 2) / 1));
+};
+
+// ---------- composición ----------
+window.renderAt = (T) => {
+  let i = TL.scenes.findIndex(s => T >= s.start && T < s.start + s.dur); if (i < 0) i = TL.scenes.length - 1;
+  const scT = TL.scenes[i], sc = SCENES[i], t = T - scT.start, d = scT.dur;
+  background(T, sc.id === 'cierre');
+  if (sc.visual !== 'intro' && sc.visual !== 'outro' && sc.visual !== 'refs') {
+    const y = header(sc, t) || 300; bullets(sc, t, d, y + 10);
+    // marco del visual
+    g.save(); g.globalAlpha = eout(t / 1) * .5; rrect(960, 160, 880, 670, 26); g.fillStyle = '#081634aa'; g.fill(); g.strokeStyle = '#38e1ff33'; g.lineWidth = 2; g.stroke(); g.restore();
+    g.save(); rrect(960, 160, 880, 670, 26); g.clip(); V[sc.visual](t, d, sc, scT); g.restore();
+    refs(sc, t);
+  } else V[sc.visual](t, d, sc, scT);
+  subtitles(scT, t);
+  if (sc.visual !== 'refs') progressBar(T);
+  // fundido entre escenas
+  const f = Math.min(clamp(t / .45), clamp((d - t) / .45));
+  if (f < 1) { g.fillStyle = `rgba(2,5,14,${1 - f})`; g.fillRect(0, 0, W, H); }
+};
+window.init = (scenes, tl) => { SCENES = scenes; TL = tl; };
+</script></body></html>

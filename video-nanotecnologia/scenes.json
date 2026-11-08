@@ -1,0 +1,172 @@
+[
+  {
+    "id": "intro", "visual": "intro", "kicker": "", "title": "",
+    "bullets": [], "refs": [],
+    "lead": 2.2,
+    "lines": [
+      {"sub": "¿Qué pasaría si pudieras construir cosas átomo por átomo?"},
+      {"sub": "Eso es exactamente lo que hace la nanotecnología."},
+      {"sub": "En este video vas a ver, con base en artículos científicos reales, todo lo que puedes lograr con ella."}
+    ]
+  },
+  {
+    "id": "escala", "visual": "scale", "kicker": "01 · LA ESCALA", "title": "¿Qué tan pequeño es un nanómetro?",
+    "bullets": ["1 nm = 0.000 000 001 m", "Cabello humano ≈ 80,000 nm", "Virus ≈ 100 nm", "ADN ≈ 2.5 nm de ancho"],
+    "refs": ["Feynman, R. P. (1959). There's Plenty of Room at the Bottom. Engineering and Science 23(5), 22–36."],
+    "lines": [
+      {"sub": "Un nanómetro es la mil millonésima parte de un metro."},
+      {"sub": "Un cabello humano mide unos 80,000 nanómetros de grosor.", "say": "Un cabello humano mide unos ochenta mil nanómetros de grosor."},
+      {"sub": "Un virus, alrededor de 100. La doble hélice del ADN, apenas 2.5.", "say": "Un virus, alrededor de cien. La doble hélice del ADN, apenas dos punto cinco."},
+      {"sub": "En 1959, el físico Richard Feynman dio una conferencia legendaria: “Hay mucho espacio en el fondo”.", "say": "En mil novecientos cincuenta y nueve, el físico Richard Feynman dio una conferencia legendaria: Hay mucho espacio en el fondo."},
+      {"sub": "Ahí imaginó que algún día podríamos manipular los átomos uno por uno."}
+    ]
+  },
+  {
+    "id": "atomos", "visual": "atoms", "kicker": "02 · VER Y MOVER ÁTOMOS", "title": "Escribir con átomos",
+    "bullets": ["1982: microscopio de efecto túnel (STM)", "1986: Premio Nobel de Física", "1990: 35 átomos de xenón forman “IBM”"],
+    "refs": ["Binnig, G., Rohrer, H. et al. (1982). Surface studies by scanning tunneling microscopy. Phys. Rev. Lett. 49, 57.", "Eigler, D. M. & Schweizer, E. K. (1990). Positioning single atoms with a scanning tunnelling microscope. Nature 344, 524."],
+    "lines": [
+      {"sub": "Y ese día llegó."},
+      {"sub": "En 1982, Binnig y Rohrer presentaron el microscopio de efecto túnel, capaz de ver átomos individuales.", "say": "En mil novecientos ochenta y dos, Binnig y Rohrer presentaron el microscopio de efecto túnel, capaz de ver átomos individuales."},
+      {"sub": "Ese invento les valió el Premio Nobel de Física en 1986.", "say": "Ese invento les valió el Premio Nobel de Física en mil novecientos ochenta y seis."},
+      {"sub": "En 1990, Eigler y Schweizer acomodaron 35 átomos de xenón, uno por uno, para escribir “IBM”.", "say": "En mil novecientos noventa, Eigler y Schweizer acomodaron treinta y cinco átomos de xenón, uno por uno, para escribir las letras i, be, eme."},
+      {"sub": "Por primera vez, la humanidad escribió con átomos."}
+    ]
+  },
+  {
+    "id": "qdots", "visual": "qdots", "kicker": "03 · EL MUNDO CUÁNTICO", "title": "El tamaño cambia el color",
+    "bullets": ["Confinamiento cuántico", "Puntos cuánticos de CdSe: 2–7 nm", "Premio Nobel de Química 2023", "Pantallas QLED e imagen médica"],
+    "refs": ["Murray, C. B., Norris, D. J. & Bawendi, M. G. (1993). Synthesis and characterization of nearly monodisperse CdE (E = S, Se, Te) semiconductor nanocrystallites. J. Am. Chem. Soc. 115, 8706."],
+    "lines": [
+      {"sub": "A esta escala, la materia se comporta de forma diferente."},
+      {"sub": "Un mismo material puede cambiar de color solo con cambiar su tamaño. Se llama confinamiento cuántico."},
+      {"sub": "Los puntos cuánticos de seleniuro de cadmio brillan en azul cuando son muy pequeños y en rojo cuando son más grandes."},
+      {"sub": "Este descubrimiento ganó el Premio Nobel de Química 2023, y hoy está en pantallas QLED y en imágenes médicas.", "say": "Este descubrimiento ganó el Premio Nobel de Química dos mil veintitrés, y hoy está en pantallas de televisión y en imágenes médicas."}
+    ]
+  },
+  {
+    "id": "carbono", "visual": "carbon", "kicker": "04 · MATERIALES DEL FUTURO", "title": "La magia del carbono",
+    "bullets": ["1985: fullereno C60 (Nobel 1996)", "1991: nanotubos de carbono", "2004: grafeno (Nobel 2010)", "El material más resistente jamás medido"],
+    "refs": ["Kroto, H. W. et al. (1985). C60: Buckminsterfullerene. Nature 318, 162.", "Iijima, S. (1991). Helical microtubules of graphitic carbon. Nature 354, 56.", "Novoselov, K. S. et al. (2004). Electric field effect in atomically thin carbon films. Science 306, 666.", "Lee, C. et al. (2008). Measurement of the elastic properties and intrinsic strength of monolayer graphene. Science 321, 385."],
+    "lines": [
+      {"sub": "Con un solo elemento, el carbono, se descubrieron materiales asombrosos."},
+      {"sub": "En 1985, Kroto y su equipo descubrieron el fullereno C60, una molécula con forma de balón de fútbol.", "say": "En mil novecientos ochenta y cinco, Kroto y su equipo descubrieron el fullereno, ce sesenta, una molécula con forma de balón de fútbol."},
+      {"sub": "En 1991, Sumio Iijima reportó los nanotubos de carbono.", "say": "En mil novecientos noventa y uno, Sumio Iijima reportó los nanotubos de carbono."},
+      {"sub": "Y en 2004, Novoselov y Geim aislaron el grafeno: una lámina de carbono de un solo átomo de grosor.", "say": "Y en dos mil cuatro, Novoselov y Geim aislaron el grafeno: una lámina de carbono de un solo átomo de grosor."},
+      {"sub": "Mediciones publicadas en Science mostraron que es el material más resistente jamás medido."}
+    ]
+  },
+  {
+    "id": "vacunas", "visual": "lnp", "kicker": "05 · MEDICINA", "title": "Nanopartículas que salvan vidas",
+    "bullets": ["Nanopartículas lipídicas ≈ 100 nm", "Protegen y transportan el ARNm", "La célula fabrica la proteína", "Eficacia del 95 % en el ensayo clínico"],
+    "refs": ["Polack, F. P. et al. (2020). Safety and efficacy of the BNT162b2 mRNA Covid-19 vaccine. N. Engl. J. Med. 383, 2603.", "Hou, X., Zaks, T., Langer, R. & Dong, Y. (2021). Lipid nanoparticles for mRNA delivery. Nat. Rev. Mater. 6, 1078."],
+    "lines": [
+      {"sub": "La nanotecnología también salva vidas."},
+      {"sub": "Las vacunas de ARN mensajero contra el COVID-19 funcionan gracias a nanopartículas lipídicas: esferas de grasa de unos 100 nanómetros.", "say": "Las vacunas de ARN mensajero contra el covid diecinueve funcionan gracias a nanopartículas lipídicas: esferas de grasa de unos cien nanómetros."},
+      {"sub": "Protegen el ARN y lo llevan al interior de las células, que producen la proteína que entrena al sistema inmune."},
+      {"sub": "En el ensayo clínico publicado en el New England Journal of Medicine, la vacuna mostró 95 % de eficacia.", "say": "En el ensayo clínico publicado en el New England Journal of Medicine, la vacuna mostró noventa y cinco por ciento de eficacia."}
+    ]
+  },
+  {
+    "id": "cancer", "visual": "cancer", "kicker": "06 · MEDICINA", "title": "Caballos de Troya contra el cáncer",
+    "bullets": ["Efecto EPR: los tumores “atrapan” nanopartículas", "Nanocápsulas de oro + luz infrarroja", "Calor que destruye el tumor", "Nanomedicamentos ya aprobados (Doxil, 1995)"],
+    "refs": ["Matsumura, Y. & Maeda, H. (1986). A new concept for macromolecular therapeutics in cancer chemotherapy. Cancer Res. 46, 6387.", "Hirsch, L. R. et al. (2003). Nanoshell-mediated near-infrared thermal therapy of tumors under magnetic resonance guidance. PNAS 100, 13549.", "Barenholz, Y. (2012). Doxil® — The first FDA-approved nano-drug. J. Control. Release 160, 117."],
+    "lines": [
+      {"sub": "Contra el cáncer, las nanopartículas pueden actuar como caballos de Troya."},
+      {"sub": "Los vasos sanguíneos de muchos tumores tienen fugas, y las nanopartículas se acumulan ahí."},
+      {"sub": "Es el efecto de permeabilidad y retención aumentada, descrito por Matsumura y Maeda en 1986.", "say": "Es el efecto de permeabilidad y retención aumentada, descrito por Matsumura y Maeda en mil novecientos ochenta y seis."},
+      {"sub": "En 2003, un equipo de la Universidad Rice usó nanocápsulas de oro que, al iluminarlas con luz infrarroja, se calientan y destruyen el tumor.", "say": "En dos mil tres, un equipo de la Universidad Rice usó nanocápsulas de oro que, al iluminarlas con luz infrarroja, se calientan y destruyen el tumor."},
+      {"sub": "Y ya existen medicamentos aprobados que usan nanopartículas para llevar la quimioterapia directo al tumor."}
+    ]
+  },
+  {
+    "id": "adn", "visual": "dna", "kicker": "07 · NANOROBOTS", "title": "Origami con ADN",
+    "bullets": ["Una hebra larga + ~200 hebras cortas", "Se dobla sola en la forma deseada", "2012: nanorobot de ADN con “cerradura” molecular"],
+    "refs": ["Rothemund, P. W. K. (2006). Folding DNA to create nanoscale shapes and patterns. Nature 440, 297.", "Douglas, S. M., Bachelet, I. & Church, G. M. (2012). A logic-gated nanorobot for targeted transport of molecular payloads. Science 335, 831."],
+    "lines": [
+      {"sub": "¿Y si usáramos el ADN como material de construcción?"},
+      {"sub": "En 2006, Paul Rothemund publicó en Nature el origami de ADN: una hebra larga que se dobla sola, guiada por cientos de hebras cortas.", "say": "En dos mil seis, Paul Rothemund publicó en Nature el origami de ADN: una hebra larga que se dobla sola, guiada por cientos de hebras cortas."},
+      {"sub": "Así formó figuras de unos 100 nanómetros, como esta carita sonriente.", "say": "Así formó figuras de unos cien nanómetros, como esta carita sonriente."},
+      {"sub": "En 2012, en Harvard, se construyó un nanorobot de ADN que solo se abre al reconocer células específicas, para entregar su carga.", "say": "En dos mil doce, en Harvard, se construyó un nanorobot de ADN que solo se abre al reconocer células específicas, para entregar su carga."}
+    ]
+  },
+  {
+    "id": "motores", "visual": "motor", "kicker": "08 · MÁQUINAS MOLECULARES", "title": "Motores del tamaño de una molécula",
+    "bullets": ["1999: primer motor molecular rotatorio", "Impulsado por luz", "Gira siempre en el mismo sentido", "Premio Nobel de Química 2016"],
+    "refs": ["Koumura, N., Zijlstra, R. W. J., van Delden, R. A., Harada, N. & Feringa, B. L. (1999). Light-driven monodirectional molecular rotor. Nature 401, 152."],
+    "lines": [
+      {"sub": "También podemos construir máquinas del tamaño de una molécula."},
+      {"sub": "En 1999, el equipo de Ben Feringa creó un motor molecular impulsado por luz que gira siempre en la misma dirección.", "say": "En mil novecientos noventa y nueve, el equipo de Ben Feringa creó un motor molecular impulsado por luz que gira siempre en la misma dirección."},
+      {"sub": "Este trabajo, junto con el de Sauvage y Stoddart, ganó el Premio Nobel de Química 2016.", "say": "Este trabajo, junto con el de Sauvage y Stoddart, ganó el Premio Nobel de Química dos mil dieciséis."}
+    ]
+  },
+  {
+    "id": "chips", "visual": "chip", "kicker": "09 · ELECTRÓNICA", "title": "Tu celular es nanotecnología",
+    "bullets": ["Miles de millones de transistores por chip", "Estructuras de pocos nanómetros", "2013: primera computadora de nanotubos de carbono"],
+    "refs": ["Shulaker, M. M. et al. (2013). Carbon nanotube computer. Nature 501, 526."],
+    "lines": [
+      {"sub": "Tu celular es nanotecnología pura."},
+      {"sub": "Los procesadores modernos tienen miles de millones de transistores, con estructuras de apenas unos cuantos nanómetros."},
+      {"sub": "Y ya se exploran nuevos materiales: en 2013, en Stanford, se construyó la primera computadora hecha con transistores de nanotubos de carbono.", "say": "Y ya se exploran nuevos materiales: en dos mil trece, en Stanford, se construyó la primera computadora hecha con transistores de nanotubos de carbono."}
+    ]
+  },
+  {
+    "id": "energia", "visual": "energy", "kicker": "10 · ENERGÍA LIMPIA", "title": "Mejores baterías y celdas solares",
+    "bullets": ["Nanoalambres de Si: baterías de litio", "Celdas de perovskita: 3.8 % en 2009", "Hoy: más de 25 % de eficiencia"],
+    "refs": ["Chan, C. K. et al. (2008). High-performance lithium battery anodes using silicon nanowires. Nat. Nanotechnol. 3, 31.", "Kojima, A. et al. (2009). Organometal halide perovskites as visible-light sensitizers for photovoltaic cells. J. Am. Chem. Soc. 131, 6050.", "NREL. Best Research-Cell Efficiency Chart."],
+    "lines": [
+      {"sub": "La nanotecnología es clave para la energía limpia."},
+      {"sub": "En 2008, en Stanford, se mostró que ánodos de nanoalambres de silicio almacenan mucha más carga que el grafito de las baterías convencionales.", "say": "En dos mil ocho, en Stanford, se mostró que ánodos de nanoalambres de silicio almacenan mucha más carga que el grafito de las baterías convencionales."},
+      {"sub": "En 2009, Kojima y su equipo presentaron las primeras celdas solares de perovskita, con 3.8 % de eficiencia.", "say": "En dos mil nueve, Kojima y su equipo presentaron las primeras celdas solares de perovskita, con tres punto ocho por ciento de eficiencia."},
+      {"sub": "Hoy superan el 25 %: uno de los avances más rápidos en la historia de la energía solar.", "say": "Hoy superan el veinticinco por ciento: uno de los avances más rápidos en la historia de la energía solar."}
+    ]
+  },
+  {
+    "id": "agua", "visual": "water", "kicker": "11 · AGUA POTABLE", "title": "Un filtro de un átomo de grosor",
+    "bullets": ["Grafeno con nanoporos", "El agua pasa, la sal no", "Desalinización más eficiente"],
+    "refs": ["Surwade, S. P. et al. (2015). Water desalination using nanoporous single-layer graphene. Nat. Nanotechnol. 10, 459.", "WHO / UNICEF JMP. Progress on household drinking water, sanitation and hygiene."],
+    "lines": [
+      {"sub": "Más de 2,000 millones de personas no tienen acceso a agua potable segura.", "say": "Más de dos mil millones de personas no tienen acceso a agua potable segura."},
+      {"sub": "En 2015, en el Laboratorio Nacional Oak Ridge, se creó una membrana de grafeno con nanoporos que deja pasar el agua, pero bloquea la sal.", "say": "En dos mil quince, en el Laboratorio Nacional Oak Ridge, se creó una membrana de grafeno con nanoporos que deja pasar el agua, pero bloquea la sal."},
+      {"sub": "Es un filtro de un solo átomo de grosor."}
+    ]
+  },
+  {
+    "id": "naturaleza", "visual": "nature", "kicker": "12 · INSPIRADA EN LA NATURALEZA", "title": "La naturaleza ya lo hacía",
+    "bullets": ["Efecto loto: superficies autolimpiables", "Gecko: fuerzas de van der Waals", "Adhesivos sin pegamento"],
+    "refs": ["Barthlott, W. & Neinhuis, C. (1997). Purity of the sacred lotus, or escape from contamination in biological surfaces. Planta 202, 1.", "Autumn, K. et al. (2000). Adhesive force of a single gecko foot-hair. Nature 405, 681.", "Autumn, K. et al. (2002). Evidence for van der Waals adhesion in gecko setae. PNAS 99, 12252."],
+    "lines": [
+      {"sub": "La naturaleza lleva millones de años haciendo nanotecnología."},
+      {"sub": "La hoja de loto se mantiene limpia gracias a nanoestructuras que hacen que el agua ruede y arrastre la suciedad."},
+      {"sub": "Y el gecko camina por las paredes gracias a millones de pelos diminutos que se adhieren por fuerzas de van der Waals."},
+      {"sub": "Hoy copiamos estas ideas para crear superficies autolimpiables y adhesivos sin pegamento."}
+    ]
+  },
+  {
+    "id": "carrera", "visual": "career", "kicker": "13 · TU FUTURO", "title": "¿Por qué estudiar nanotecnología?",
+    "bullets": ["Salud y farmacéutica", "Semiconductores y electrónica", "Energía y medio ambiente", "Nuevos materiales", "Investigación y emprendimiento"],
+    "refs": [],
+    "lines": [
+      {"sub": "¿Y por qué estudiar nanotecnología?"},
+      {"sub": "Porque es una carrera donde se unen la física, la química, la biología, la computación y la ingeniería."},
+      {"sub": "Puedes trabajar en salud, en semiconductores, en energía, en nuevos materiales, en investigación, o crear tu propia empresa."},
+      {"sub": "Y aprenderás a estudiar también sus riesgos, para que esta tecnología avance de forma segura y responsable."}
+    ]
+  },
+  {
+    "id": "cierre", "visual": "outro", "kicker": "", "title": "",
+    "bullets": [], "refs": [],
+    "tail": 2.5,
+    "lines": [
+      {"sub": "La salud, la energía, el agua: los problemas más grandes del mundo se están resolviendo en lo más pequeño."},
+      {"sub": "La próxima gran idea a escala nano podría ser la tuya."},
+      {"sub": "Estudia nanotecnología. El futuro se construye átomo por átomo."}
+    ]
+  },
+  {
+    "id": "referencias", "visual": "refs", "kicker": "", "title": "Referencias",
+    "bullets": [], "refs": [],
+    "silent": 14,
+    "lines": []
+  }
+]
